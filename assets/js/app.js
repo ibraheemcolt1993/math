@@ -122,3 +122,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") btnGo.click();
   });
 });
+// ===== lesson.html init =====
+if (window.location.pathname.endsWith("lesson.html")) {
+  const params = new URLSearchParams(window.location.search);
+  const week = params.get("week") || "?";
+
+  const title = document.getElementById("lessonTitle");
+  if (title) title.textContent = `بطاقة الأسبوع ${week}`;
+}
