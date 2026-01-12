@@ -5,22 +5,52 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>math</title>
 
-  <!-- CSS -->
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
+
 <body>
+  <main class="shell">
+    <header class="brand">
+      <div class="logo">∑</div>
+      <div>
+        <h1>Math</h1>
+        <p class="muted">منصة دروس رياضيات تفاعلية</p>
+      </div>
+    </header>
 
-  <div class="card">
-    <h1>منصة math</h1>
-    <p>أدخل رقم الهوية للمتابعة</p>
+    <!-- المرحلة 1: الهوية -->
+    <section class="card" id="screen-id">
+      <h2>ابدأ</h2>
+      <p class="muted">اكتب رقم الهوية عشان نجيب اسمك ونفتح البطاقات.</p>
 
-    <label for="nid">رقم الهوية</label>
-    <input type="text" id="nid" placeholder="أدخل رقم الهوية">
+      <label for="nid">رقم الهوية</label>
+      <input id="nid" inputmode="numeric" placeholder="مثال: 123456789">
 
-    <button id="btn">متابعة</button>
-  </div>
+      <button class="btn primary" id="btnGo">متابعة</button>
+      <p class="hint">إذا ما ظهر التحديث بسرعة: Ctrl+F5</p>
+    </section>
 
-  <!-- JS -->
+    <!-- المرحلة 2: الترحيب -->
+    <section class="card hidden" id="screen-welcome">
+      <h2 id="welcomeTitle">مرحبًا</h2>
+      <p class="muted">اختَر البطاقة المتاحة لك.</p>
+      <button class="btn" id="btnToCards">عرض البطاقات</button>
+    </section>
+
+    <!-- المرحلة 3: اختيار البطاقات -->
+    <section class="card hidden" id="screen-cards">
+      <div class="row">
+        <h2>البطاقات</h2>
+        <button class="btn ghost" id="btnBack">رجوع</button>
+      </div>
+
+      <div class="cards" id="cardsList"></div>
+    </section>
+
+    <!-- Toast -->
+    <div class="toastHost" id="toastHost"></div>
+  </main>
+
   <script src="assets/js/app.js"></script>
 </body>
 </html>
