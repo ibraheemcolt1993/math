@@ -1,1 +1,48 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Math | الدرس</title>
+
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <main class="shell">
+    <header class="brand">
+      <div class="logo">∑</div>
+      <div>
+        <h1 id="lessonTitle">بطاقة الأسبوع</h1>
+        <p class="muted" id="studentName">الطالب</p>
+      </div>
+    </header>
+
+    <!-- شريط التقدم -->
+    <section class="card">
+      <div class="muted">مستوى الفهم</div>
+      <div style="margin-top:8px;">
+        <div style="height:8px;background:rgba(255,255,255,.12);border-radius:999px;overflow:hidden;">
+          <div id="progressBar" style="height:100%;width:0%;background:#4f9cff;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- محتوى المفهوم -->
+    <section class="card" id="content">
+      <!-- هنا سنعرض: الهدف، الشرح، الأمثلة -->
+    </section>
+
+    <!-- السؤال -->
+    <section class="card" id="question">
+      <!-- هنا سيظهر السؤال -->
+    </section>
+
+    <!-- Toast -->
+    <div class="toastHost" id="toastHost"></div>
+  </main>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
 
