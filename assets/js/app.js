@@ -124,9 +124,35 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 // ===== lesson.html init =====
 if (window.location.pathname.endsWith("lesson.html")) {
-  const params = new URLSearchParams(window.location.search);
-  const week = params.get("week") || "?";
+  (async () => {
+    const params = new URLSearchParams(window.location.search);
+    const week = params.get("week") || "13";
 
-  const title = document.getElementById("lessonTitle");
-  if (title) title.textContent = `بطاقة الأسبوع ${week}`;
+    const titleEl = document.getElementById("lessonTitle");
+    const nameEl  = document.getElementById("studentName");
+    const content = document.getElementById("content");
+    const question= document.getElementById("question");
+
+    // عنوان مبدئي
+    if (titleEl) titleEl.textContent = `بطاقة الأسبوع ${week}`;
+    if (nameEl)  nameEl.textContent = `الطالب`;
+
+    try {
+      const res = await fetch(`data/week${week}.json`, { cache: "no-store" });
+      if (!res.ok) throw new Error("لم أستطع تحميل ملف البطاقة");
+
+      const data = await res.json();
+
+      if (titleEl) titleEl.textContent = data.title || `بطاقة الأسبوع ${week}`;
+
+      // عرض بسيط جدًا الآن (فقط للتأكد)
+      if (content) content.innerHTML = `<h2>تم تحميل البطاقة ✅</h2><p class="muted">جاهزين نبدأ نبني المفهوم الأول.</p>`;
+      if (question) question.innerHTML = `<p class="muted">قسم الأسئلة لسه.</p>`;
+
+    } catch (e) {
+      if (content) content.innerHTML = `<h2>مشكلة ⚠️</h2><p class="muted">${e.message}</p>`;
+      if (question) question.innerHTML = ``;
+    }
+  })();
 }
+
