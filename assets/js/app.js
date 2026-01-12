@@ -182,7 +182,7 @@ if (window.location.pathname.endsWith("lesson.html")) {
         if(val === concept.question.answer){
           alert("أحسنت ✅ إجابة صحيحة");
         }else{
-          alert("حاول مرة أخرى");
+          showToast("تنبيه", "حاول مرة أخرى");
         }
       });
     }
