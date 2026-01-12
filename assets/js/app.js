@@ -1,6 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   const $ = (id) => document.getElementById(id);
 
+  /* =========================
+     الصفحة الرئيسية
+  ========================= */
+
   const screenId = $("screen-id");
   const screenWelcome = $("screen-welcome");
   const screenCards = $("screen-cards");
@@ -12,35 +16,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const welcomeTitle = $("welcomeTitle");
   const cardsList = $("cardsList");
 
-  // نموذج بيانات (مؤقت) — لاحقًا بنجيبهم من DB وملفات الدروس
   const Students = {
     "123": "أحمد محمد",
     "456": "سارة علي",
     "789": "إبراهيم أحمد"
   };
 
-  // البطاقات اللي “مضافة فعليًا” فقط
-  // rule: 14 ما تنفتح إلا إذا 13 منجزة
   const Cards = [
-    { week: 13, title: "بطاقة الأسبوع الثالث عشر", key: "w13" },
-    // { week: 14, title: "بطاقة الأسبوع الرابع عشر", key: "w14" }, // لما نضيفها لاحقًا نفك التعليق
+    { week: 13, title: "بطاقة الأسبوع الثالث عشر", key: "w13" }
   ];
 
-  // إنجازات الطالب (مؤقت) — لاحقًا من DB
-  const Progress = {
-    // nid: { w13: true/false, w14: true/false }
-  };
-
+  const Progress = {};
   let currentNid = "";
   let currentName = "";
 
   function show(el){
-    [screenId, screenWelcome, screenCards].forEach(s => s.classList.add("hidden"));
-    el.classList.remove("hidden");
+    [screenId, screenWelcome, screenCards].forEach(s => s?.classList.add("hidden"));
+    el?.classList.remove("hidden");
   }
 
   function toast(title, msg, duration=2600){
     const host = $("toastHost");
+    if(!host) return;
+
     const t = document.createElement("div");
     t.className = "toast";
     t.innerHTML = `
@@ -49,110 +47,153 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="bar"><i></i></div>
     `;
     host.appendChild(t);
+
     const bar = t.querySelector(".bar i");
-    bar.animate([{transform:"scaleX(1)"},{transform:"scaleX(0)"}], {duration, easing:"linear", fill:"forwards"});
+    bar.animate(
+      [{transform:"scaleX(1)"},{transform:"scaleX(0)"}],
+      {duration, easing:"linear", fill:"forwards"}
+    );
+
     setTimeout(()=> t.remove(), duration);
   }
 
-  function isUnlocked(week){
-    if (week === 13) return true;
-    // قاعدة التسلسل: لازم ينهي السابق
-    const prevKey = `w${week-1}`;
-    return !!(Progress[currentNid]?.[prevKey]);
-  }
-
-  function isDone(week){
-    const key = `w${week}`;
-    return !!(Progress[currentNid]?.[key]);
-  }
-
   function renderCards(){
+    if(!cardsList) return;
     cardsList.innerHTML = "";
-    Cards.forEach(c => {
-      const unlocked = isUnlocked(c.week);
-      const done = isDone(c.week);
 
+    Cards.forEach(c => {
       const item = document.createElement("div");
-      item.className = `cardItem ${done ? "done" : ""} ${unlocked ? "" : "locked"}`;
+      item.className = "cardItem";
       item.innerHTML = `
         <div>
           <div style="font-weight:700">${c.title}</div>
           <div class="muted" style="margin-top:4px;font-size:13px">week ${c.week}</div>
         </div>
-        <div class="badge">${done ? "منجزة" : (unlocked ? "مفتوحة" : "مقفلة")}</div>
+        <div class="badge">مفتوحة</div>
       `;
-
-      item.addEventListener("click", () => {
-        if (!unlocked){
-          toast("مقفلة 🔒", `لازم تنجز بطاقة الأسبوع ${c.week-1} أولًا.`);
-          return;
-        }
+      item.onclick = () => {
         window.location.href = `lesson.html?week=${c.week}`;
-        // لاحقًا: هنا بننقلك لصفحة الدرس lesson.html أو نبدّل شاشة الدرس
-      });
-
+      };
       cardsList.appendChild(item);
     });
   }
 
-  btnGo.addEventListener("click", () => {
+  btnGo?.addEventListener("click", () => {
     const id = nid.value.trim();
-    if (!id){
-      toast("تنبيه", "اكتب رقم الهوية أولًا.");
+    if(!id){
+      toast("تنبيه", "اكتب رقم الهوية أولًا");
       return;
     }
     currentNid = id;
     currentName = Students[id] || "طالبنا";
-
     welcomeTitle.textContent = `مرحبًا يا ${currentName}`;
-    toast("أهلًا 👋", `أهلاً ${currentName}، يلا نبدأ.`);
     show(screenWelcome);
   });
 
-  btnToCards.addEventListener("click", () => {
-    if (!Progress[currentNid]) Progress[currentNid] = {}; // إنشاء سجل مؤقت
+  btnToCards?.addEventListener("click", () => {
     renderCards();
     show(screenCards);
   });
 
-  btnBack.addEventListener("click", () => show(screenWelcome));
-
-  // Enter يعمل متابعة
-  nid.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") btnGo.click();
-  });
+  btnBack?.addEventListener("click", () => show(screenWelcome));
+  nid?.addEventListener("keydown", e => e.key==="Enter" && btnGo.click());
 });
-// ===== lesson.html init =====
+
+
+/* =========================
+   lesson.html (محرك الدرس)
+========================= */
+
 if (window.location.pathname.endsWith("lesson.html")) {
-  (async () => {
-    const params = new URLSearchParams(window.location.search);
-    const week = params.get("week") || "13";
+(async () => {
 
-    const titleEl = document.getElementById("lessonTitle");
-    const nameEl  = document.getElementById("studentName");
-    const content = document.getElementById("content");
-    const question= document.getElementById("question");
+  const params = new URLSearchParams(window.location.search);
+  const week = params.get("week") || "13";
 
-    // عنوان مبدئي
-    if (titleEl) titleEl.textContent = `بطاقة الأسبوع ${week}`;
-    if (nameEl)  nameEl.textContent = `الطالب`;
+  const titleEl  = document.getElementById("lessonTitle");
+  const nameEl   = document.getElementById("studentName");
+  const content  = document.getElementById("content");
+  const question = document.getElementById("question");
 
-    try {
-      const res = await fetch(`data/week${week}.json`, { cache: "no-store" });
-      if (!res.ok) throw new Error("لم أستطع تحميل ملف البطاقة");
+  if(titleEl) titleEl.textContent = `بطاقة الأسبوع ${week}`;
+  if(nameEl)  nameEl.textContent  = `الطالب`;
 
-      const data = await res.json();
+  try {
+    const res = await fetch(`data/week${week}.json`, { cache:"no-store" });
+    if(!res.ok) throw new Error("تعذر تحميل البطاقة");
+    const data = await res.json();
 
-      if (titleEl) titleEl.textContent = data.title || `بطاقة الأسبوع ${week}`;
+    titleEl.textContent = data.title;
 
-      // عرض بسيط جدًا الآن (فقط للتأكد)
-      if (content) content.innerHTML = `<h2>تم تحميل البطاقة ✅</h2><p class="muted">جاهزين نبدأ نبني المفهوم الأول.</p>`;
-      if (question) question.innerHTML = `<p class="muted">قسم الأسئلة لسه.</p>`;
+    const concept = data.concepts[0];
+    let step = 0; // 0 هدف - 1 شرح - 2 مثال - 3 ملاحظة - 4 سؤال
 
-    } catch (e) {
-      if (content) content.innerHTML = `<h2>مشكلة ⚠️</h2><p class="muted">${e.message}</p>`;
-      if (question) question.innerHTML = ``;
+    function renderStep(){
+      if(!content) return;
+
+      if(step === 0){
+        content.innerHTML = `
+          <h2>${concept.title}</h2>
+          <p class="muted">${concept.goal}</p>
+          <button class="btn primary" id="next">التالي</button>
+        `;
+      }
+
+      if(step === 1){
+        content.innerHTML = `
+          <h2>الشرح</h2>
+          <p>${concept.explain}</p>
+          <button class="btn primary" id="next">التالي</button>
+        `;
+      }
+
+      if(step === 2){
+        content.innerHTML = `
+          <h2>مثال</h2>
+          <p>${concept.example}</p>
+          <button class="btn primary" id="next">التالي</button>
+        `;
+      }
+
+      if(step === 3){
+        content.innerHTML = `
+          <h2>ملاحظة</h2>
+          <p>${concept.note}</p>
+          <button class="btn primary" id="next">انتقل للسؤال</button>
+        `;
+      }
+
+      if(step === 4){
+        content.innerHTML = `
+          <h2>سؤال</h2>
+          <p>${concept.question.text}</p>
+          <input id="answer" placeholder="اكتب الإجابة">
+          <button class="btn primary" id="check">تحقق</button>
+        `;
+      }
+
+      document.getElementById("next")?.addEventListener("click", () => {
+        step++;
+        renderStep();
+      });
+
+      document.getElementById("check")?.addEventListener("click", () => {
+        const val = document.getElementById("answer").value.trim();
+        if(val === concept.question.answer){
+          alert("أحسنت ✅ إجابة صحيحة");
+        }else{
+          alert("حاول مرة أخرى");
+        }
+      });
     }
-  })();
-}
 
+    renderStep();
+
+  } catch(e){
+    if(content){
+      content.innerHTML = `<h2>خطأ ⚠️</h2><p>${e.message}</p>`;
+    }
+  }
+
+})();
+}
