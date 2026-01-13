@@ -1,0 +1,97 @@
+/* =========================================================
+   questions.css — Question Types Styling (Light Material)
+   Depends on base.css
+   ========================================================= */
+
+/* ---------- Common Question Block ---------- */
+.q{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.q-desc{
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* ---------- Input Question ---------- */
+.q-input{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.q-input .input{
+  font-size: 16px;
+  text-align: center;
+  letter-spacing: .3px;
+}
+.q-input .hint{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- MCQ ---------- */
+.q-mcq{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.q-mcq .choice{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17,24,39,.14);
+  background: rgba(255,255,255,.85);
+  box-shadow: var(--shadow-xs);
+  cursor:pointer;
+  transition: background .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.q-mcq .choice:hover{
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.q-mcq .choice input{
+  accent-color: var(--primary);
+  cursor:pointer;
+}
+.q-mcq .choice.correct{
+  border-color: rgba(22,163,74,.45);
+  background: rgba(22,163,74,.10);
+}
+.q-mcq .choice.wrong{
+  border-color: rgba(220,38,38,.45);
+  background: rgba(220,38,38,.10);
+}
+
+/* ---------- Match (Structure only / future) ---------- */
+.q-match{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.q-match .col{
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.q-match .item{
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.14);
+  background: rgba(255,255,255,.85);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---------- Feedback ---------- */
+.q-feedback{
+  font-size: 13px;
+  font-weight: 800;
+}
+.q-feedback.ok{
+  color: var(--success);
+}
+.q-feedback.err{
+  color: var(--danger);
+}

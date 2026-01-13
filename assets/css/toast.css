@@ -1,0 +1,168 @@
+/* =========================================================
+   toast.css — Material Light Toast + Countdown Bar
+   used by assets/js/ui/toast.js
+   ========================================================= */
+
+:root{
+  --toast-max: 420px;
+  --toast-pad: 12px;
+  --toast-gap: 10px;
+
+  --toast-bg: rgba(255,255,255,.86);
+  --toast-border: rgba(17,24,39,.12);
+  --toast-shadow: 0 18px 40px rgba(17,24,39,.16);
+  --toast-blur: 12px;
+
+  --toast-title: #111827;
+  --toast-text: #4b5563;
+  --toast-bar-bg: rgba(17,24,39,.10);
+  --toast-bar: rgba(37,99,235,1);
+
+  --toast-ok: rgba(22,163,74,1);
+  --toast-warn: rgba(245,158,11,1);
+  --toast-err: rgba(220,38,38,1);
+}
+
+/* Container fixed on viewport */
+.toast-host{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding: 16px;
+}
+
+/* Toast element */
+.toast{
+  width: min(var(--toast-max), calc(100vw - 32px));
+  pointer-events: auto;
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-border);
+  border-radius: 18px;
+  box-shadow: var(--toast-shadow);
+  backdrop-filter: blur(var(--toast-blur));
+  -webkit-backdrop-filter: blur(var(--toast-blur));
+  overflow: hidden;
+
+  transform: translateY(18px) scale(.98);
+  opacity: 0;
+  transition: transform .22s ease, opacity .22s ease;
+}
+
+.toast.is-show{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.toast-inner{
+  display:flex;
+  gap: var(--toast-gap);
+  padding: var(--toast-pad);
+  align-items:flex-start;
+}
+
+/* Icon pill */
+.toast-ic{
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(37,99,235,.12);
+  border: 1px solid rgba(37,99,235,.18);
+  box-shadow: 0 10px 18px rgba(37,99,235,.10);
+}
+
+.toast-ic svg{
+  width: 18px;
+  height: 18px;
+  fill: rgba(29,78,216,1);
+}
+
+.toast-content{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toast-title{
+  margin: 0;
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--toast-title);
+  line-height: 1.2;
+}
+
+.toast-msg{
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--toast-text);
+  line-height: 1.45;
+  word-wrap: break-word;
+}
+
+/* Progress bar (countdown) */
+.toast-bar{
+  height: 4px;
+  width: 100%;
+  background: var(--toast-bar-bg);
+  position: relative;
+}
+
+.toast-bar > i{
+  display:block;
+  height: 100%;
+  width: 100%;
+  background: var(--toast-bar);
+  transform-origin: right center; /* RTL feel */
+  transform: scaleX(1);
+}
+
+/* Variants */
+.toast[data-type="info"] .toast-ic{
+  background: rgba(37,99,235,.12);
+  border-color: rgba(37,99,235,.18);
+}
+.toast[data-type="info"] .toast-ic svg{ fill: rgba(29,78,216,1); }
+.toast[data-type="info"] .toast-bar > i{ background: rgba(37,99,235,1); }
+
+.toast[data-type="success"] .toast-ic{
+  background: rgba(22,163,74,.12);
+  border-color: rgba(22,163,74,.18);
+  box-shadow: 0 10px 18px rgba(22,163,74,.10);
+}
+.toast[data-type="success"] .toast-ic svg{ fill: var(--toast-ok); }
+.toast[data-type="success"] .toast-bar > i{ background: var(--toast-ok); }
+
+.toast[data-type="warning"] .toast-ic{
+  background: rgba(245,158,11,.14);
+  border-color: rgba(245,158,11,.22);
+  box-shadow: 0 10px 18px rgba(245,158,11,.10);
+}
+.toast[data-type="warning"] .toast-ic svg{ fill: var(--toast-warn); }
+.toast[data-type="warning"] .toast-bar > i{ background: var(--toast-warn); }
+
+.toast[data-type="danger"] .toast-ic,
+.toast[data-type="error"] .toast-ic{
+  background: rgba(220,38,38,.12);
+  border-color: rgba(220,38,38,.18);
+  box-shadow: 0 10px 18px rgba(220,38,38,.10);
+}
+.toast[data-type="danger"] .toast-ic svg,
+.toast[data-type="error"] .toast-ic svg{ fill: var(--toast-err); }
+.toast[data-type="danger"] .toast-bar > i,
+.toast[data-type="error"] .toast-bar > i{ background: var(--toast-err); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .toast{ transition: none; }
+}
+
+/* Mobile spacing tweak */
+@media (max-width: 420px){
+  .toast-inner{ padding: 10px; }
+}
