@@ -8,8 +8,13 @@
    - Mobile UX: keep input visible above keyboard while typing (VisualViewport)
 
    UPDATE (2026-01-14):
-   - Fix #1: Pressing Enter/Go triggers the main "متابعة" button automatically
-   - Fix #2: Persist input value across engine re-renders using question._value
+   - Pressing Enter/Go triggers the main "متابعة" button automatically
+   - Persist input value across engine re-renders using question._value
+
+   UPDATE (2026-01-14) #2:
+   - Improve keyboard overlap fix:
+     * scroll based on the whole question box (.question-wrap), not only the input
+     * re-run visibility adjustment after check (so attempts/solution stay visible)
    ========================================================= */
 
 export function renderInputQuestion({ mountEl, question }) {
@@ -128,7 +133,6 @@ export function renderInputQuestion({ mountEl, question }) {
   function ensureVisible() {
     // Delay to allow keyboard to open and viewport to resize
     setTimeout(() => {
-      // If VisualViewport exists, use it for precise offset
       const vv = window.visualViewport;
 
       // Determine current visible bottom in layout viewport coordinates
@@ -139,17 +143,24 @@ export function renderInputQuestion({ mountEl, question }) {
         visibleBottomY = window.scrollY + window.innerHeight;
       }
 
-      const rect = input.getBoundingClientRect();
-      const inputBottomY = window.scrollY + rect.bottom;
+      // ✅ IMPORTANT: use the whole question box bottom, not just the input
+      const qWrap = input.closest('.question-wrap') || input;
+      const rect = qWrap.getBoundingClientRect();
+      const targetBottomY = window.scrollY + rect.bottom;
 
-      // Keep a comfortable margin above keyboard / bottom
-      const margin = 18;
+      // Comfortable margin (bigger when keyboard is open)
+      let extra = 18;
+      if (vv) {
+        const kb = Math.max(0, window.innerHeight - vv.height); // approximate keyboard height
+        // raise more when keyboard is big
+        extra += Math.min(160, Math.max(60, Math.round(kb * 0.35)));
+      } else {
+        extra += 60;
+      }
 
-      // If input is under the visible bottom, scroll down
-      if (inputBottomY + margin > visibleBottomY) {
-        const delta = (inputBottomY + margin) - visibleBottomY;
+      if (targetBottomY + extra > visibleBottomY) {
+        const delta = (targetBottomY + extra) - visibleBottomY;
         window.scrollBy({ top: delta, left: 0, behavior: 'smooth' });
-        return;
       }
     }, 260);
   }
@@ -200,6 +211,11 @@ export function renderInputQuestion({ mountEl, question }) {
       feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
       feedback.classList.toggle('ok', ok);
       feedback.classList.toggle('err', !ok);
+
+      // ✅ After checking (and possible solution injection), ensure visibility again
+      if (!ok) {
+        setTimeout(() => ensureVisible(), 80);
+      }
       return ok;
     }
 
@@ -212,6 +228,11 @@ export function renderInputQuestion({ mountEl, question }) {
     feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
     feedback.classList.toggle('ok', ok);
     feedback.classList.toggle('err', !ok);
+
+    // ✅ After checking (and possible solution injection), ensure visibility again
+    if (!ok) {
+      setTimeout(() => ensureVisible(), 80);
+    }
     return ok;
   }
 
