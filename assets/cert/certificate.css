@@ -1,0 +1,225 @@
+/* =========================================================
+   certificate.css — Certificate Page Styles (Light Material)
+   - Print-friendly
+   - A4 ratio
+   - Soft shadows on screen, clean on print
+   ========================================================= */
+
+.cert-app {
+  background: #f6f7fb;
+}
+
+.cert-shell {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+/* Certificate Paper */
+.cert-paper {
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px 36px 32px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+/* Subtle background */
+.cert-bg {
+  position: absolute;
+  inset: -20% -10% auto auto;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(closest-side, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0));
+  pointer-events: none;
+}
+
+/* Header */
+.cert-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.cert-badge {
+  font-size: 44px;
+  line-height: 1;
+}
+
+.cert-title {
+  font-size: 32px;
+  margin: 0;
+}
+
+.cert-sub {
+  margin: 4px 0 0;
+  color: #64748b;
+}
+
+/* Body */
+.cert-body {
+  margin-top: 8px;
+}
+
+.cert-line {
+  margin: 18px 0 6px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.cert-name {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: #0f172a;
+  padding: 6px 0 2px;
+}
+
+.cert-card {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  padding: 4px 0 10px;
+}
+
+/* Meta */
+.cert-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.cert-meta-item {
+  background: #f8fafc;
+  border: 1px dashed #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.cert-meta-k {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cert-meta-v {
+  display: block;
+  margin-top: 2px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Footer */
+.cert-footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 28px;
+}
+
+.cert-sign {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.cert-sign-k {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cert-sign-v {
+  font-weight: 700;
+}
+
+/* Stamp */
+.cert-stamp {
+  position: relative;
+  width: 86px;
+  height: 86px;
+}
+
+.cert-stamp-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid #2563eb;
+  opacity: 0.9;
+}
+
+.cert-stamp-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #2563eb;
+  transform: rotate(-12deg);
+}
+
+/* Actions */
+.cert-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* Empty */
+#certEmpty.card {
+  margin-top: 16px;
+}
+
+/* Print */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .topbar,
+  .cert-actions {
+    display: none !important;
+  }
+
+  .cert-paper {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 24mm 20mm;
+  }
+
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .cert-paper {
+    padding: 28px 20px;
+  }
+
+  .cert-title {
+    font-size: 26px;
+  }
+
+  .cert-name {
+    font-size: 28px;
+  }
+
+  .cert-card {
+    font-size: 18px;
+  }
+
+  .cert-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .cert-footer {
+    grid-template-columns: 1fr;
+  }
+}
