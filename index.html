@@ -1,109 +1,0 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#2563eb" />
-  <title>math — منصة الرياضيات</title>
-
-  <link rel="stylesheet" href="/assets/css/base.css" />
-  <link rel="stylesheet" href="/assets/css/toast.css" />
-</head>
-
-<body>
-  <div class="app">
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="container topbar-inner">
-        <div class="brand" aria-label="math">
-          <div class="brand-mark" aria-hidden="true"></div>
-          <div class="brand-title">
-            <b>math</b>
-            <span>بطاقات أسبوعية تفاعلية</span>
-          </div>
-        </div>
-
-        <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
-          الرئيسية
-        </a>
-      </div>
-    </header>
-
-    <main class="container section">
-      <!-- Screen: ID -->
-      <section id="screen-id" class="stack">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <h1 class="h1">تسجيل الدخول</h1>
-              <p class="p">ادخل رقم الهوية عشان نكمل ونحفظ تقدمك.</p>
-            </div>
-            <span class="badge primary">نهاري</span>
-          </div>
-
-          <div class="card-body">
-            <div class="field">
-              <label class="label" for="studentId">رقم الهوية</label>
-              <input id="studentId" class="input ltr" inputmode="numeric" autocomplete="off" placeholder="مثال: 123456789" />
-              <div class="help">بنستخدمه بس لحفظ التقدم على نفس الجهاز (LocalStorage).</div>
-            </div>
-
-            <div class="row">
-              <button id="btnLogin" class="btn btn-primary btn-lg w-100">دخول</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Screen: Welcome -->
-      <section id="screen-welcome" class="stack hidden">
-        <div class="card soft">
-          <div class="card-header">
-            <div>
-              <h2 class="h2" id="welcomeTitle">مرحبًا 👋</h2>
-              <p class="p" id="welcomeSub">جاهز نبدأ ببطاقات الأسبوع؟</p>
-            </div>
-            <span class="badge primary" id="welcomeChip">طالب</span>
-          </div>
-
-          <div class="card-body">
-            <button id="btnToCards" class="btn btn-primary btn-lg w-100">عرض البطاقات</button>
-            <button id="btnChangeId" class="btn btn-outline w-100">تغيير رقم الهوية</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Screen: Cards -->
-      <section id="screen-cards" class="stack hidden">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <h2 class="h2">بطاقات الأسابيع</h2>
-              <p class="p">اختر بطاقة مفتوحة. المقفلة ما بتفتح إلا بعد إنجاز اللي قبلها.</p>
-            </div>
-            <div class="row">
-              <span class="badge primary" id="cardsStudentName">طالب</span>
-              <button id="btnLogout" class="btn btn-ghost btn-sm">تبديل الطالب</button>
-            </div>
-          </div>
-
-          <div class="card-body">
-            <div id="cardsList" class="grid cards" aria-live="polite"></div>
-          </div>
-
-          <div class="card-footer">
-            <span class="small">تجربة أولى: بطاقة week=999</span>
-            <span class="kbd">Light Material</span>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="container section center">
-      <p class="small">© math — منصة تعليمية تفاعلية</p>
-    </footer>
-  </div>
-
-  <script type="module" src="/assets/js/app.js"></script>
-</body>
-</html>
