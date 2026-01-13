@@ -1,0 +1,221 @@
+/* =========================================================
+   lesson.css — Lesson Page Layout & Progress (Light Material)
+   Depends on base.css
+   ========================================================= */
+
+/* ---------- Header (Lesson Title) ---------- */
+.lesson-header{
+  margin-top: 10px;
+}
+.lesson-title{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lesson-title .h1{
+  font-size: 20px;
+}
+.lesson-meta{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  flex-wrap: wrap;
+}
+.lesson-student{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(37,99,235,.10);
+  border: 1px solid rgba(37,99,235,.18);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ---------- Progress Bar ---------- */
+.progress-wrap{
+  margin: 14px 0 18px;
+}
+.progress-label{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.progress-label span{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+.progress{
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(17,24,39,.10);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(17,24,39,.12);
+}
+.progress > i{
+  display:block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(37,99,235,1), rgba(99,102,241,1));
+  border-radius: 999px;
+  transition: width .28s ease;
+}
+
+/* ---------- Concept Card ---------- */
+.concept{
+  margin-bottom: 18px;
+}
+.concept .card{
+  padding: 16px;
+}
+.concept-header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.concept-index{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  background: rgba(37,99,235,.12);
+  border: 1px solid rgba(37,99,235,.18);
+  font-weight: 900;
+  font-size: 14px;
+}
+.concept-title{
+  font-size: 16px;
+  font-weight: 900;
+  margin: 0;
+}
+.concept-body{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- Steps ---------- */
+.step{
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px dashed rgba(17,24,39,.14);
+  background: rgba(255,255,255,.70);
+}
+.step-title{
+  font-weight: 900;
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.step-text{
+  font-size: 14px;
+  color: var(--text);
+}
+.step.muted{
+  background: rgba(17,24,39,.04);
+}
+.step.example{
+  background: rgba(37,99,235,.06);
+  border-style: solid;
+}
+.step.warning{
+  background: rgba(245,158,11,.10);
+  border-style: solid;
+}
+.step.note{
+  background: rgba(16,185,129,.08);
+  border-style: solid;
+}
+
+/* ---------- Question Area ---------- */
+.question-wrap{
+  margin-top: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,1), rgba(243,245,251,1));
+  border: 1px solid rgba(17,24,39,.14);
+  box-shadow: var(--shadow-sm);
+}
+.question-title{
+  font-size: 15px;
+  font-weight: 900;
+  margin: 0 0 10px;
+}
+.question-actions{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* ---------- Attempts / Status ---------- */
+.attempts{
+  display:flex;
+  gap: 6px;
+  align-items:center;
+}
+.dot{
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(17,24,39,.18);
+}
+.dot.used{
+  background: rgba(220,38,38,.80);
+}
+
+/* ---------- Solution Box ---------- */
+.solution{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(220,38,38,.06);
+  border: 1px solid rgba(220,38,38,.18);
+}
+.solution-title{
+  font-size: 13px;
+  font-weight: 900;
+  margin: 0 0 6px;
+}
+.solution-text{
+  font-size: 14px;
+}
+
+/* ---------- Navigation Buttons ---------- */
+.lesson-nav{
+  display:flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.lesson-nav .btn{
+  min-width: 120px;
+}
+
+/* ---------- Completion State ---------- */
+.lesson-complete{
+  margin-top: 18px;
+}
+.lesson-complete .card{
+  border-color: rgba(212,175,55,.65);
+  background:
+    radial-gradient(800px 240px at 80% -40%, rgba(245,215,110,.28), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,1), rgba(255,248,226,1));
+}
+.lesson-complete .h2{
+  color: #6b4f00;
+}
+
+/* ---------- Responsive tweaks ---------- */
+@media (max-width: 480px){
+  .lesson-title .h1{ font-size: 18px; }
+  .question-wrap{ padding: 12px; }
+}
