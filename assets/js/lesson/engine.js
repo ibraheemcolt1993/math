@@ -1,5 +1,5 @@
 /* =========================================================
-   engine.js — Unlimited Flow Engine (single "متابعة" button) + Resume
+   engine.js — Unlimited Flow Engine (single "متابعة" button) + Resume + Completion
    - Concepts can use: concept.flow = [ {type:..., ...}, ... ]  ✅ (no limits)
    - Backward compatible: if no flow, we build flow from legacy fields
    - One button only: "متابعة"
@@ -10,13 +10,14 @@
    - Auto scroll + focus to newly revealed item after advancing
    - Fix: infer question.type if flow item doesn't include it
    - Resume: load saved { conceptIndex, stepIndex } from storage and continue
+   - Completion: when finishing the last item of the last concept -> mark done + show completion + return home
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
 import { showToast } from '../ui/toast.js';
 import { ENCOURAGEMENTS, DEFAULT_HINTS, FINAL_HINT, pickRandom } from '../ui/text.js';
 import { renderQuestion } from '../questions/registry.js';
-import { setStudentProgress, getStudentProgress, isCardDone } from '../core/storage.js';
+import { setStudentProgress, getStudentProgress, isCardDone, markCardDone } from '../core/storage.js';
 import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
 
@@ -53,10 +54,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function normalizeFlowQuestionItem(item) {
-    // Supported shapes:
-    // A) { type:'question', q:{ type:'input'|'mcq', ... } }
-    // B) { type:'question', ...fields... }  (no inner type) -> infer
-    // C) { type:'question', qtype:'input'|'mcq', ...fields... } -> use qtype
     if (item?.q && typeof item.q === 'object') {
       return { ...item.q };
     }
@@ -133,13 +130,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function applyResumeIfAvailable() {
-    // If card already done, start from beginning (or you can choose to start end)
     if (isCardDone(studentId, week)) return;
 
     const saved = getStudentProgress(studentId, week)?.progress;
     if (!saved) return;
 
-    // saved structure: { conceptIndex, stepIndex }
     if (Number.isFinite(saved.conceptIndex)) conceptIndex = Number(saved.conceptIndex);
     if (Number.isFinite(saved.stepIndex)) itemIndex = Number(saved.stepIndex);
 
@@ -150,13 +145,32 @@ export function initEngine({ week, studentId, data, mountEl }) {
     firstPaint = true;
   }
 
+  function isLastPosition() {
+    const concepts = data.concepts || [];
+    if (!concepts.length) return true;
+
+    const lastConceptIdx = concepts.length - 1;
+    const lastFlow = getConceptFlow(concepts[lastConceptIdx]);
+    const lastItemIdx = Math.max(0, lastFlow.length - 1);
+
+    return conceptIndex === lastConceptIdx && itemIndex === lastItemIdx;
+  }
+
+  function finishCard() {
+    // Persist completion
+    markCardDone(studentId, week);
+
+    // Use existing completion handler (shows UI + returns home)
+    completeLesson({ studentId, week });
+  }
+
   function render() {
     mountEl.innerHTML = '';
     activeQuestion = null;
 
     const concept = data.concepts?.[conceptIndex];
     if (!concept) {
-      completeLesson({ studentId, week });
+      finishCard();
       return;
     }
 
@@ -170,6 +184,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     // clamp
     if (itemIndex < 0) itemIndex = 0;
+
     if (itemIndex >= flow.length) {
       conceptIndex++;
       itemIndex = 0;
@@ -233,7 +248,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
     updateProgress();
     saveProgress();
 
-    // Auto scroll/focus
     if (pendingFocus) {
       requestAnimationFrame(() => {
         scrollAndFocusToItem(pendingFocus.itemIndex);
@@ -398,7 +412,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function setPendingFocusToNext() {
-    const concept = data.concepts?.[conceptIndex];
+    const concepts = data.concepts || [];
+    const concept = concepts[conceptIndex];
     const flow = concept ? getConceptFlow(concept) : [];
 
     let nextConcept = conceptIndex;
@@ -413,8 +428,15 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function advance() {
-    const concept = data.concepts?.[conceptIndex];
+    const concepts = data.concepts || [];
+    const concept = concepts[conceptIndex];
     const flow = concept ? getConceptFlow(concept) : [];
+
+    // If we are at the last item of the last concept and trying to advance -> finish
+    if (isLastPosition()) {
+      finishCard();
+      return;
+    }
 
     itemIndex++;
     if (itemIndex >= flow.length) {
