@@ -1,172 +1,146 @@
 /* =========================================================
-   toast.css — Material Light Toast + Countdown Bar
-   used by assets/js/ui/toast.js
+   toast.js — Material Toast with Countdown Bar
+   API: showToast(title, msg, type='info', duration=3000)
 
    UPDATE (2026-01-14):
-   - Toast now appears at TOP (below topbar) to avoid mobile keyboard covering it.
+   - Toast host is pinned to TOP of the visible screen.
+   - Host padding-top adapts to the current topbar height (if exists),
+     so toast appears "فوق الصفحة اللي فاتحها الطالب" وتحت الشريط العلوي.
    ========================================================= */
 
-:root{
-  --toast-max: 420px;
-  --toast-pad: 12px;
-  --toast-gap: 10px;
+let hostEl = null;
+let activeToast = null;
+let rafId = null;
 
-  --toast-bg: rgba(255,255,255,.86);
-  --toast-border: rgba(17,24,39,.12);
-  --toast-shadow: 0 18px 40px rgba(17,24,39,.16);
-  --toast-blur: 12px;
+function ensureHost() {
+  if (hostEl) return hostEl;
 
-  --toast-title: #111827;
-  --toast-text: #4b5563;
-  --toast-bar-bg: rgba(17,24,39,.10);
-  --toast-bar: rgba(37,99,235,1);
+  hostEl = document.createElement('div');
+  hostEl.className = 'toast-host';
+  document.body.appendChild(hostEl);
 
-  --toast-ok: rgba(22,163,74,1);
-  --toast-warn: rgba(245,158,11,1);
-  --toast-err: rgba(220,38,38,1);
+  // set initial top offset (below topbar)
+  updateHostTopPadding();
+
+  // keep it correct on resize/orientation
+  window.addEventListener('resize', updateHostTopPadding, { passive: true });
+
+  // if VisualViewport exists (mobile keyboard / bars), update as well
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateHostTopPadding, { passive: true });
+    window.visualViewport.addEventListener('scroll', updateHostTopPadding, { passive: true });
+  }
+
+  return hostEl;
 }
 
-/* Container fixed on viewport */
-.toast-host{
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  display:flex;
-  align-items:flex-start;          /* ✅ TOP instead of bottom */
-  justify-content:center;
-  padding: 16px;
-  padding-top: max(16px, env(safe-area-inset-top)); /* iOS notch safe */
+function updateHostTopPadding() {
+  if (!hostEl) return;
+
+  const topbar = document.querySelector('.topbar');
+  const basePad = 12;
+
+  // topbar is sticky; we place toast right under it
+  const topbarH = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+
+  // safe area inset is handled in CSS; here we just add below-topbar spacing
+  hostEl.style.paddingTop = `${topbarH + basePad}px`;
 }
 
-/* Toast element */
-.toast{
-  width: min(var(--toast-max), calc(100vw - 32px));
-  pointer-events: auto;
-  background: var(--toast-bg);
-  border: 1px solid var(--toast-border);
-  border-radius: 18px;
-  box-shadow: var(--toast-shadow);
-  backdrop-filter: blur(var(--toast-blur));
-  -webkit-backdrop-filter: blur(var(--toast-blur));
-  overflow: hidden;
+function iconSvg(type) {
+  const common = (path) => `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="${path}"></path>
+    </svg>
+  `;
 
-  transform: translateY(-10px) scale(.98);  /* ✅ comes from top */
-  opacity: 0;
-  transition: transform .22s ease, opacity .22s ease;
+  if (type === 'success') {
+    return common('M9 16.2l-3.5-3.5L4 14.2l5 5L20 8.2l-1.5-1.5z');
+  }
+  if (type === 'warning') {
+    return common('M1 21h22L12 2 1 21zm12-3h-2v2h2v-2zm0-8h-2v6h2V10z');
+  }
+  if (type === 'danger' || type === 'error') {
+    return common('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z');
+  }
+  // info
+  return common('M11 7h2v2h-2V7zm0 4h2v8h-2v-8zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z');
 }
 
-.toast.is-show{
-  transform: translateY(0) scale(1);
-  opacity: 1;
+function cleanup() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+  if (activeToast) {
+    activeToast.remove();
+    activeToast = null;
+  }
 }
 
-.toast-inner{
-  display:flex;
-  gap: var(--toast-gap);
-  padding: var(--toast-pad);
-  align-items:flex-start;
+function animateBar(barEl, duration) {
+  const start = performance.now();
+
+  const tick = (now) => {
+    const elapsed = now - start;
+    const t = Math.min(1, elapsed / duration);
+    // scale from 1 to 0
+    barEl.style.transform = `scaleX(${1 - t})`;
+    if (t < 1) {
+      rafId = requestAnimationFrame(tick);
+    }
+  };
+
+  rafId = requestAnimationFrame(tick);
 }
 
-/* Icon pill */
-.toast-ic{
-  width: 34px;
-  height: 34px;
-  border-radius: 14px;
-  flex: 0 0 auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background: rgba(37,99,235,.12);
-  border: 1px solid rgba(37,99,235,.18);
-  box-shadow: 0 10px 18px rgba(37,99,235,.10);
+export function showToast(title, msg, type = 'info', duration = 3000) {
+  ensureHost();
+
+  // update position each time (in case topbar height changed)
+  updateHostTopPadding();
+
+  // replace any existing toast (single toast policy)
+  cleanup();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.dataset.type = type;
+
+  toast.innerHTML = `
+    <div class="toast-inner">
+      <div class="toast-ic">${iconSvg(type)}</div>
+      <div class="toast-content">
+        <p class="toast-title">${escapeHtml(String(title || ''))}</p>
+        <p class="toast-msg">${escapeHtml(String(msg || ''))}</p>
+      </div>
+    </div>
+    <div class="toast-bar"><i></i></div>
+  `;
+
+  hostEl.appendChild(toast);
+  activeToast = toast;
+
+  // show
+  requestAnimationFrame(() => {
+    toast.classList.add('is-show');
+  });
+
+  // animate bar
+  const bar = toast.querySelector('.toast-bar > i');
+  if (bar) animateBar(bar, duration);
+
+  // auto hide
+  window.setTimeout(() => {
+    if (!activeToast) return;
+    activeToast.classList.remove('is-show');
+    window.setTimeout(() => cleanup(), 260);
+  }, duration);
 }
 
-.toast-ic svg{
-  width: 18px;
-  height: 18px;
-  fill: rgba(29,78,216,1);
-}
-
-.toast-content{
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.toast-title{
-  margin: 0;
-  font-weight: 900;
-  font-size: 14px;
-  color: var(--toast-title);
-  line-height: 1.2;
-}
-
-.toast-msg{
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--toast-text);
-  line-height: 1.45;
-  word-wrap: break-word;
-}
-
-/* Progress bar (countdown) */
-.toast-bar{
-  height: 4px;
-  width: 100%;
-  background: var(--toast-bar-bg);
-  position: relative;
-}
-
-.toast-bar > i{
-  display:block;
-  height: 100%;
-  width: 100%;
-  background: var(--toast-bar);
-  transform-origin: right center; /* RTL feel */
-  transform: scaleX(1);
-}
-
-/* Variants */
-.toast[data-type="info"] .toast-ic{
-  background: rgba(37,99,235,.12);
-  border-color: rgba(37,99,235,.18);
-}
-.toast[data-type="info"] .toast-ic svg{ fill: rgba(29,78,216,1); }
-.toast[data-type="info"] .toast-bar > i{ background: rgba(37,99,235,1); }
-
-.toast[data-type="success"] .toast-ic{
-  background: rgba(22,163,74,.12);
-  border-color: rgba(22,163,74,.18);
-  box-shadow: 0 10px 18px rgba(22,163,74,.10);
-}
-.toast[data-type="success"] .toast-ic svg{ fill: var(--toast-ok); }
-.toast[data-type="success"] .toast-bar > i{ background: var(--toast-ok); }
-
-.toast[data-type="warning"] .toast-ic{
-  background: rgba(245,158,11,.14);
-  border-color: rgba(245,158,11,.22);
-  box-shadow: 0 10px 18px rgba(245,158,11,.10);
-}
-.toast[data-type="warning"] .toast-ic svg{ fill: var(--toast-warn); }
-.toast[data-type="warning"] .toast-bar > i{ background: var(--toast-warn); }
-
-.toast[data-type="danger"] .toast-ic,
-.toast[data-type="error"] .toast-ic{
-  background: rgba(220,38,38,.12);
-  border-color: rgba(220,38,38,.18);
-  box-shadow: 0 10px 18px rgba(220,38,38,.10);
-}
-.toast[data-type="danger"] .toast-ic svg,
-.toast[data-type="error"] .toast-ic svg{ fill: var(--toast-err); }
-.toast[data-type="danger"] .toast-bar > i,
-.toast[data-type="error"] .toast-bar > i{ background: var(--toast-err); }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce){
-  .toast{ transition: none; }
-}
-
-/* Mobile spacing tweak */
-@media (max-width: 420px){
-  .toast-inner{ padding: 10px; }
+function escapeHtml(s) {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
