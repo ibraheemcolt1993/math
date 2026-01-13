@@ -69,14 +69,30 @@ export function setStudentProgress(studentId, week, progress) {
   writeRoot(root);
 }
 
+/* ---------- Completion helpers ---------- */
+export function clearCardProgress(studentId, week) {
+  const root = readRoot();
+  if (!root[studentId]?.cards?.[String(week)]) return;
+
+  const card = root[studentId].cards[String(week)];
+  delete card.progress;
+
+  root[studentId].cards[String(week)] = card;
+  writeRoot(root);
+}
+
 export function markCardDone(studentId, week) {
   const root = readRoot();
   if (!root[studentId]) root[studentId] = { cards: {} };
 
-  root[studentId].cards[String(week)] = {
-    ...(root[studentId].cards[String(week)] || {}),
-    done: true,
-  };
+  const key = String(week);
+  const prev = root[studentId].cards[key] || {};
+
+  // عندما تُنجز البطاقة: نثبت done ونحذف progress حتى ما يصير Resume على بطاقة منجزة
+  const next = { ...prev, done: true };
+  delete next.progress;
+
+  root[studentId].cards[key] = next;
 
   writeRoot(root);
 }
