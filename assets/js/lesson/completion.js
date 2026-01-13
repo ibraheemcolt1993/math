@@ -1,22 +1,24 @@
 /* =========================================================
    completion.js — Card Completion Handling + Certificate Hook
    - Marks card done
-   - Prepares certificate payload (for Phase 2)
+   - Prepares certificate payload
    - Stores last certificate payload in LocalStorage
+   - Shows "عرض الشهادة" button on completion (no HTML edits needed)
    ========================================================= */
 
 import { markCardDone } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
 
-const LS_CURRENT_STUDENT = 'math:currentStudent';      // set by app.js
-const LS_LAST_CERTIFICATE = 'math:lastCertificate';     // prepared here for Phase 2
+const LS_CURRENT_STUDENT = 'math:currentStudent';       // set by app.js
+const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
+const CERT_URL = '/assets/cert/certificate.html';
 
 export function completeLesson({ studentId, week, cardTitle = '' }) {
   // mark card as done
   markCardDone(studentId, week);
 
-  // Prepare certificate payload (Phase 2)
+  // Prepare certificate payload
   const student = readCurrentStudent();
   const payload = buildCertificatePayload({ studentId, week, cardTitle, student });
   writeLastCertificate(payload);
@@ -27,20 +29,54 @@ export function completeLesson({ studentId, week, cardTitle = '' }) {
     completeEl.classList.remove('hidden');
     completeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    // Optional: inject name for future UI usage if you add placeholders later
-    // (No dependency on HTML changes الآن)
+    // Inject data for future UI usage
     completeEl.setAttribute('data-student-name', payload.fullName || payload.firstName || '');
     completeEl.setAttribute('data-week', String(week));
+
+    // Add certificate button (idempotent)
+    ensureCertActions(completeEl);
   }
 
-  // Toast includes first name (nice for readiness)
+  // Toast includes first name
   const firstName = payload.firstName || 'بطل';
   showToast('ممتاز 🎉', `أحسنت يا ${firstName} — تم إنجاز البطاقة`, 'success', 3500);
 
-  // auto return after short delay (can be removed لاحقًا)
+  // NOTE: we no longer auto-return quickly, to allow opening the certificate
+  // Keep a gentle optional return after longer time (can be removed later)
   setTimeout(() => {
-    goHome();
-  }, 2000);
+    // only return if user didn't open/leave (best-effort)
+    // If you prefer: remove entirely
+    // goHome();
+  }, 12000);
+}
+
+/* ---------- Certificate UI Actions ---------- */
+function ensureCertActions(completeEl) {
+  if (completeEl.querySelector('#btnViewCert')) return;
+
+  // Find a good place to inject (card-body preferred)
+  const body = completeEl.querySelector('.card-body') || completeEl;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'row';
+  wrap.style.marginTop = '12px';
+  wrap.style.gap = '10px';
+
+  const btnCert = document.createElement('a');
+  btnCert.id = 'btnViewCert';
+  btnCert.className = 'btn btn-primary btn-lg w-100';
+  btnCert.href = CERT_URL;
+  btnCert.textContent = 'عرض الشهادة';
+
+  const btnBack = document.createElement('button');
+  btnBack.type = 'button';
+  btnBack.className = 'btn btn-outline w-100';
+  btnBack.textContent = 'العودة للبطاقات';
+  btnBack.addEventListener('click', () => goHome());
+
+  wrap.appendChild(btnCert);
+  wrap.appendChild(btnBack);
+  body.appendChild(wrap);
 }
 
 /* ---------- Certificate Hook Helpers ---------- */
