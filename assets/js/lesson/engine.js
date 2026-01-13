@@ -8,6 +8,11 @@
        - Wrong: hints/attempts/solution
        - Correct: toast تعزيز + مهلة قصيرة ثم يكشف اللي بعده تلقائيًا
    - Auto scroll + focus to newly revealed item after advancing
+   - Fix: Flow question items may be written as:
+       { "type":"question", ... }  (without inner question.type)
+     We infer question renderer type:
+       - if choices exists -> mcq
+       - else -> input
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
@@ -31,7 +36,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
   let firstPaint = true;
 
   // Question state (for current question only)
-  let activeQuestion = null; // { check, attempts, solutionShown, btn, dotsWrap, container, question }
+  let activeQuestion = null; // { check, attempts, solutionShown, btn, dotsWrap, container, qData, verifiedOk }
 
   function getConceptFlow(concept) {
     if (Array.isArray(concept.flow) && concept.flow.length) return concept.flow;
@@ -41,7 +46,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
     for (const key of LEGACY_ORDER) {
       if (key === 'question') {
         if (concept.question) {
-          flow.push({ type: 'question', ...concept.question });
+          // legacy had question.type inside question object
+          flow.push({ type: 'question', q: concept.question });
         }
       } else {
         if (concept[key]) flow.push({ type: key, text: concept[key] });
@@ -78,6 +84,38 @@ export function initEngine({ week, studentId, data, mountEl }) {
       conceptIndex,
       stepIndex: itemIndex,
     });
+  }
+
+  function normalizeFlowQuestionItem(item) {
+    // Supported shapes:
+    // A) { type:'question', q:{ type:'input'|'mcq', ... } }
+    // B) { type:'question', type:'question', ...fields... }  (no inner type) -> infer
+    // C) { type:'question', qtype:'input'|'mcq', ...fields... } -> use qtype
+    if (item?.q && typeof item.q === 'object') {
+      return { ...item.q };
+    }
+
+    const inferredType =
+      item?.qtype ||
+      item?.questionType ||
+      (Array.isArray(item?.choices) ? 'mcq' : 'input');
+
+    const q = {
+      type: inferredType,
+      text: item?.text || 'سؤال',
+      hints: item?.hints || [],
+      solution: item?.solution || '',
+    };
+
+    if (inferredType === 'mcq') {
+      q.choices = item?.choices || [];
+      q.correctIndex = typeof item?.correctIndex === 'number' ? item.correctIndex : 0;
+    } else {
+      q.answer = item?.answer ?? '';
+      q.placeholder = item?.placeholder;
+    }
+
+    return q;
   }
 
   function render() {
@@ -206,9 +244,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
     wrap.setAttribute('data-step-index', String(idx));
     wrap.setAttribute('data-step-key', 'question');
 
+    const qData = normalizeFlowQuestionItem(item);
+
     const title = document.createElement('p');
     title.className = 'question-title';
-    title.textContent = item.text || 'سؤال';
+    title.textContent = qData.text || 'سؤال';
 
     const attemptsWrap = document.createElement('div');
     attemptsWrap.className = 'attempts';
@@ -228,18 +268,32 @@ export function initEngine({ week, studentId, data, mountEl }) {
     wrap.appendChild(qMount);
     wrap.appendChild(actions);
 
-    const q = renderQuestion({ mountEl: qMount, question: item });
+    try {
+      const q = renderQuestion({ mountEl: qMount, question: qData });
 
-    activeQuestion = {
-      check: q.check,
-      attempts: 0,
-      solutionShown: false,
-      btn: null,
-      dotsWrap: attemptsWrap,
-      container: wrap,
-      question: item,
-      verifiedOk: false,
-    };
+      activeQuestion = {
+        check: q.check,
+        attempts: 0,
+        solutionShown: false,
+        btn: null,
+        dotsWrap: attemptsWrap,
+        container: wrap,
+        qData,
+        verifiedOk: false,
+      };
+    } catch (err) {
+      console.error(err);
+      // show error block instead of crashing whole page
+      const errBox = document.createElement('div');
+      errBox.className = 'solution';
+      errBox.innerHTML = `
+        <p class="solution-title">خطأ في إعداد السؤال</p>
+        <div class="solution-text">تأكد من نوع السؤال وحقوله (input/mcq).</div>
+      `;
+      wrap.appendChild(errBox);
+      showToast('خطأ', 'في مشكلة ببيانات السؤال (JSON)', 'error', 4500);
+      activeQuestion = null;
+    }
 
     return wrap;
   }
@@ -247,7 +301,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
   function onVerifyOrAdvanceQuestion() {
     if (!activeQuestion || !activeQuestion.btn) return;
 
-    // if already correct, advance (this case rarely used؛ عادة بنتقدم تلقائيًا)
     if (activeQuestion.verifiedOk) {
       advanceWithFocus();
       return;
@@ -278,18 +331,18 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
       if (a < ENGINE.MAX_ATTEMPTS) {
         const hint =
-          activeQuestion.question.hints?.[a - 1] ||
+          activeQuestion.qData.hints?.[a - 1] ||
           DEFAULT_HINTS[a - 1] ||
           FINAL_HINT;
 
         showToast('تلميح', hint, 'warning', 4000);
       } else {
-        const hint3 = activeQuestion.question.hints?.[a - 1] || FINAL_HINT;
+        const hint3 = activeQuestion.qData.hints?.[a - 1] || FINAL_HINT;
         showToast('تلميح قوي', hint3, 'warning', 4500);
 
         if (!activeQuestion.solutionShown) {
           showToast('الحل', 'تم عرض الحل النموذجي تحت', 'danger', 4500);
-          showSolution(activeQuestion.container, activeQuestion.question.solution);
+          showSolution(activeQuestion.container, activeQuestion.qData.solution);
           activeQuestion.solutionShown = true;
         }
       }
