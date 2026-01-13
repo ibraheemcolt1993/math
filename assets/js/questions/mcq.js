@@ -1,5 +1,6 @@
 /* =========================================================
    mcq.js — Multiple Choice Question (Single Correct)
+   - Fix: enforce single selection by using one shared radio group name
    ========================================================= */
 
 export function renderMcqQuestion({ mountEl, question }) {
@@ -16,24 +17,28 @@ export function renderMcqQuestion({ mountEl, question }) {
 
   let selectedIndex = null;
 
+  // IMPORTANT: one shared group name for all choices (prevents multi-select)
+  const groupName = `mcq-${Math.random().toString(36).slice(2)}`;
+
   (question.choices || []).forEach((choice, idx) => {
     const label = document.createElement('label');
     label.className = 'choice';
 
     const radio = document.createElement('input');
     radio.type = 'radio';
-    radio.name = `mcq-${Math.random().toString(36).slice(2)}`;
-    radio.value = idx;
+    radio.name = groupName;
+    radio.value = String(idx);
 
     const span = document.createElement('span');
     span.textContent = choice;
 
-    label.appendChild(radio);
-    label.appendChild(span);
-
-    label.addEventListener('click', () => {
+    // Keep selectedIndex in sync
+    radio.addEventListener('change', () => {
       selectedIndex = idx;
     });
+
+    label.appendChild(radio);
+    label.appendChild(span);
 
     wrap.appendChild(label);
   });
