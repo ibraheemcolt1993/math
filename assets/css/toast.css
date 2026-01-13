@@ -1,6 +1,9 @@
 /* =========================================================
    toast.css — Material Light Toast + Countdown Bar
    used by assets/js/ui/toast.js
+
+   UPDATE (2026-01-14):
+   - Toast now appears at TOP (below topbar) to avoid mobile keyboard covering it.
    ========================================================= */
 
 :root{
@@ -30,9 +33,10 @@
   pointer-events: none;
   z-index: 9999;
   display:flex;
-  align-items:flex-end;
+  align-items:flex-start;          /* ✅ TOP instead of bottom */
   justify-content:center;
   padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top)); /* iOS notch safe */
 }
 
 /* Toast element */
@@ -47,7 +51,7 @@
   -webkit-backdrop-filter: blur(var(--toast-blur));
   overflow: hidden;
 
-  transform: translateY(18px) scale(.98);
+  transform: translateY(-10px) scale(.98);  /* ✅ comes from top */
   opacity: 0;
   transition: transform .22s ease, opacity .22s ease;
 }
