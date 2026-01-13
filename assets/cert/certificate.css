@@ -1,8 +1,8 @@
 /* =========================================================
    certificate.css — Certificate Page Styles (Light Material)
-   - Print-friendly
-   - A4 ratio
-   - Soft shadows on screen, clean on print
+   هدف النسخة الحالية:
+   - الشهادة تظهر كاملة داخل شاشة الجوال (Screenshot واحد بدون سكرول)
+   - إخفاء أزرار الأكشن على الجوال عشان ما تزود الارتفاع
    ========================================================= */
 
 .cert-app {
@@ -197,29 +197,120 @@
   }
 }
 
-/* Mobile */
+/* =========================================================
+   Mobile Screenshot Mode (default on small screens)
+   - Center certificate
+   - Fit inside viewport (no scroll)
+   - Hide actions to keep one-shot screenshot
+   ========================================================= */
 @media (max-width: 640px) {
+  /* make page fit screen */
+  html, body {
+    height: 100%;
+    overflow: hidden; /* screenshot بدون سكرول */
+  }
+
+  .container.section {
+    padding-block: 12px;
+  }
+
+  .cert-shell {
+    height: calc(100vh - 72px); /* تقريبًا ارتفاع topbar */
+    display: grid;
+    place-items: center;
+  }
+
+  /* Hide actions on mobile for one-screen screenshot */
+  .cert-actions {
+    display: none !important;
+  }
+
+  /* Fit paper into viewport */
   .cert-paper {
-    padding: 28px 20px;
+    width: min(94vw, 420px);
+    max-height: calc(100vh - 92px);
+    padding: 18px 16px 14px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+  }
+
+  .cert-bg {
+    width: 320px;
+    height: 320px;
+    inset: -25% -20% auto auto;
+  }
+
+  .cert-head {
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .cert-badge {
+    font-size: 34px;
   }
 
   .cert-title {
-    font-size: 26px;
+    font-size: 22px;
+  }
+
+  .cert-sub {
+    font-size: 12px;
+  }
+
+  .cert-line {
+    margin: 10px 0 4px;
+    font-size: 12px;
   }
 
   .cert-name {
-    font-size: 28px;
+    font-size: 22px;
+    padding: 2px 0 2px;
   }
 
   .cert-card {
-    font-size: 18px;
+    font-size: 15px;
+    padding: 2px 0 6px;
   }
 
   .cert-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .cert-meta-item {
+    padding: 8px 8px;
+    border-radius: 10px;
+  }
+
+  .cert-meta-k {
+    font-size: 11px;
+  }
+
+  .cert-meta-v {
+    font-size: 12px;
   }
 
   .cert-footer {
-    grid-template-columns: 1fr;
+    margin-top: 12px;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  .cert-stamp {
+    width: 64px;
+    height: 64px;
+  }
+
+  .cert-stamp-ring {
+    border-width: 2px;
+  }
+
+  .cert-sign-k {
+    font-size: 11px;
+  }
+
+  .cert-sign-v {
+    font-size: 12px;
   }
 }
