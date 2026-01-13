@@ -1,95 +1,78 @@
 /* =========================================================
-   cardsPage.js — Cards List Logic (index.html)
+   cardsPage.js — Cards List (Locking + Completion UI)
+   - Loads cards from /data/cards.json
+   - Applies sequential locking via prereq
+   - Shows completed cards with golden frame + star
+   - Navigates to lesson.html?week=XXX on open cards
    ========================================================= */
 
-import { fetchJson } from '../core/api.js';
-import { DATA_PATHS } from '../core/constants.js';
-import { getLastStudentId, isCardDone } from '../core/storage.js';
-import { goToLesson } from '../core/router.js';
-import { showToast } from '../ui/toast.js';
+import { API_PATHS } from '../core/constants.js';
+import { fetchJSON } from '../core/api.js';
+import { getLastStudentId } from '../core/storage.js';
+import { isCardDone } from '../core/storage.js';
 
-export async function initCardsPage() {
+export async function initCardsPage({ mountEl }) {
+  mountEl.innerHTML = '';
+
   const studentId = getLastStudentId();
-  if (!studentId) return;
-
-  const listEl = document.getElementById('cardsList');
-  const studentNameEl = document.getElementById('cardsStudentName');
-
-  if (studentNameEl) studentNameEl.textContent = `طالب ${studentId}`;
-
-  try {
-    const cards = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
-    renderCards(listEl, cards, studentId);
-  } catch (e) {
-    showToast('خطأ', 'فشل تحميل البطاقات', 'error');
-    console.error(e);
+  if (!studentId) {
+    mountEl.innerHTML = `<p class="muted">الرجاء إدخال رقم الهوية أولًا.</p>`;
+    return;
   }
-}
 
-function renderCards(container, cards, studentId) {
-  container.innerHTML = '';
+  let cards = [];
+  try {
+    cards = await fetchJSON(API_PATHS.CARDS);
+  } catch (e) {
+    mountEl.innerHTML = `<p class="error">تعذر تحميل البطاقات.</p>`;
+    return;
+  }
 
-  cards.forEach((card) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'cards-grid';
+
+  cards.forEach((card, idx) => {
     const done = isCardDone(studentId, card.week);
-    const prereqDone = !card.prereq || isCardDone(studentId, card.prereq);
-    const locked = !prereqDone;
 
-    const cardEl = document.createElement('div');
-    cardEl.className = `card ${locked ? 'is-locked' : ''} ${done ? 'is-done' : ''}`;
+    // locking rule: open if no prereq OR prereq done
+    let locked = false;
+    if (card.prereq !== null && card.prereq !== undefined) {
+      locked = !isCardDone(studentId, card.prereq);
+    }
 
-    cardEl.innerHTML = `
-      <div class="card-header">
-        <div>
-          <h3 class="card-title">${escapeHtml(card.title)}</h3>
-          <p class="card-subtitle">الأسبوع ${card.week}</p>
-        </div>
-        ${done ? starHtml() : ''}
-      </div>
+    const el = document.createElement('div');
+    el.className = 'card card-item';
 
+    if (locked) el.classList.add('locked');
+    if (done) el.classList.add('done');
+
+    el.innerHTML = `
       <div class="card-body">
-        <span class="badge ${done ? 'done' : locked ? 'locked' : 'primary'}">
-          ${done ? 'منجزة' : locked ? 'مقفلة' : 'مفتوحة'}
-        </span>
-      </div>
-
-      <div class="card-footer">
-        <button class="btn ${locked ? 'btn-outline' : 'btn-primary'} w-100"
-                ${locked ? 'disabled' : ''}>
-          ${done ? 'إعادة فتح' : 'ابدأ'}
-        </button>
+        <div class="card-header">
+          <span class="card-week">الأسبوع ${card.week}</span>
+          ${done ? '<span class="star">⭐</span>' : ''}
+        </div>
+        <h3 class="card-title">${card.title}</h3>
+        <div class="card-status">
+          ${
+            done
+              ? '<span class="status done">منجزة</span>'
+              : locked
+              ? '<span class="status locked">مقفلة</span>'
+              : '<span class="status open">مفتوحة</span>'
+          }
+        </div>
       </div>
     `;
 
-    const btn = cardEl.querySelector('button');
     if (!locked) {
-      btn.addEventListener('click', () => {
-        goToLesson(card.week);
-      });
-    } else {
-      btn.addEventListener('click', () => {
-        showToast('مقفلة 🔒', 'لازم تنهي البطاقة السابقة أولًا', 'warning');
+      el.addEventListener('click', () => {
+        window.location.href = `lesson.html?week=${encodeURIComponent(card.week)}`;
       });
     }
 
-    container.appendChild(cardEl);
+    wrap.appendChild(el);
   });
-}
 
-function starHtml() {
-  return `
-    <div class="star" title="منجزة">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.6-6.2 3.6 1.6-7-5.4-4.7 7.1-.6z"></path>
-      </svg>
-    </div>
-  `;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+  mountEl.appendChild(wrap);
 }
