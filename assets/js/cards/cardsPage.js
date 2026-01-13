@@ -3,6 +3,7 @@
    - Loads cards.json
    - Applies sequential locking via prereq
    - Shows completed cards as gold + star (base.css styles)
+   - Shows student name (firstName/fullName) instead of "طالب {id}"
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
@@ -11,6 +12,8 @@ import { getLastStudentId, isCardDone } from '../core/storage.js';
 import { goToLesson } from '../core/router.js';
 import { showToast } from '../ui/toast.js';
 
+const LS_CURRENT_STUDENT = 'math:currentStudent'; // set by app.js
+
 export async function initCardsPage() {
   const studentId = getLastStudentId();
   if (!studentId) return;
@@ -18,7 +21,13 @@ export async function initCardsPage() {
   const listEl = document.getElementById('cardsList');
   const studentNameEl = document.getElementById('cardsStudentName');
 
-  if (studentNameEl) studentNameEl.textContent = `طالب ${studentId}`;
+  const student = readCurrentStudent();
+  const displayName =
+    (student?.firstName && String(student.firstName).trim()) ||
+    (student?.fullName && String(student.fullName).trim()) ||
+    `طالب ${studentId}`;
+
+  if (studentNameEl) studentNameEl.textContent = displayName;
 
   try {
     const cards = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
@@ -26,6 +35,15 @@ export async function initCardsPage() {
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
     console.error(e);
+  }
+}
+
+function readCurrentStudent() {
+  try {
+    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
 }
 
