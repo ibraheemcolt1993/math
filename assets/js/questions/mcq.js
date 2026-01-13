@@ -1,6 +1,9 @@
 /* =========================================================
    mcq.js — Multiple Choice Question (Single Correct)
    - Fix: enforce single selection by using one shared radio group name
+
+   UPDATE (2026-01-14):
+   - Persist MCQ selection across engine re-renders using question._selectedIndex
    ========================================================= */
 
 export function renderMcqQuestion({ mountEl, question }) {
@@ -15,7 +18,10 @@ export function renderMcqQuestion({ mountEl, question }) {
 
   wrap.appendChild(desc);
 
-  let selectedIndex = null;
+  // Restore previous selection (if any)
+  let selectedIndex = (typeof question._selectedIndex === 'number')
+    ? question._selectedIndex
+    : null;
 
   // IMPORTANT: one shared group name for all choices (prevents multi-select)
   const groupName = `mcq-${Math.random().toString(36).slice(2)}`;
@@ -29,12 +35,18 @@ export function renderMcqQuestion({ mountEl, question }) {
     radio.name = groupName;
     radio.value = String(idx);
 
+    // Apply restored selection
+    if (selectedIndex === idx) {
+      radio.checked = true;
+    }
+
     const span = document.createElement('span');
     span.textContent = choice;
 
-    // Keep selectedIndex in sync
+    // Keep selectedIndex in sync + persist on question object
     radio.addEventListener('change', () => {
       selectedIndex = idx;
+      question._selectedIndex = idx;
     });
 
     label.appendChild(radio);
@@ -50,6 +62,11 @@ export function renderMcqQuestion({ mountEl, question }) {
   mountEl.appendChild(wrap);
 
   function check() {
+    // Persist selection (safety)
+    if (typeof selectedIndex === 'number') {
+      question._selectedIndex = selectedIndex;
+    }
+
     const ok = selectedIndex === question.correctIndex;
 
     feedback.textContent = ok
