@@ -1,5 +1,5 @@
 /* =========================================================
-   engine.js — Unlimited Flow Engine (single "متابعة" button)
+   engine.js — Unlimited Flow Engine (single "متابعة" button) + Resume
    - Concepts can use: concept.flow = [ {type:..., ...}, ... ]  ✅ (no limits)
    - Backward compatible: if no flow, we build flow from legacy fields
    - One button only: "متابعة"
@@ -8,18 +8,15 @@
        - Wrong: hints/attempts/solution
        - Correct: toast تعزيز + مهلة قصيرة ثم يكشف اللي بعده تلقائيًا
    - Auto scroll + focus to newly revealed item after advancing
-   - Fix: Flow question items may be written as:
-       { "type":"question", ... }  (without inner question.type)
-     We infer question renderer type:
-       - if choices exists -> mcq
-       - else -> input
+   - Fix: infer question.type if flow item doesn't include it
+   - Resume: load saved { conceptIndex, stepIndex } from storage and continue
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
 import { showToast } from '../ui/toast.js';
 import { ENCOURAGEMENTS, DEFAULT_HINTS, FINAL_HINT, pickRandom } from '../ui/text.js';
 import { renderQuestion } from '../questions/registry.js';
-import { setStudentProgress } from '../core/storage.js';
+import { setStudentProgress, getStudentProgress, isCardDone } from '../core/storage.js';
 import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
 
@@ -46,7 +43,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
     for (const key of LEGACY_ORDER) {
       if (key === 'question') {
         if (concept.question) {
-          // legacy had question.type inside question object
           flow.push({ type: 'question', q: concept.question });
         }
       } else {
@@ -56,40 +52,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return flow;
   }
 
-  function totalFlowItems() {
-    const concepts = data.concepts || [];
-    let total = 0;
-    for (const c of concepts) total += getConceptFlow(c).length;
-    return Math.max(1, total);
-  }
-
-  function currentFlowPosition() {
-    const concepts = data.concepts || [];
-    let pos = 0;
-    for (let i = 0; i < conceptIndex; i++) pos += getConceptFlow(concepts[i]).length;
-    pos += itemIndex;
-    return pos;
-  }
-
-  function updateProgress() {
-    const total = totalFlowItems();
-    const pos = currentFlowPosition();
-    const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)));
-    setProgressUI(pct);
-  }
-
-  function saveProgress() {
-    // keep compatibility with storage schema: stepIndex
-    setStudentProgress(studentId, week, {
-      conceptIndex,
-      stepIndex: itemIndex,
-    });
-  }
-
   function normalizeFlowQuestionItem(item) {
     // Supported shapes:
     // A) { type:'question', q:{ type:'input'|'mcq', ... } }
-    // B) { type:'question', type:'question', ...fields... }  (no inner type) -> infer
+    // B) { type:'question', ...fields... }  (no inner type) -> infer
     // C) { type:'question', qtype:'input'|'mcq', ...fields... } -> use qtype
     if (item?.q && typeof item.q === 'object') {
       return { ...item.q };
@@ -118,6 +84,72 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return q;
   }
 
+  function totalFlowItems() {
+    const concepts = data.concepts || [];
+    let total = 0;
+    for (const c of concepts) total += getConceptFlow(c).length;
+    return Math.max(1, total);
+  }
+
+  function currentFlowPosition() {
+    const concepts = data.concepts || [];
+    let pos = 0;
+    for (let i = 0; i < conceptIndex; i++) pos += getConceptFlow(concepts[i]).length;
+    pos += itemIndex;
+    return pos;
+  }
+
+  function updateProgress() {
+    const total = totalFlowItems();
+    const pos = currentFlowPosition();
+    const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)));
+    setProgressUI(pct);
+  }
+
+  function saveProgress() {
+    setStudentProgress(studentId, week, {
+      conceptIndex,
+      stepIndex: itemIndex,
+    });
+  }
+
+  function clampToValidPosition() {
+    const concepts = data.concepts || [];
+    if (!concepts.length) {
+      conceptIndex = 0;
+      itemIndex = 0;
+      return;
+    }
+
+    conceptIndex = Math.max(0, Math.min(conceptIndex, concepts.length - 1));
+
+    const flow = getConceptFlow(concepts[conceptIndex]);
+    if (!flow.length) {
+      itemIndex = 0;
+      return;
+    }
+
+    itemIndex = Math.max(0, Math.min(itemIndex, flow.length - 1));
+  }
+
+  function applyResumeIfAvailable() {
+    // If card already done, start from beginning (or you can choose to start end)
+    if (isCardDone(studentId, week)) return;
+
+    const saved = getStudentProgress(studentId, week)?.progress;
+    if (!saved) return;
+
+    // saved structure: { conceptIndex, stepIndex }
+    if (Number.isFinite(saved.conceptIndex)) conceptIndex = Number(saved.conceptIndex);
+    if (Number.isFinite(saved.stepIndex)) itemIndex = Number(saved.stepIndex);
+
+    clampToValidPosition();
+
+    // focus the current item after first render
+    pendingFocus = { conceptIndex, itemIndex };
+    firstPaint = true;
+  }
+
   function render() {
     mountEl.innerHTML = '';
     activeQuestion = null;
@@ -130,7 +162,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     const flow = getConceptFlow(concept);
     if (!flow.length) {
-      // concept with no content: move on
       conceptIndex++;
       itemIndex = 0;
       render();
@@ -190,11 +221,9 @@ export function initEngine({ week, studentId, data, mountEl }) {
     // decide behavior for current item
     const currentItem = flow[itemIndex];
     if (currentItem?.type === 'question' && activeQuestion) {
-      // "متابعة" acts as verify for the current question
       activeQuestion.btn = btn;
       btn.addEventListener('click', () => onVerifyOrAdvanceQuestion());
     } else {
-      // normal advance
       btn.addEventListener('click', () => advanceWithFocus());
     }
 
@@ -204,8 +233,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
     updateProgress();
     saveProgress();
 
-    // Auto scroll/focus to newly revealed content (after pressing متابعة)
-    if (!firstPaint && pendingFocus) {
+    // Auto scroll/focus
+    if (pendingFocus) {
       requestAnimationFrame(() => {
         scrollAndFocusToItem(pendingFocus.itemIndex);
         pendingFocus = null;
@@ -283,7 +312,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
       };
     } catch (err) {
       console.error(err);
-      // show error block instead of crashing whole page
       const errBox = document.createElement('div');
       errBox.className = 'solution';
       errBox.innerHTML = `
@@ -314,7 +342,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
       showToast('صح ✔', pickRandom(ENCOURAGEMENTS), 'success');
 
-      // give student time to read encouragement, then reveal next item
       setTimeout(() => {
         advanceWithFocus();
       }, 850);
@@ -322,7 +349,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
       return;
     }
 
-    // wrong
     activeQuestion.attempts++;
     const a = activeQuestion.attempts;
 
@@ -426,6 +452,9 @@ export function initEngine({ week, studentId, data, mountEl }) {
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
   }
+
+  // Apply resume (if any) before first render
+  applyResumeIfAvailable();
 
   // start
   render();
