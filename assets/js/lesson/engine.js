@@ -5,6 +5,7 @@
    - "متابعة" after each text step, and after answering question correctly
    - Auto scroll + focus to the newly revealed step/question after "متابعة"
    - Attempts: 3 hints then show solution; after that allow retry without extra hints
+   - تحسين السلاسة: سكرول مخصص أهدى (مدة حسب المسافة) بدون رجّات
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
@@ -25,6 +26,11 @@ const STEPS_ORDER = [
   'question'
 ];
 
+// Scroll tuning
+const SCROLL_OFFSET_PX = 10;  // مساحة بسيطة فوق العنصر
+const MIN_SCROLL_MS = 320;    // أقل مدة
+const MAX_SCROLL_MS = 900;    // أعلى مدة
+
 export function initEngine({ week, studentId, data, mountEl }) {
   mountEl.innerHTML = '';
 
@@ -36,6 +42,9 @@ export function initEngine({ week, studentId, data, mountEl }) {
   // Scroll/focus control
   let pendingFocus = null; // { conceptIndex, stepIndex }
   let firstPaint = true;
+
+  // smooth scroll state (to cancel previous)
+  let scrollRaf = null;
 
   function render() {
     mountEl.innerHTML = '';
@@ -87,7 +96,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
         onClick: () => nextStepWithFocus(),
       }));
     }
-    // for question: continue bar is controlled by question logic after correct
 
     card.appendChild(cardInner);
     mountEl.appendChild(card);
@@ -98,17 +106,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
     // Auto scroll/focus to newly revealed content (after pressing متابعة)
     if (!firstPaint && pendingFocus) {
       requestAnimationFrame(() => {
-        scrollAndFocusToStep(pendingFocus.conceptIndex, pendingFocus.stepIndex);
+        scrollAndFocusToStep(pendingFocus.stepIndex);
         pendingFocus = null;
       });
     }
     firstPaint = false;
-  }
-
-  function nextStepWithFocus() {
-    nextStep();
-    // render() will happen inside nextStep -> render(); so set pendingFocus BEFORE render
-    // But nextStep currently calls render at end, so we set pendingFocus before calling nextStep
   }
 
   function renderContinueBar({ enabled, onClick }) {
@@ -212,7 +214,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
         return;
       }
 
-      // wrong
       attempts++;
 
       if (attempts <= ENGINE.MAX_ATTEMPTS) {
@@ -241,7 +242,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
     });
 
     btnNext.addEventListener('click', () => {
-      // set pending focus to the NEXT step before moving
       setPendingFocusToNext();
       nextStep();
     });
@@ -270,7 +270,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function setPendingFocusToNext() {
-    // Calculate where we will land after nextStep()
     let nextConcept = conceptIndex;
     let nextStep = stepIndex + 1;
 
@@ -308,18 +307,72 @@ export function initEngine({ week, studentId, data, mountEl }) {
     });
   }
 
-  function scrollAndFocusToStep(cIdx, sIdx) {
-    // We render only current concept card, so focus is within current mount
-    // Try to find element by data-step-index in DOM
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function easeInOutCubic(t) {
+    return t < 0.5
+      ? 4 * t * t * t
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  function cancelScroll() {
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    scrollRaf = null;
+  }
+
+  function smoothScrollToY(targetY) {
+    if (prefersReducedMotion()) {
+      window.scrollTo(0, targetY);
+      return Promise.resolve();
+    }
+
+    cancelScroll();
+
+    const startY = window.scrollY || document.documentElement.scrollTop || 0;
+    const delta = targetY - startY;
+
+    if (Math.abs(delta) < 2) return Promise.resolve();
+
+    // duration proportional to distance (أهدى مع مسافة أطول)
+    const duration = Math.max(
+      MIN_SCROLL_MS,
+      Math.min(MAX_SCROLL_MS, Math.abs(delta) * 0.65)
+    );
+
+    const start = performance.now();
+
+    return new Promise((resolve) => {
+      const tick = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = easeInOutCubic(t);
+        window.scrollTo(0, startY + delta * eased);
+
+        if (t < 1) {
+          scrollRaf = requestAnimationFrame(tick);
+        } else {
+          scrollRaf = null;
+          resolve();
+        }
+      };
+
+      scrollRaf = requestAnimationFrame(tick);
+    });
+  }
+
+  async function scrollAndFocusToStep(cIdx, sIdx) {
     const target = mountEl.querySelector(`[data-step-index="${sIdx}"]`);
     if (!target) return;
 
-    // Make focusable temporarily
     if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
 
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const rect = target.getBoundingClientRect();
+    const targetY = (window.scrollY || 0) + rect.top - SCROLL_OFFSET_PX;
 
-    // Focus without additional scroll jump
+    await smoothScrollToY(targetY);
+
+    // focus بعد اكتمال الحركة (بدون قفزة)
     try {
       target.focus({ preventScroll: true });
     } catch {
@@ -336,7 +389,6 @@ export function initEngine({ week, studentId, data, mountEl }) {
       .replaceAll("'", '&#039;');
   }
 
-  // Hook "متابعة" for text steps: set pending focus then advance
   function nextStepWithFocus() {
     setPendingFocusToNext();
     nextStep();
