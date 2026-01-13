@@ -12,6 +12,10 @@
    - Resume: load saved { conceptIndex, stepIndex } from storage and continue
    - Completion: when finishing the last item of the last concept -> mark done + show completion + return home
    - Certificate Hook: pass cardTitle to completion.js (data.title)
+
+   UPDATE (2026-01-14):
+   - Fix #1: Preserve question state across re-renders (input value / mcq selection)
+     by caching built flow + caching normalized question object per flow item.
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
@@ -38,27 +42,58 @@ export function initEngine({ week, studentId, data, mountEl }) {
   let activeQuestion = null; // { check, attempts, solutionShown, btn, dotsWrap, container, qData, verifiedOk }
 
   function getConceptFlow(concept) {
-    if (Array.isArray(concept.flow) && concept.flow.length) return concept.flow;
+    // IMPORTANT: cache flow so items keep runtime state across re-renders
+    if (concept && Array.isArray(concept._flowCache) && concept._flowCache.length) {
+      return concept._flowCache;
+    }
 
-    // Backward compatible: build flow from legacy keys
-    const flow = [];
-    for (const key of LEGACY_ORDER) {
-      if (key === 'question') {
-        if (concept.question) {
-          flow.push({ type: 'question', q: concept.question });
+    let flow = null;
+
+    if (Array.isArray(concept?.flow) && concept.flow.length) {
+      // Use original flow array (stable reference) + cache it
+      flow = concept.flow;
+    } else {
+      // Backward compatible: build flow from legacy keys (once)
+      flow = [];
+      for (const key of LEGACY_ORDER) {
+        if (key === 'question') {
+          if (concept?.question) {
+            flow.push({ type: 'question', q: concept.question });
+          }
+        } else {
+          if (concept?.[key]) flow.push({ type: key, text: concept[key] });
         }
-      } else {
-        if (concept[key]) flow.push({ type: key, text: concept[key] });
       }
     }
-    return flow;
+
+    // cache for stability
+    if (concept) concept._flowCache = flow || [];
+    return concept?._flowCache || [];
   }
 
-  function normalizeFlowQuestionItem(item) {
+  function buildNormalizedQuestionFromItem(item) {
+    // If flow item already contains q object:
     if (item?.q && typeof item.q === 'object') {
-      return { ...item.q };
+      // Use the same object reference as base, but ensure required fields exist
+      const q = item.q;
+
+      // Ensure type exists (if missing infer)
+      if (!q.type) {
+        q.type =
+          item?.qtype ||
+          item?.questionType ||
+          (Array.isArray(q?.choices) ? 'mcq' : 'input');
+      }
+
+      // Ensure common fields exist
+      if (q.text == null) q.text = item?.text || 'سؤال';
+      if (!Array.isArray(q.hints)) q.hints = q.hints ? [q.hints] : [];
+      if (q.solution == null) q.solution = '';
+
+      return q;
     }
 
+    // Otherwise infer from item structure (question written directly in flow)
     const inferredType =
       item?.qtype ||
       item?.questionType ||
@@ -67,7 +102,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const q = {
       type: inferredType,
       text: item?.text || 'سؤال',
-      hints: item?.hints || [],
+      hints: Array.isArray(item?.hints) ? item.hints : [],
       solution: item?.solution || '',
     };
 
@@ -78,6 +113,21 @@ export function initEngine({ week, studentId, data, mountEl }) {
       q.answer = item?.answer ?? '';
       q.placeholder = item?.placeholder;
     }
+
+    return q;
+  }
+
+  function getStableQuestionObjectForFlowItem(item) {
+    // IMPORTANT: keep one normalized question object per flow item
+    // so UI state (like input value / selected choice) can persist across re-renders.
+    if (item?._qState && typeof item._qState === 'object') {
+      return item._qState;
+    }
+
+    const q = buildNormalizedQuestionFromItem(item);
+
+    // Store on the flow item itself (stable if flow is cached)
+    if (item) item._qState = q;
 
     return q;
   }
@@ -263,12 +313,12 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
   function renderTextItem(item, idx) {
     const map = {
-      goal:    { title: 'الهدف', cls: '' },
-      explain: { title: 'الشرح', cls: '' },
-      example: { title: 'مثال محلول', cls: 'example' },
-      example2:{ title: 'مثال إضافي', cls: 'example' },
-      mistake: { title: 'خطأ شائع', cls: 'warning' },
-      note:    { title: 'ملاحظة', cls: 'note' },
+      goal:     { title: 'الهدف', cls: '' },
+      explain:  { title: 'الشرح', cls: '' },
+      example:  { title: 'مثال محلول', cls: 'example' },
+      example2: { title: 'مثال إضافي', cls: 'example' },
+      mistake:  { title: 'خطأ شائع', cls: 'warning' },
+      note:     { title: 'ملاحظة', cls: 'note' },
     };
 
     const cfg = map[item.type] || { title: 'محتوى', cls: '' };
@@ -291,7 +341,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
     wrap.setAttribute('data-step-index', String(idx));
     wrap.setAttribute('data-step-key', 'question');
 
-    const qData = normalizeFlowQuestionItem(item);
+    // IMPORTANT: stable question object for this flow item (persists across re-renders)
+    const qData = getStableQuestionObjectForFlowItem(item);
 
     const title = document.createElement('p');
     title.className = 'question-title';
