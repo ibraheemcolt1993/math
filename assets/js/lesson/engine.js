@@ -11,6 +11,7 @@
    - Fix: infer question.type if flow item doesn't include it
    - Resume: load saved { conceptIndex, stepIndex } from storage and continue
    - Completion: when finishing the last item of the last concept -> mark done + show completion + return home
+   - Certificate Hook: pass cardTitle to completion.js (data.title)
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
@@ -160,8 +161,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
     // Persist completion
     markCardDone(studentId, week);
 
+    // Pass title for certificate hook readiness
+    const cardTitle = String(data?.title || '');
+
     // Use existing completion handler (shows UI + returns home)
-    completeLesson({ studentId, week });
+    completeLesson({ studentId, week, cardTitle });
   }
 
   function render() {
