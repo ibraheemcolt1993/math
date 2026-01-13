@@ -1,8 +1,14 @@
 /* =========================================================
    app.js — App Bootstrap & Page Router
-   - Login now uses: (Student ID + Birth Year) against /data/students.json
+   - Login uses: (Student ID + Birth Year) against /data/students.json
    - Greets by firstName
    - Stores current student profile for later certificates
+
+   UPDATE (2026-01-14):
+   - Fix UI flash: do NOT show ID screen briefly if a valid current student exists
+     (hide all screens first, then show the correct one)
+   - Remove "old behavior" auto-welcome based on lastStudentId only
+     (welcome happens ONLY if currentStudent exists)
    ========================================================= */
 
 import { getLastStudentId, setLastStudentId } from './core/storage.js';
@@ -45,18 +51,20 @@ function initIndexPage() {
   // Ensure Birth Year input exists (inject if missing)
   const inputBirthYear = ensureBirthYearInput(inputId);
 
-  // Try auto-welcome from saved current student
+  // ✅ Prevent flash: hide all screens FIRST, then show the right one
+  hideAllScreens();
+
+  // ✅ Auto-welcome ONLY if a real current student exists
   const current = readCurrentStudent();
-  if (current?.id) {
-    // Also keep last id synced
+  if (current?.id && current?.birthYear) {
+    // Keep last id synced
     setLastStudentId(current.id);
     showWelcome(current);
   } else {
-    // fallback: old behavior (id only) -> show as رقم if exists
+    // No current student: show login screen (optionally prefill id if it exists)
     const lastId = getLastStudentId();
-    if (lastId) {
-      showWelcome({ id: lastId, firstName: lastId, fullName: `طالب ${lastId}` });
-    }
+    if (lastId && inputId) inputId.value = String(lastId);
+    showId();
   }
 
   btnLogin?.addEventListener('click', async () => {
@@ -111,35 +119,41 @@ function initIndexPage() {
 
   btnLogout?.addEventListener('click', () => {
     clearCurrentStudent();
-    // keep last id? no. remove it as well:
+    // remove last id as well
     try { localStorage.removeItem('math:lastStudentId'); } catch {}
     showId();
     if (inputId) inputId.value = '';
     if (inputBirthYear) inputBirthYear.value = '';
   });
 
+  function hideAllScreens() {
+    screenId?.classList.add('hidden');
+    screenWelcome?.classList.add('hidden');
+    screenCards?.classList.add('hidden');
+  }
+
   function showId() {
-    screenId.classList.remove('hidden');
-    screenWelcome.classList.add('hidden');
-    screenCards.classList.add('hidden');
+    screenId?.classList.remove('hidden');
+    screenWelcome?.classList.add('hidden');
+    screenCards?.classList.add('hidden');
   }
 
   function showWelcome(student) {
     const firstName = student?.firstName || student?.id || 'طالب';
     const fullName = student?.fullName || `طالب ${student?.id || ''}`.trim();
 
-    welcomeTitle.textContent = `مرحبًا يا ${firstName} 👋`;
-    welcomeChip.textContent = fullName;
+    if (welcomeTitle) welcomeTitle.textContent = `مرحبًا يا ${firstName} 👋`;
+    if (welcomeChip) welcomeChip.textContent = fullName;
 
-    screenId.classList.add('hidden');
-    screenWelcome.classList.remove('hidden');
-    screenCards.classList.add('hidden');
+    screenId?.classList.add('hidden');
+    screenWelcome?.classList.remove('hidden');
+    screenCards?.classList.add('hidden');
   }
 
   function showCards() {
-    screenId.classList.add('hidden');
-    screenWelcome.classList.add('hidden');
-    screenCards.classList.remove('hidden');
+    screenId?.classList.add('hidden');
+    screenWelcome?.classList.add('hidden');
+    screenCards?.classList.remove('hidden');
     initCardsPage();
   }
 }
