@@ -1,9 +1,10 @@
 /* =========================================================
-   engine.js — Sequential Lesson Engine (with "متابعة" button)
+   engine.js — Sequential Lesson Engine (with "متابعة" + Scroll/Focus)
    - Renders concepts & steps in strict order
    - No skipping
-   - "متابعة" يظهر بعد كل خطوة نصية، وبعد حل السؤال صح
-   - Attempts: 3 hints ثم عرض الحل، وبعدها يقدر يضل يحاول بدون تلميحات إضافية
+   - "متابعة" after each text step, and after answering question correctly
+   - Auto scroll + focus to the newly revealed step/question after "متابعة"
+   - Attempts: 3 hints then show solution; after that allow retry without extra hints
    ========================================================= */
 
 import { ENGINE } from '../core/constants.js';
@@ -32,6 +33,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
   const stepsPerConcept = STEPS_ORDER.length;
 
+  // Scroll/focus control
+  let pendingFocus = null; // { conceptIndex, stepIndex }
+  let firstPaint = true;
+
   function render() {
     mountEl.innerHTML = '';
 
@@ -54,7 +59,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
           <h3 class="concept-title">${escapeHtml(concept.title || '')}</h3>
         </div>
       </div>
-      <div class="concept-body"></div>
+      <div class="concept-body" data-concept-index="${conceptIndex}"></div>
     `;
 
     const body = cardInner.querySelector('.concept-body');
@@ -68,18 +73,18 @@ export function initEngine({ week, studentId, data, mountEl }) {
       if (stepKey === 'question' && !concept.question) continue;
 
       if (stepKey === 'question') {
-        renderQuestionStep(body, concept.question);
+        body.appendChild(renderQuestionStep(concept.question, i));
       } else {
-        body.appendChild(renderTextStep(stepKey, concept[stepKey]));
+        body.appendChild(renderTextStep(stepKey, concept[stepKey], i));
       }
     }
 
-    // add "متابعة" button for current step (rules)
+    // add "متابعة" button for current step (text steps)
     const currentKey = STEPS_ORDER[stepIndex];
     if (currentKey !== 'question') {
       body.appendChild(renderContinueBar({
         enabled: true,
-        onClick: () => nextStep(),
+        onClick: () => nextStepWithFocus(),
       }));
     }
     // for question: continue bar is controlled by question logic after correct
@@ -89,6 +94,21 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     updateProgress();
     saveProgress();
+
+    // Auto scroll/focus to newly revealed content (after pressing متابعة)
+    if (!firstPaint && pendingFocus) {
+      requestAnimationFrame(() => {
+        scrollAndFocusToStep(pendingFocus.conceptIndex, pendingFocus.stepIndex);
+        pendingFocus = null;
+      });
+    }
+    firstPaint = false;
+  }
+
+  function nextStepWithFocus() {
+    nextStep();
+    // render() will happen inside nextStep -> render(); so set pendingFocus BEFORE render
+    // But nextStep currently calls render at end, so we set pendingFocus before calling nextStep
   }
 
   function renderContinueBar({ enabled, onClick }) {
@@ -105,7 +125,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return wrap;
   }
 
-  function renderTextStep(type, text) {
+  function renderTextStep(type, text, idx) {
     const map = {
       goal: { title: 'الهدف', cls: '' },
       explain: { title: 'الشرح', cls: '' },
@@ -118,6 +138,9 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const cfg = map[type];
     const el = document.createElement('div');
     el.className = `step ${cfg.cls || ''}`.trim();
+    el.setAttribute('data-step-index', String(idx));
+    el.setAttribute('data-step-key', type);
+
     el.innerHTML = `
       <p class="step-title">${cfg.title}</p>
       <div class="step-text">${escapeHtml(text)}</div>
@@ -125,9 +148,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return el;
   }
 
-  function renderQuestionStep(container, question) {
+  function renderQuestionStep(question, idx) {
     const wrap = document.createElement('div');
     wrap.className = 'question-wrap';
+    wrap.setAttribute('data-step-index', String(idx));
+    wrap.setAttribute('data-step-key', 'question');
 
     const title = document.createElement('p');
     title.className = 'question-title';
@@ -160,15 +185,14 @@ export function initEngine({ week, studentId, data, mountEl }) {
     // continue bar (disabled until correct)
     const nav = document.createElement('div');
     nav.className = 'lesson-nav';
+
     const btnNext = document.createElement('button');
     btnNext.className = 'btn btn-primary w-100';
     btnNext.textContent = 'متابعة';
     btnNext.disabled = true;
+
     nav.appendChild(btnNext);
-
     wrap.appendChild(nav);
-
-    container.appendChild(wrap);
 
     let attempts = 0;
     let solutionShown = false;
@@ -202,11 +226,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
           showToast('تلميح', hint, 'warning', 4000);
         } else {
-          // 3rd attempt: show solution (once), but allow retry بدون تلميحات إضافية
-          const hint3 =
-            question.hints?.[attempts - 1] ||
-            FINAL_HINT;
-
+          const hint3 = question.hints?.[attempts - 1] || FINAL_HINT;
           showToast('تلميح قوي', hint3, 'warning', 4500);
 
           if (!solutionShown) {
@@ -216,14 +236,17 @@ export function initEngine({ week, studentId, data, mountEl }) {
           }
         }
       } else {
-        // attempts beyond 3: no more dots/hints
         showToast('جرّب كمان', 'ارجع للحل واعمل التحقق مرة ثانية', 'info', 2500);
       }
     });
 
     btnNext.addEventListener('click', () => {
+      // set pending focus to the NEXT step before moving
+      setPendingFocusToNext();
       nextStep();
     });
+
+    return wrap;
   }
 
   function markAttempt(wrap, count) {
@@ -244,6 +267,19 @@ export function initEngine({ week, studentId, data, mountEl }) {
       <div class="solution-text">${escapeHtml(solutionText || '')}</div>
     `;
     container.appendChild(sol);
+  }
+
+  function setPendingFocusToNext() {
+    // Calculate where we will land after nextStep()
+    let nextConcept = conceptIndex;
+    let nextStep = stepIndex + 1;
+
+    if (nextStep >= STEPS_ORDER.length) {
+      nextConcept = conceptIndex + 1;
+      nextStep = 0;
+    }
+
+    pendingFocus = { conceptIndex: nextConcept, stepIndex: nextStep };
   }
 
   function nextStep() {
@@ -272,6 +308,25 @@ export function initEngine({ week, studentId, data, mountEl }) {
     });
   }
 
+  function scrollAndFocusToStep(cIdx, sIdx) {
+    // We render only current concept card, so focus is within current mount
+    // Try to find element by data-step-index in DOM
+    const target = mountEl.querySelector(`[data-step-index="${sIdx}"]`);
+    if (!target) return;
+
+    // Make focusable temporarily
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Focus without additional scroll jump
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+  }
+
   function escapeHtml(s) {
     return String(s)
       .replaceAll('&', '&amp;')
@@ -279,6 +334,12 @@ export function initEngine({ week, studentId, data, mountEl }) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
+  }
+
+  // Hook "متابعة" for text steps: set pending focus then advance
+  function nextStepWithFocus() {
+    setPendingFocusToNext();
+    nextStep();
   }
 
   // start
