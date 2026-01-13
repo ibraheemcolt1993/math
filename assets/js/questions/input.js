@@ -6,6 +6,10 @@
      - compare by numeric value (2 == 02 == ٢ == ۲)
    - Otherwise: normal text compare after trim + collapse spaces
    - Mobile UX: keep input visible above keyboard while typing (VisualViewport)
+
+   UPDATE (2026-01-14):
+   - Fix #1: Pressing Enter/Go triggers the main "متابعة" button automatically
+   - Fix #2: Persist input value across engine re-renders using question._value
    ========================================================= */
 
 export function renderInputQuestion({ mountEl, question }) {
@@ -60,17 +64,25 @@ export function renderInputQuestion({ mountEl, question }) {
 
   const expectsNumber = isNumericAnswer(question.answer);
 
+  // Restore previous value (persisted by engine via stable question object)
+  if (typeof question._value === 'string' && question._value !== '') {
+    input.value = question._value;
+  }
+
   if (expectsNumber) {
     // Mobile: numeric keyboard
     input.inputMode = 'numeric';
     input.pattern = '[0-9]*';
 
-    // Desktop/All: restrict to digits only
+    // Desktop/All: restrict to digits only + persist value
     input.addEventListener('input', () => {
       const before = input.value;
       const latin = toLatinDigits(before);
       const filtered = numericOnly(latin);
       if (before !== filtered) input.value = filtered;
+
+      // Persist
+      question._value = input.value;
     });
 
     // Block non-digit keys (extra safety)
@@ -83,7 +95,28 @@ export function renderInputQuestion({ mountEl, question }) {
       if (e.ctrlKey || e.metaKey) return;
       if (!/^[0-9]$/.test(e.key)) e.preventDefault();
     });
+  } else {
+    // Text mode: persist as user types
+    input.addEventListener('input', () => {
+      question._value = input.value;
+    });
   }
+
+  /* ---------- Enter/Go triggers "متابعة" ---------- */
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.shiftKey) return;
+
+    e.preventDefault();
+
+    // Find the single main button "متابعة" inside current concept
+    const conceptBody = mountEl.closest('.concept-body') || mountEl.closest('.card') || document;
+    const btn = conceptBody.querySelector('.lesson-nav .btn');
+
+    if (btn && typeof btn.click === 'function') {
+      btn.click();
+    }
+  });
 
   /* ---------- Mobile keyboard overlap fix ---------- */
   const isTouchLikely =
@@ -107,7 +140,6 @@ export function renderInputQuestion({ mountEl, question }) {
       }
 
       const rect = input.getBoundingClientRect();
-      const inputTopY = window.scrollY + rect.top;
       const inputBottomY = window.scrollY + rect.bottom;
 
       // Keep a comfortable margin above keyboard / bottom
@@ -119,9 +151,6 @@ export function renderInputQuestion({ mountEl, question }) {
         window.scrollBy({ top: delta, left: 0, behavior: 'smooth' });
         return;
       }
-
-      // If input is too high (rare), we can center it slightly
-      // (Optional) keep stable: do nothing
     }, 260);
   }
 
@@ -155,6 +184,9 @@ export function renderInputQuestion({ mountEl, question }) {
   function check() {
     const rawUser = input.value ?? '';
     const rawAns = question.answer ?? '';
+
+    // Persist before checking (safety)
+    question._value = rawUser;
 
     if (expectsNumber) {
       const userDigits = numericOnly(toLatinDigits(rawUser));
