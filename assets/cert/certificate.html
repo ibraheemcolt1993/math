@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — شهادة إنجاز</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/cert/certificate.css" />
+</head>
+
+<body>
+  <div class="app cert-app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>شهادة إنجاز</span>
+          </div>
+        </div>
+
+        <a class="btn btn-ghost btn-sm" href="/" aria-label="العودة للبطاقات">العودة</a>
+      </div>
+    </header>
+
+    <main class="container section">
+      <div class="cert-shell">
+        <!-- Certificate Paper -->
+        <section id="certPaper" class="cert-paper" aria-label="شهادة">
+          <div class="cert-bg"></div>
+
+          <div class="cert-head">
+            <div class="cert-badge" aria-hidden="true">🏅</div>
+            <div>
+              <h1 class="cert-title">شهادة إنجاز</h1>
+              <p class="cert-sub">تُمنح هذه الشهادة تقديرًا لإتمام البطاقة بنجاح</p>
+            </div>
+          </div>
+
+          <div class="cert-body">
+            <p class="cert-line">نُبارك للطالب/ة</p>
+            <div id="certName" class="cert-name">...</div>
+
+            <p class="cert-line">إتمام</p>
+            <div id="certCardTitle" class="cert-card">...</div>
+
+            <div class="cert-meta">
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">الأسبوع</span>
+                <span id="certWeek" class="cert-meta-v">—</span>
+              </div>
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">التاريخ</span>
+                <span id="certDate" class="cert-meta-v">—</span>
+              </div>
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">الشعبة</span>
+                <span id="certClass" class="cert-meta-v">—</span>
+              </div>
+            </div>
+
+            <div class="cert-footer">
+              <div class="cert-sign">
+                <span class="cert-sign-k">المعلم</span>
+                <span class="cert-sign-v">المعلم إبراهيم أحمد</span>
+              </div>
+              <div class="cert-stamp" aria-hidden="true">
+                <div class="cert-stamp-ring"></div>
+                <div class="cert-stamp-text">math</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Actions -->
+        <section class="cert-actions">
+          <button id="btnPrint" class="btn btn-primary btn-lg w-100">تحميل / طباعة</button>
+          <button id="btnShare" class="btn btn-outline w-100" disabled>مشاركة واتساب (قريبًا)</button>
+          <p class="small center muted">المصدر: آخر إنجاز محفوظ في الجهاز (math:lastCertificate)</p>
+        </section>
+
+        <!-- Fallback message -->
+        <section id="certEmpty" class="card hidden">
+          <div class="card-header">
+            <div>
+              <h2 class="h2">لا توجد شهادة بعد</h2>
+              <p class="p">أنهِ بطاقة أولًا، وبعدين ارجع لهون.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <a href="/" class="btn btn-primary w-100">اذهب للبطاقات</a>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      const LS_LAST_CERTIFICATE = 'math:lastCertificate';
+
+      const elPaper = document.getElementById('certPaper');
+      const elEmpty = document.getElementById('certEmpty');
+
+      const elName = document.getElementById('certName');
+      const elCard = document.getElementById('certCardTitle');
+      const elWeek = document.getElementById('certWeek');
+      const elDate = document.getElementById('certDate');
+      const elClass = document.getElementById('certClass');
+
+      const btnPrint = document.getElementById('btnPrint');
+      const btnShare = document.getElementById('btnShare');
+
+      function readPayload() {
+        try {
+          const raw = localStorage.getItem(LS_LAST_CERTIFICATE);
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function fmtDate(iso) {
+        try {
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) return '—';
+          // yyyy-mm-dd
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        } catch {
+          return '—';
+        }
+      }
+
+      const payload = readPayload();
+
+      if (!payload || !payload.fullName) {
+        elPaper.classList.add('hidden');
+        elEmpty.classList.remove('hidden');
+        btnPrint.disabled = true;
+        btnShare.disabled = true;
+        return;
+      }
+
+      elName.textContent = payload.fullName || payload.firstName || '—';
+      elCard.textContent = payload.cardTitle || 'بطاقة';
+      elWeek.textContent = (payload.week != null) ? String(payload.week) : '—';
+      elDate.textContent = fmtDate(payload.issuedAt);
+      elClass.textContent = payload.class || '—';
+
+      btnPrint.addEventListener('click', () => {
+        // المرحلة الحالية: طباعة/حفظ PDF عبر المتصفح
+        window.print();
+      });
+
+      // placeholder for Phase 2 share
+      btnShare.addEventListener('click', () => {});
+    })();
+  </script>
+</body>
+</html>
