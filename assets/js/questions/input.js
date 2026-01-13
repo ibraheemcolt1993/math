@@ -5,6 +5,7 @@
      - field only accepts digits (even on PC)
      - compare by numeric value (2 == 02 == ٢ == ۲)
    - Otherwise: normal text compare after trim + collapse spaces
+   - Mobile UX: keep input visible above keyboard while typing (VisualViewport)
    ========================================================= */
 
 export function renderInputQuestion({ mountEl, question }) {
@@ -39,8 +40,6 @@ export function renderInputQuestion({ mountEl, question }) {
   }
 
   function toLatinDigits(str) {
-    // Arabic-Indic: ٠١٢٣٤٥٦٧٨٩
-    // Eastern Arabic-Indic: ۰۱۲۳۴۵۶۷۸۹
     const map = {
       '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
       '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
@@ -51,7 +50,6 @@ export function renderInputQuestion({ mountEl, question }) {
   }
 
   function numericOnly(str) {
-    // keep digits only
     return String(str).replace(/[^0-9]/g, '');
   }
 
@@ -82,16 +80,78 @@ export function renderInputQuestion({ mountEl, question }) {
         'Tab', 'Home', 'End', 'Enter'
       ];
       if (allowed.includes(e.key)) return;
-
-      // allow Ctrl/Cmd shortcuts (copy/paste/select all)
       if (e.ctrlKey || e.metaKey) return;
-
-      if (!/^[0-9]$/.test(e.key)) {
-        e.preventDefault();
-      }
+      if (!/^[0-9]$/.test(e.key)) e.preventDefault();
     });
   }
 
+  /* ---------- Mobile keyboard overlap fix ---------- */
+  const isTouchLikely =
+    ('ontouchstart' in window) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+
+  let vvHandler = null;
+
+  function ensureVisible() {
+    // Delay to allow keyboard to open and viewport to resize
+    setTimeout(() => {
+      // If VisualViewport exists, use it for precise offset
+      const vv = window.visualViewport;
+
+      // Determine current visible bottom in layout viewport coordinates
+      let visibleBottomY;
+      if (vv) {
+        visibleBottomY = vv.pageTop + vv.height;
+      } else {
+        visibleBottomY = window.scrollY + window.innerHeight;
+      }
+
+      const rect = input.getBoundingClientRect();
+      const inputTopY = window.scrollY + rect.top;
+      const inputBottomY = window.scrollY + rect.bottom;
+
+      // Keep a comfortable margin above keyboard / bottom
+      const margin = 18;
+
+      // If input is under the visible bottom, scroll down
+      if (inputBottomY + margin > visibleBottomY) {
+        const delta = (inputBottomY + margin) - visibleBottomY;
+        window.scrollBy({ top: delta, left: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // If input is too high (rare), we can center it slightly
+      // (Optional) keep stable: do nothing
+    }, 260);
+  }
+
+  function onFocus() {
+    if (!isTouchLikely) return;
+
+    ensureVisible();
+
+    // Also react to viewport changes while keyboard is animating
+    const vv = window.visualViewport;
+    if (vv && !vvHandler) {
+      vvHandler = () => ensureVisible();
+      vv.addEventListener('resize', vvHandler);
+      vv.addEventListener('scroll', vvHandler);
+    }
+  }
+
+  function onBlur() {
+    const vv = window.visualViewport;
+    if (vv && vvHandler) {
+      vv.removeEventListener('resize', vvHandler);
+      vv.removeEventListener('scroll', vvHandler);
+      vvHandler = null;
+    }
+  }
+
+  input.addEventListener('focus', onFocus);
+  input.addEventListener('blur', onBlur);
+
+  /* ---------- Check ---------- */
   function check() {
     const rawUser = input.value ?? '';
     const rawAns = question.answer ?? '';
