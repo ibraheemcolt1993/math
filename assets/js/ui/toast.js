@@ -3,14 +3,16 @@
    API: showToast(title, msg, type='info', duration=3000)
 
    UPDATE (2026-01-14):
-   - Toast host is pinned to TOP of the visible screen.
-   - Host padding-top adapts to the current topbar height (if exists),
-     so toast appears "فوق الصفحة اللي فاتحها الطالب" وتحت الشريط العلوي.
+   - Host is pinned to TOP of the VISUAL viewport (not the layout viewport)
+     using visualViewport.offsetTop/offsetLeft + height/width.
+   - This avoids cases where toast appears "too high" and requires scrolling
+     to reveal it on mobile browsers.
    ========================================================= */
 
 let hostEl = null;
 let activeToast = null;
 let rafId = null;
+let bound = false;
 
 function ensureHost() {
   if (hostEl) return hostEl;
@@ -19,32 +21,50 @@ function ensureHost() {
   hostEl.className = 'toast-host';
   document.body.appendChild(hostEl);
 
-  // set initial top offset (below topbar)
-  updateHostTopPadding();
+  updateHostToVisualViewport();
 
-  // keep it correct on resize/orientation
-  window.addEventListener('resize', updateHostTopPadding, { passive: true });
+  if (!bound) {
+    bound = true;
 
-  // if VisualViewport exists (mobile keyboard / bars), update as well
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', updateHostTopPadding, { passive: true });
-    window.visualViewport.addEventListener('scroll', updateHostTopPadding, { passive: true });
+    // Resize/orientation changes
+    window.addEventListener('resize', updateHostToVisualViewport, { passive: true });
+    window.addEventListener('scroll', updateHostToVisualViewport, { passive: true });
+
+    // Mobile browser UI + keyboard changes
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateHostToVisualViewport, { passive: true });
+      window.visualViewport.addEventListener('scroll', updateHostToVisualViewport, { passive: true });
+    }
   }
 
   return hostEl;
 }
 
-function updateHostTopPadding() {
+function updateHostToVisualViewport() {
   if (!hostEl) return;
 
-  const topbar = document.querySelector('.topbar');
-  const basePad = 12;
+  const vv = window.visualViewport;
 
-  // topbar is sticky; we place toast right under it
-  const topbarH = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+  // Default (no VisualViewport support)
+  let top = 0;
+  let left = 0;
+  let width = window.innerWidth;
+  let height = window.innerHeight;
 
-  // safe area inset is handled in CSS; here we just add below-topbar spacing
-  hostEl.style.paddingTop = `${topbarH + basePad}px`;
+  if (vv) {
+    top = Math.round(vv.offsetTop || 0);
+    left = Math.round(vv.offsetLeft || 0);
+    width = Math.round(vv.width || window.innerWidth);
+    height = Math.round(vv.height || window.innerHeight);
+  }
+
+  // Place host at the top of the VISUAL viewport.
+  // We keep position:fixed + inset:0 in CSS, and move the whole host.
+  hostEl.style.transform = `translate(${left}px, ${top}px)`;
+
+  // Limit interactions area to the visible viewport (optional but clean)
+  hostEl.style.width = `${width}px`;
+  hostEl.style.height = `${height}px`;
 }
 
 function iconSvg(type) {
@@ -82,7 +102,6 @@ function animateBar(barEl, duration) {
   const tick = (now) => {
     const elapsed = now - start;
     const t = Math.min(1, elapsed / duration);
-    // scale from 1 to 0
     barEl.style.transform = `scaleX(${1 - t})`;
     if (t < 1) {
       rafId = requestAnimationFrame(tick);
@@ -95,8 +114,8 @@ function animateBar(barEl, duration) {
 export function showToast(title, msg, type = 'info', duration = 3000) {
   ensureHost();
 
-  // update position each time (in case topbar height changed)
-  updateHostTopPadding();
+  // Refresh position each time (mobile UI can change between toasts)
+  updateHostToVisualViewport();
 
   // replace any existing toast (single toast policy)
   cleanup();
@@ -119,16 +138,13 @@ export function showToast(title, msg, type = 'info', duration = 3000) {
   hostEl.appendChild(toast);
   activeToast = toast;
 
-  // show
   requestAnimationFrame(() => {
     toast.classList.add('is-show');
   });
 
-  // animate bar
   const bar = toast.querySelector('.toast-bar > i');
   if (bar) animateBar(bar, duration);
 
-  // auto hide
   window.setTimeout(() => {
     if (!activeToast) return;
     activeToast.classList.remove('is-show');
