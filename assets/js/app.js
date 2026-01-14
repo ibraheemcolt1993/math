@@ -5,10 +5,9 @@
    - Stores current student profile for later certificates
 
    UPDATE (2026-01-14):
-   - Fix UI flash: do NOT show ID screen briefly if a valid current student exists
-     (hide all screens first, then show the correct one)
-   - Remove "old behavior" auto-welcome based on lastStudentId only
-     (welcome happens ONLY if currentStudent exists)
+   - Fix UI flash: hide all screens first, show correct one
+   - Remove old auto-welcome based on lastStudentId only
+   - Add optional Sync toggle (Google Sheets) on welcome screen
    ========================================================= */
 
 import { getLastStudentId, setLastStudentId } from './core/storage.js';
@@ -17,6 +16,7 @@ import { getWeekParam } from './core/router.js';
 import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { fetchJson } from './core/api.js';
+import { isSyncEnabled, setSyncEnabled, flushSyncQueue } from './core/sync.js';
 
 const STUDENTS_PATH = '/data/students.json';
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // {id,birthYear,firstName,fullName,class}
@@ -25,10 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const week = getWeekParam();
 
   if (week) {
-    // lesson.html
     initLessonPage();
   } else {
-    // index.html
     initIndexPage();
   }
 });
@@ -51,17 +49,13 @@ function initIndexPage() {
   // Ensure Birth Year input exists (inject if missing)
   const inputBirthYear = ensureBirthYearInput(inputId);
 
-  // ✅ Prevent flash: hide all screens FIRST, then show the right one
   hideAllScreens();
 
-  // ✅ Auto-welcome ONLY if a real current student exists
   const current = readCurrentStudent();
   if (current?.id && current?.birthYear) {
-    // Keep last id synced
     setLastStudentId(current.id);
     showWelcome(current);
   } else {
-    // No current student: show login screen (optionally prefill id if it exists)
     const lastId = getLastStudentId();
     if (lastId && inputId) inputId.value = String(lastId);
     showId();
@@ -109,17 +103,11 @@ function initIndexPage() {
     }
   });
 
-  btnToCards?.addEventListener('click', () => {
-    showCards();
-  });
-
-  btnChangeId?.addEventListener('click', () => {
-    showId();
-  });
+  btnToCards?.addEventListener('click', () => showCards());
+  btnChangeId?.addEventListener('click', () => showId());
 
   btnLogout?.addEventListener('click', () => {
     clearCurrentStudent();
-    // remove last id as well
     try { localStorage.removeItem('math:lastStudentId'); } catch {}
     showId();
     if (inputId) inputId.value = '';
@@ -148,6 +136,9 @@ function initIndexPage() {
     screenId?.classList.add('hidden');
     screenWelcome?.classList.remove('hidden');
     screenCards?.classList.add('hidden');
+
+    // ✅ inject sync toggle (idempotent)
+    injectSyncToggle();
   }
 
   function showCards() {
@@ -155,6 +146,41 @@ function initIndexPage() {
     screenWelcome?.classList.add('hidden');
     screenCards?.classList.remove('hidden');
     initCardsPage();
+  }
+
+  function injectSyncToggle() {
+    const host = screenWelcome?.querySelector('.card-body');
+    if (!host) return;
+    if (host.querySelector('#syncToggle')) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    wrap.id = 'syncToggle';
+
+    const enabled = isSyncEnabled();
+
+    wrap.innerHTML = `
+      <label class="label" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <span>مزامنة اختيارية (Google Sheets)</span>
+        <input id="syncEnabled" type="checkbox" ${enabled ? 'checked' : ''} />
+      </label>
+      <div class="help">اختياري: يرفع إنجاز البطاقة + بيانات الشهادة على Google Sheet. إذا فصلته، كل شيء يظل محلي.</div>
+    `;
+
+    host.appendChild(wrap);
+
+    const chk = wrap.querySelector('#syncEnabled');
+    chk?.addEventListener('change', () => {
+      const on = Boolean(chk.checked);
+      setSyncEnabled(on);
+
+      if (on) {
+        showToast('تم', 'تم تفعيل المزامنة الاختيارية', 'success', 2500);
+        flushSyncQueue(); // try sending queued data
+      } else {
+        showToast('تم', 'تم إيقاف المزامنة', 'info', 2500);
+      }
+    });
   }
 }
 
@@ -185,10 +211,8 @@ function ensureBirthYearInput(inputIdEl) {
   let el = document.getElementById('studentBirthYear');
   if (el) return el;
 
-  // if no place to inject, just return null
   if (!inputIdEl) return null;
 
-  // Find nearest container (field) to place after it
   const field = inputIdEl.closest('.field') || inputIdEl.parentElement;
   if (!field) return null;
 
@@ -205,7 +229,6 @@ function ensureBirthYearInput(inputIdEl) {
   field.insertAdjacentElement('afterend', wrap);
   el = wrap.querySelector('#studentBirthYear');
 
-  // Numeric-only behavior
   el.addEventListener('input', () => {
     el.value = String(el.value || '').replace(/[^0-9]/g, '').slice(0, 4);
   });
