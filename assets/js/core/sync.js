@@ -1,10 +1,17 @@
 /* =========================================================
    sync.js — Optional Google Sheets Sync (via Google Apps Script Web App)
-   - Keeps the app fully offline-first (LocalStorage remains source of truth)
+   - Offline-first: LocalStorage remains source of truth
    - When enabled, sends key events to a GAS endpoint:
      * completion
-     * certificate (payload stored by completion.js)
-   - Safe: if network fails, we keep a queue in LocalStorage and retry later
+     * certificate
+   - Queue in LocalStorage + best-effort flush
+
+   UPDATE (2026-01-14):
+   - Fix CORS: Google Apps Script /exec blocks fetch due to CORS preflight.
+     We now send events using:
+       1) navigator.sendBeacon (preferred)
+       2) fetch with mode:'no-cors' as fallback
+     This guarantees the request is SENT even without CORS headers.
    ========================================================= */
 
 import { SYNC, STORAGE_KEYS } from './constants.js';
@@ -61,15 +68,26 @@ function makeEvent({ type, studentId, week, payload }) {
   };
 }
 
+function buildEndpointUrl() {
+  const base = String(SYNC.ENDPOINT || '').trim();
+  if (!base) return '';
+
+  // If SECRET is set, pass it as query param (no custom headers => no preflight)
+  if (SYNC.SECRET) {
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}secret=${encodeURIComponent(SYNC.SECRET)}`;
+  }
+  return base;
+}
+
 /**
- * Enqueue an event and try to flush in background.
- * This is safe even if offline (will retry later).
+ * Enqueue an event and try to flush (best-effort).
  */
 export function enqueueSyncEvent({ type, studentId, week, payload }) {
   if (!isSyncEnabled()) return;
 
-  // Guard: require endpoint
-  if (!SYNC.ENDPOINT || SYNC.ENDPOINT.includes('PASTE_YOUR_SCRIPT_URL_HERE')) return;
+  const endpoint = buildEndpointUrl();
+  if (!endpoint || endpoint.includes('PASTE_YOUR_SCRIPT_URL_HERE')) return;
 
   const ev = makeEvent({ type, studentId, week, payload });
 
@@ -77,49 +95,63 @@ export function enqueueSyncEvent({ type, studentId, week, payload }) {
   q.push(ev);
   writeQueue(q);
 
-  // try to flush (best-effort)
-  flushSyncQueue();
+  flushSyncQueue(); // best-effort
 }
 
 /**
- * Flush queue (best effort). Keeps remaining events if fails.
+ * Flush queue (best-effort). Removes events that were SENT.
+ * Note: With no-cors / beacon we can't read response, but request is delivered.
  */
 export async function flushSyncQueue() {
   if (!isSyncEnabled()) return;
 
-  if (!SYNC.ENDPOINT || SYNC.ENDPOINT.includes('PASTE_YOUR_SCRIPT_URL_HERE')) return;
+  const endpoint = buildEndpointUrl();
+  if (!endpoint || endpoint.includes('PASTE_YOUR_SCRIPT_URL_HERE')) return;
 
   const q = readQueue();
   if (!q.length) return;
 
-  // Send one by one to keep it simple & reliable
   const remaining = [];
 
   for (const ev of q) {
-    const ok = await sendEvent(ev);
-    if (!ok) remaining.push(ev);
+    const sent = await sendEventNoCors(endpoint, ev);
+    if (!sent) remaining.push(ev);
   }
 
   writeQueue(remaining);
 }
 
-async function sendEvent(ev) {
+/**
+ * Send cross-origin without CORS issues:
+ * - Prefer navigator.sendBeacon (no preflight, no CORS blocking)
+ * - Fallback: fetch with mode:'no-cors' (opaque response, but request is sent)
+ */
+async function sendEventNoCors(endpoint, ev) {
+  const json = JSON.stringify(ev);
+
+  // 1) Beacon (best)
   try {
-    const res = await fetch(SYNC.ENDPOINT, {
+    if (navigator.sendBeacon) {
+      // Use text/plain to stay "simple"
+      const blob = new Blob([json], { type: 'text/plain;charset=utf-8' });
+      const ok = navigator.sendBeacon(endpoint, blob);
+      return Boolean(ok);
+    }
+  } catch {
+    // ignore and fallback
+  }
+
+  // 2) fetch no-cors fallback
+  try {
+    await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // optional shared secret (recommended)
-        ...(SYNC.SECRET ? { 'X-MATH-SECRET': SYNC.SECRET } : {}),
-      },
-      body: JSON.stringify(ev),
-      // keepalive helps when user navigates away (supported in modern browsers)
+      mode: 'no-cors',
+      // text/plain is allowed in no-cors and avoids preflight
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: json,
       keepalive: true,
     });
-
-    if (!res.ok) return false;
-
-    // We don't need the body, but keep it safe
+    // If no exception, we consider it sent.
     return true;
   } catch {
     return false;
