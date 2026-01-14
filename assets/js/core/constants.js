@@ -49,7 +49,7 @@ export const SYNC = {
       https://script.googleusercontent.com/macros/echo?...&lib=...
     - هذا أفضل من /exec لأنه يتجنب مشاكل الحجب/CORS في بعض الشبكات.
   */
-  ENDPOINT: 'PASTE_YOUR_SCRIPT_URL_HERE',
+  ENDPOINT: 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLg88hwJ32Bz-6wt_7RbpRnD1yBqXwDjH_HjfOzOOizNx59AECGEw2dH-CFPyJ8QFA2uvOm-l3Oag9QSksofTrzlMRmB5nmHuIb2OsHQ5ZibTuCYgzfhpW9pCpmZeueM_bQ-NclW_DhQUbHDhflB71dJO6ijI7beRThoouCtiF57cnhfA4mBUiH-u22_tau8TIdxMAkEeqNM62HLty81-8B8ou_7x4NlOjn49kyaqdUUGXIAFJSETUYgAfANEzXlK3D1sCiDT2BflBDD_XNe0kICCVV8Ng&lib=Mt66HPqX1L1gOu47UE8MI51BDFj5_MLQx',
 
   // (اختياري) سر بسيط للحماية — سيتم إرساله كـ query param ?secret=
   SECRET: '',
