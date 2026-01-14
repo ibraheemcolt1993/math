@@ -41,10 +41,17 @@ export const PROGRESS = {
 
 // Optional Sync (Google Apps Script Web App)
 export const SYNC = {
-  // ضع رابط Web App هنا بعد نشر Google Apps Script
-  ENDPOINT: 'https://script.google.com/macros/s/AKfycby21G617_uHALVYKB2iN-wl4wy1_qC0xc6ZYtLxf8OBnnh6nT5FobudJFzeiOjh0v7m/exec',
+  /*
+    IMPORTANT:
+    - استخدم الرابط اللي أعطاك:
+      {"ok":true,"service":"math-sync"}
+    - غالبًا سيكون من نوع:
+      https://script.googleusercontent.com/macros/echo?...&lib=...
+    - هذا أفضل من /exec لأنه يتجنب مشاكل الحجب/CORS في بعض الشبكات.
+  */
+  ENDPOINT: 'PASTE_YOUR_SCRIPT_URL_HERE',
 
-  // (اختياري) سر بسيط للحماية — لازم يطابق اللي بتحطه في Apps Script
+  // (اختياري) سر بسيط للحماية — سيتم إرساله كـ query param ?secret=
   SECRET: '',
 };
 
