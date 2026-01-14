@@ -3,7 +3,8 @@
    used by assets/js/ui/toast.js
 
    UPDATE (2026-01-14):
-   - Toast now appears at TOP (below topbar) to avoid mobile keyboard covering it.
+   - Toast host is anchored to the TOP of the *visual viewport*
+     (handled by JS via translateY + height adjustment).
    ========================================================= */
 
 :root{
@@ -33,10 +34,11 @@
   pointer-events: none;
   z-index: 9999;
   display:flex;
-  align-items:flex-start;          /* ✅ TOP instead of bottom */
+  align-items:flex-start;          /* top */
   justify-content:center;
-  padding: 16px;
-  padding-top: max(16px, env(safe-area-inset-top)); /* iOS notch safe */
+
+  /* JS will place us at top of VISUAL viewport; keep a small inner padding */
+  padding: 12px 16px;
 }
 
 /* Toast element */
@@ -51,7 +53,7 @@
   -webkit-backdrop-filter: blur(var(--toast-blur));
   overflow: hidden;
 
-  transform: translateY(-10px) scale(.98);  /* ✅ comes from top */
+  transform: translateY(-10px) scale(.98);
   opacity: 0;
   transition: transform .22s ease, opacity .22s ease;
 }
