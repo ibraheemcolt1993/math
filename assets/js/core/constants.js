@@ -42,7 +42,7 @@ export const PROGRESS = {
 // Optional Sync (Google Apps Script Web App)
 export const SYNC = {
   // ضع رابط Web App هنا بعد نشر Google Apps Script
-  ENDPOINT: 'PASTE_YOUR_SCRIPT_URL_HERE',
+  ENDPOINT: 'https://script.google.com/macros/s/AKfycby21G617_uHALVYKB2iN-wl4wy1_qC0xc6ZYtLxf8OBnnh6nT5FobudJFzeiOjh0v7m/exec',
 
   // (اختياري) سر بسيط للحماية — لازم يطابق اللي بتحطه في Apps Script
   SECRET: '',
