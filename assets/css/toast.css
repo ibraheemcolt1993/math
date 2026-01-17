@@ -125,7 +125,7 @@
   width: 100%;
   background: var(--toast-bar);
   transform-origin: right center; /* RTL feel */
-  transform: scaleX(1);
+  transform: scaleX(0);
 }
 
 /* Variants */

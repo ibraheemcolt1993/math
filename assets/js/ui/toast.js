@@ -102,7 +102,7 @@ function animateBar(barEl, duration) {
   const tick = (now) => {
     const elapsed = now - start;
     const t = Math.min(1, elapsed / duration);
-    barEl.style.transform = `scaleX(${1 - t})`;
+    barEl.style.transform = `scaleX(${t})`;
     if (t < 1) {
       rafId = requestAnimationFrame(tick);
     }
