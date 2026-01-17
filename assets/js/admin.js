@@ -173,6 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .map((line) => line.trim())
         .filter(Boolean);
       card.items = lines;
+    } else if (field === 'link') {
+      card.link = target.value.trim();
     } else if (field === 'week' || field === 'prereq') {
       const cleaned = target.value.replace(/[^0-9]/g, '');
       target.value = cleaned;
@@ -183,6 +185,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     persistCards();
     refreshCardHeaders();
+  });
+
+  cardsList?.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.dataset.field !== 'link') return;
+
+    const index = Number(target.dataset.index);
+    if (!Number.isFinite(index)) return;
+    const card = cards[index];
+    if (!card) return;
+
+    saveCardLink(card);
   });
 
   cardsList?.addEventListener('click', (event) => {
@@ -342,6 +357,10 @@ function renderCards(container) {
         <label class="label">عناصر البطاقة (كل عنصر بسطر)</label>
         <textarea class="input" data-index="${index}" data-field="items" placeholder="مثال: سؤال 1">${escapeValue(itemsText)}</textarea>
       </div>
+      <div class="field">
+        <label class="label">رابط البطاقة (سيُحفظ في قاعدة البيانات)</label>
+        <input class="input ltr" data-index="${index}" data-field="link" value="${escapeValue(card.link ?? '')}" placeholder="https://example.com" />
+      </div>
       <div class="card-actions">
         <button class="btn btn-primary btn-sm" type="button" data-action="edit-card" data-id="${escapeValue(card.id)}">تحرير النموذج</button>
         <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${index}">حذف البطاقة</button>
@@ -430,4 +449,35 @@ function openCardBuilder(cardId) {
   if (!cardId) return;
   const url = `/admin-card-builder.html?id=${encodeURIComponent(cardId)}`;
   window.open(url, '_blank', 'noopener');
+}
+
+async function saveCardLink(card) {
+  const week = Number(card.week);
+  if (!Number.isInteger(week)) {
+    showToast('تنبيه', 'يرجى إدخال رقم أسبوع صحيح قبل حفظ الرابط.', 'warning');
+    return;
+  }
+
+  const url = String(card.link || '').trim();
+  if (!url) {
+    showToast('تنبيه', 'يرجى إدخال رابط صحيح قبل الحفظ.', 'warning');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/admin/cards/${week}/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || 'تعذر حفظ الرابط في قاعدة البيانات.');
+    }
+
+    showToast('تم الحفظ', 'تم حفظ الرابط في قاعدة البيانات.', 'success');
+  } catch (error) {
+    showToast('خطأ', error.message || 'تعذر حفظ الرابط في قاعدة البيانات.', 'error');
+  }
 }
