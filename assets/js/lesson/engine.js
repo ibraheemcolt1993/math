@@ -706,10 +706,11 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     const youtubeId = getYouTubeId(url);
     if (youtubeId) {
+      const safeId = encodeURIComponent(youtubeId);
       return `
         <iframe
           class="video-embed"
-          src="https://www.youtube.com/embed/${youtubeId}"
+          src="https://www.youtube.com/embed/${safeId}"
           title="فيديو الدرس"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowfullscreen
