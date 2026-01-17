@@ -1,0 +1,10 @@
+{
+  "name": "math-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Functions API for Math app",
+  "main": "index.js",
+  "dependencies": {
+    "mssql": "^10.0.2"
+  }
+}
