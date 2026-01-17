@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — لوحة الإدارة</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/admin.css" />
+</head>
+
+<body class="is-loading">
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+          </div>
+        </div>
+
+        <div class="row">
+          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+            الرئيسية
+          </a>
+          <button id="btnAdminLogout" class="btn btn-ghost btn-sm hidden" type="button">
+            تسجيل خروج
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <section id="screen-admin-login" class="stack">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h1 class="h1">لوحة الإدارة</h1>
+              <p class="p">سجّل الدخول لإدارة بيانات الطلاب والبطاقات.</p>
+            </div>
+            <span class="badge primary">Admin</span>
+          </div>
+
+          <div class="card-body">
+            <div class="field">
+              <label class="label" for="adminUser">اسم المستخدم</label>
+              <input id="adminUser" class="input ltr" autocomplete="username" placeholder="admin" />
+            </div>
+
+            <div class="field" style="margin-top: 12px;">
+              <label class="label" for="adminPass">كلمة السر</label>
+              <input id="adminPass" type="password" class="input ltr" autocomplete="current-password" placeholder="Aa@232323445566" />
+            </div>
+
+            <div class="row" style="margin-top: 16px;">
+              <button id="btnAdminLogin" class="btn btn-primary btn-lg w-100" type="button">دخول الإدارة</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-admin" class="stack hidden" hidden style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="h2">إدارة البيانات</h2>
+              <p class="p">التغييرات تُحفظ داخل المتصفح وتُستخدم مباشرة في المنصة.</p>
+            </div>
+            <span class="badge primary">لوحة التحكم</span>
+          </div>
+
+          <div class="card-body">
+            <div class="admin-tabs">
+              <button class="btn btn-outline is-active" type="button" data-tab="students">بيانات الطلاب</button>
+              <button class="btn btn-outline" type="button" data-tab="cards">بيانات البطاقات</button>
+            </div>
+
+            <div id="tab-students" class="admin-panel">
+              <div class="panel-header">
+                <div>
+                  <h3 class="h3">الطلاب</h3>
+                  <p class="p">أضف أو عدّل رقم الهوية، سنة الميلاد، الاسم، والفصل.</p>
+                </div>
+                <div class="row">
+                  <button id="btnAddStudent" class="btn btn-primary btn-sm" type="button">إضافة طالب</button>
+                  <button id="btnSaveStudents" class="btn btn-ghost btn-sm" type="button">حفظ الآن</button>
+                </div>
+              </div>
+
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>رقم الهوية</th>
+                      <th>سنة الميلاد</th>
+                      <th>الاسم الأول</th>
+                      <th>الاسم الكامل</th>
+                      <th>الفصل</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="studentsTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="tab-cards" class="admin-panel hidden" hidden style="display:none;">
+              <div class="panel-header">
+                <div>
+                  <h3 class="h3">البطاقات</h3>
+                  <p class="p">يمكنك إضافة بطاقة جديدة وتعديل عناصر كل بطاقة.</p>
+                </div>
+                <div class="row">
+                  <button id="btnAddCard" class="btn btn-primary btn-sm" type="button">إضافة بطاقة</button>
+                  <button id="btnSaveCards" class="btn btn-ghost btn-sm" type="button">حفظ الآن</button>
+                </div>
+              </div>
+
+              <div id="cardsList" class="admin-card-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container section center">
+      <p class="small">© math — لوحة الإدارة</p>
+    </footer>
+  </div>
+
+  <script type="module" src="/assets/js/admin.js"></script>
+</body>
+</html>
