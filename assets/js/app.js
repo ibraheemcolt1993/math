@@ -118,6 +118,14 @@ function initIndexPage() {
     if (!screen) return;
     screen.classList.toggle('hidden', !isVisible);
     screen.toggleAttribute('hidden', !isVisible);
+    if (isVisible) {
+      screen.style.removeProperty('display');
+      if (!screen.getAttribute('style')) {
+        screen.removeAttribute('style');
+      }
+    } else {
+      screen.style.display = 'none';
+    }
   }
 
   function hideAllScreens() {
