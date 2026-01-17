@@ -2,7 +2,24 @@
    api.js — JSON Loader (cards & weeks)
    ========================================================= */
 
+const LOCAL_OVERRIDES = {
+  '/data/students.json': 'math:admin:students',
+  '/data/cards.json': 'math:admin:cards',
+};
+
 export async function fetchJson(url, { noStore = false } = {}) {
+  const overrideKey = LOCAL_OVERRIDES[url];
+  if (overrideKey) {
+    try {
+      const stored = localStorage.getItem(overrideKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {
+      // Fall back to network fetch when parsing fails.
+    }
+  }
+
   const opts = {
     headers: {},
   };

@@ -1,0 +1,114 @@
+.admin-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-tabs .btn.is-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow: auto;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.table th,
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table input,
+.table textarea {
+  width: 100%;
+  min-width: 140px;
+}
+
+.table .btn {
+  white-space: nowrap;
+}
+
+.admin-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.admin-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-card .field {
+  margin-top: 0;
+}
+
+.admin-card textarea {
+  min-height: 120px;
+}
+
+.admin-card .card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .panel-header {
+    align-items: flex-start;
+  }
+
+  .table {
+    min-width: 640px;
+  }
+}
