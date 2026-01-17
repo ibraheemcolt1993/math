@@ -61,16 +61,21 @@
 
       <!-- Screen: Welcome -->
       <section id="screen-welcome" class="stack hidden" hidden style="display:none;">
-        <div class="card soft">
+        <div class="card">
           <div class="card-header">
             <div>
-              <h2 class="h2" id="welcomeTitle">مرحبًا 👋</h2>
+              <h1 class="h1" id="welcomeTitle">مرحبًا 👋</h1>
               <p class="p" id="welcomeSub">هل تريد البدء ببطاقات الأسبوع؟</p>
             </div>
             <span class="badge primary" id="welcomeChip">طالب</span>
           </div>
 
           <div class="card-body">
+            <div class="field">
+              <label class="label">اسم الطالب</label>
+              <div id="welcomeName" class="input is-static" role="status">طالب</div>
+              <div class="help">يمكنك تغيير رقم الهوية من الزر أدناه.</div>
+            </div>
             <button id="btnToCards" class="btn btn-primary btn-lg w-100">عرض البطاقات</button>
             <button id="btnChangeId" class="btn btn-outline w-100">تغيير رقم الهوية</button>
           </div>

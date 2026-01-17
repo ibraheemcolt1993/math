@@ -330,6 +330,12 @@ button, input, select, textarea{
   transition: box-shadow .18s ease, border-color .18s ease, background .18s ease;
   font-size: 15px;
 }
+.input.is-static{
+  display:flex;
+  align-items:center;
+  color: var(--text);
+  user-select: text;
+}
 .input::placeholder{ color: rgba(107,114,128,.85); }
 .input:focus{
   border-color: rgba(37,99,235,.55);
@@ -377,7 +383,6 @@ button, input, select, textarea{
 .card.is-locked .card-title{ color: rgba(17,24,39,.80); }
 .card.is-done{
   border-color: rgba(212,175,55,.65);
-@@ -348,45 +358,58 @@ button, input, select, textarea{
   background:
     radial-gradient(700px 220px at 80% -40%, rgba(245,215,110,.28), transparent 65%),
     linear-gradient(180deg, rgba(255,255,255,1), rgba(255,248,226,1));
