@@ -2,6 +2,7 @@
    engine.js — Unlimited Flow Engine (single "متابعة" button) + Resume + Completion
    - Concepts can use: concept.flow = [ {type:..., ...}, ... ]  ✅ (no limits)
    - Backward compatible: if no flow, we build flow from legacy fields
+   - Stages: goals (once) -> prereq (once) -> goals per concept -> assessment (final)
    - One button only: "متابعة"
      * On text items: reveals next item
      * On question items: "متابعة" = تحقق للسؤال الحالي
@@ -9,8 +10,8 @@
        - Correct: toast تعزيز + مهلة قصيرة ثم يكشف اللي بعده تلقائيًا
    - Auto scroll + focus to newly revealed item after advancing
    - Fix: infer question.type if flow item doesn't include it
-   - Resume: load saved { conceptIndex, stepIndex } from storage and continue
-   - Completion: when finishing the last item of the last concept -> mark done + show completion + return home
+   - Resume: load saved { stage, conceptIndex, stepIndex } from storage and continue
+   - Completion: when finishing the last item -> mark done + show completion + return home
    - Certificate Hook: pass cardTitle to completion.js (data.title)
 
    UPDATE (2026-01-14):
@@ -27,12 +28,30 @@ import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
 
 const LEGACY_ORDER = ['goal', 'explain', 'example', 'example2', 'mistake', 'note', 'question'];
+const STAGES = {
+  GOALS: 'goals',
+  PREREQ: 'prereq',
+  CONCEPT: 'concept',
+  ASSESSMENT: 'assessment',
+};
 
 export function initEngine({ week, studentId, data, mountEl }) {
   mountEl.innerHTML = '';
 
+  let stage = STAGES.GOALS;
   let conceptIndex = 0;
   let itemIndex = 0;
+
+  let assessmentState = {
+    attempts: 0,
+    completed: false,
+    score: null,
+    total: null,
+  };
+
+  const goalsList = getGoalsList(data);
+  const prereqList = getPrereqList(data);
+  const assessment = normalizeAssessment(data?.assessment);
 
   // Scroll/focus control
   let pendingFocus = null; // { conceptIndex, itemIndex }
@@ -132,11 +151,54 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return q;
   }
 
+  function normalizeAssessment(assessmentData) {
+    if (!assessmentData || !Array.isArray(assessmentData.questions)) return null;
+
+    const questions = assessmentData.questions.map((question) => {
+      if (!question || typeof question !== 'object') return null;
+
+      const inferredType =
+        question?.type ||
+        (Array.isArray(question?.choices) ? 'mcq' : 'input');
+
+      const normalized = {
+        ...question,
+        type: inferredType,
+        text: question?.text || 'سؤال',
+        points: Number.isFinite(question?.points) ? Number(question.points) : 1,
+      };
+
+      if (inferredType === 'mcq') {
+        normalized.choices = Array.isArray(question?.choices) ? question.choices : [];
+        normalized.correctIndex =
+          typeof question?.correctIndex === 'number' ? question.correctIndex : 0;
+      } else {
+        normalized.answer = question?.answer ?? '';
+        normalized.placeholder = question?.placeholder || 'اكتب إجابتك هنا';
+      }
+
+      return normalized;
+    }).filter(Boolean);
+
+    if (!questions.length) return null;
+
+    return {
+      title: assessmentData?.title || 'تقييم الدرس',
+      description: assessmentData?.description || 'اختبار تقييم من نقاط دون تصويب.',
+      questions,
+    };
+  }
+
   function totalFlowItems() {
     const concepts = data.concepts || [];
     let total = 0;
     for (const c of concepts) total += getConceptFlow(c).length;
     return Math.max(1, total);
+  }
+
+  function totalStages() {
+    const base = 2 + totalFlowItems();
+    return assessment ? base + 1 : base;
   }
 
   function currentFlowPosition() {
@@ -147,17 +209,26 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return pos;
   }
 
+  function currentStagePosition() {
+    if (stage === STAGES.GOALS) return 0;
+    if (stage === STAGES.PREREQ) return 1;
+    if (stage === STAGES.CONCEPT) return 2 + currentFlowPosition();
+    return totalStages() - 1;
+  }
+
   function updateProgress() {
-    const total = totalFlowItems();
-    const pos = currentFlowPosition();
+    const total = totalStages();
+    const pos = currentStagePosition();
     const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)));
     setProgressUI(pct);
   }
 
   function saveProgress() {
     setStudentProgress(studentId, week, {
+      stage,
       conceptIndex,
       stepIndex: itemIndex,
+      assessment: assessmentState,
     });
   }
 
@@ -186,8 +257,19 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const saved = getStudentProgress(studentId, week)?.progress;
     if (!saved) return;
 
+    if (saved.stage && Object.values(STAGES).includes(saved.stage)) {
+      stage = saved.stage;
+    }
+
     if (Number.isFinite(saved.conceptIndex)) conceptIndex = Number(saved.conceptIndex);
     if (Number.isFinite(saved.stepIndex)) itemIndex = Number(saved.stepIndex);
+
+    if (saved.assessment && typeof saved.assessment === 'object') {
+      assessmentState = {
+        ...assessmentState,
+        ...saved.assessment,
+      };
+    }
 
     clampToValidPosition();
 
@@ -222,8 +304,142 @@ export function initEngine({ week, studentId, data, mountEl }) {
     mountEl.innerHTML = '';
     activeQuestion = null;
 
+    if (stage === STAGES.GOALS) {
+      renderGoalsStage();
+      return;
+    }
+
+    if (stage === STAGES.PREREQ) {
+      renderPrereqStage();
+      return;
+    }
+
+    if (stage === STAGES.ASSESSMENT) {
+      renderAssessmentStage();
+      return;
+    }
+
+    renderConceptStage();
+  }
+
+  function renderGoalsStage() {
+    const card = document.createElement('div');
+    card.className = 'lesson-stage card';
+
+    card.innerHTML = `
+      <div class="stage-header">
+        <span class="stage-badge">المرحلة الأولى</span>
+        <h3 class="stage-title">عرض الأهداف كاملة</h3>
+      </div>
+      <div class="stage-body"></div>
+    `;
+
+    const body = card.querySelector('.stage-body');
+    const list = document.createElement('ul');
+    list.className = 'goal-list';
+
+    if (goalsList.length) {
+      goalsList.forEach((goal, idx) => {
+        const item = document.createElement('li');
+        item.className = 'goal-item';
+        item.innerHTML = `
+          <span class="goal-index">${idx + 1}</span>
+          <span class="goal-text">${escapeHtml(goal.text)}</span>
+        `;
+        list.appendChild(item);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'stage-empty';
+      empty.textContent = 'لا توجد أهداف مسجلة بعد.';
+      body.appendChild(empty);
+    }
+
+    body.appendChild(list);
+
+    const nav = document.createElement('div');
+    nav.className = 'lesson-nav';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary w-100';
+    btn.textContent = 'متابعة';
+    btn.addEventListener('click', () => {
+      stage = STAGES.PREREQ;
+      render();
+    });
+
+    nav.appendChild(btn);
+    card.appendChild(nav);
+    mountEl.appendChild(card);
+
+    updateProgress();
+    saveProgress();
+  }
+
+  function renderPrereqStage() {
+    const card = document.createElement('div');
+    card.className = 'lesson-stage card';
+
+    card.innerHTML = `
+      <div class="stage-header">
+        <span class="stage-badge">المرحلة الثانية</span>
+        <h3 class="stage-title">عرض المتطلبات السابقة</h3>
+      </div>
+      <div class="stage-body"></div>
+    `;
+
+    const body = card.querySelector('.stage-body');
+    const list = document.createElement('ul');
+    list.className = 'goal-list prereq-list';
+
+    if (prereqList.length) {
+      prereqList.forEach((req, idx) => {
+        const item = document.createElement('li');
+        item.className = 'goal-item';
+        item.innerHTML = `
+          <span class="goal-index">${idx + 1}</span>
+          <span class="goal-text">${escapeHtml(req)}</span>
+        `;
+        list.appendChild(item);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'stage-empty';
+      empty.textContent = 'لا توجد متطلبات سابقة لهذه البطاقة.';
+      body.appendChild(empty);
+    }
+
+    body.appendChild(list);
+
+    const nav = document.createElement('div');
+    nav.className = 'lesson-nav';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary w-100';
+    btn.textContent = 'متابعة';
+    btn.addEventListener('click', () => {
+      stage = STAGES.CONCEPT;
+      conceptIndex = 0;
+      itemIndex = 0;
+      render();
+    });
+
+    nav.appendChild(btn);
+    card.appendChild(nav);
+    mountEl.appendChild(card);
+
+    updateProgress();
+    saveProgress();
+  }
+
+  function renderConceptStage() {
     const concept = data.concepts?.[conceptIndex];
     if (!concept) {
+      if (assessment) {
+        stage = STAGES.ASSESSMENT;
+        render();
+        return;
+      }
       finishCard();
       return;
     }
@@ -253,6 +469,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
     cardInner.className = 'card';
 
     cardInner.innerHTML = `
+      <div class="stage-progress">
+        <span class="stage-badge">المرحلة الثالثة</span>
+        <div class="stage-progress-body"></div>
+      </div>
       <div class="concept-header">
         <div class="row">
           <span class="concept-index">${conceptIndex + 1}</span>
@@ -261,6 +481,9 @@ export function initEngine({ week, studentId, data, mountEl }) {
       </div>
       <div class="concept-body" data-concept-index="${conceptIndex}"></div>
     `;
+
+    const stageBody = cardInner.querySelector('.stage-progress-body');
+    stageBody.appendChild(renderGoalsProgress(conceptIndex));
 
     const body = cardInner.querySelector('.concept-body');
 
@@ -271,6 +494,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
       if (item.type === 'question') {
         body.appendChild(renderQuestionItem(item, i));
+      } else if (item.type === 'video') {
+        body.appendChild(renderVideoItem(item, i));
       } else {
         body.appendChild(renderTextItem(item, i));
       }
@@ -311,6 +536,118 @@ export function initEngine({ week, studentId, data, mountEl }) {
     firstPaint = false;
   }
 
+  function renderAssessmentStage() {
+    if (!assessment) {
+      finishCard();
+      return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'lesson-stage card assessment';
+
+    card.innerHTML = `
+      <div class="stage-header">
+        <span class="stage-badge">المرحلة الرابعة</span>
+        <h3 class="stage-title">${escapeHtml(assessment.title)}</h3>
+        <p class="stage-desc">${escapeHtml(assessment.description)}</p>
+      </div>
+      <div class="stage-body assessment-body"></div>
+    `;
+
+    const body = card.querySelector('.assessment-body');
+
+    assessment.questions.forEach((question, index) => {
+      const item = document.createElement('div');
+      item.className = 'assessment-question';
+      item.appendChild(renderAssessmentQuestion(question, index));
+      body.appendChild(item);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'lesson-nav';
+
+    const btnSubmit = document.createElement('button');
+    btnSubmit.className = 'btn btn-primary w-100';
+    btnSubmit.textContent = 'احسب النتيجة';
+
+    const btnFinish = document.createElement('button');
+    btnFinish.className = 'btn btn-outline w-100';
+    btnFinish.textContent = 'إنهاء البطاقة';
+
+    const result = document.createElement('div');
+    result.className = 'assessment-result hidden';
+
+    if (assessmentState.completed) {
+      applyAssessmentResult(result, assessmentState);
+      result.classList.remove('hidden');
+      btnSubmit.disabled = true;
+    }
+
+    btnSubmit.addEventListener('click', () => {
+      if (assessmentState.completed && assessmentState.attempts >= 2) return;
+
+      const { score, total } = scoreAssessment(assessment.questions);
+      assessmentState = {
+        attempts: assessmentState.attempts + 1,
+        completed: true,
+        score,
+        total,
+      };
+
+      render();
+    });
+
+    btnFinish.addEventListener('click', () => {
+      if (!assessmentState.completed) {
+        showToast('تنبيه', 'احسب النتيجة أولًا قبل إنهاء البطاقة', 'warning');
+        return;
+      }
+      finishCard();
+    });
+
+    actions.appendChild(btnSubmit);
+    actions.appendChild(btnFinish);
+
+    card.appendChild(actions);
+    card.appendChild(result);
+    mountEl.appendChild(card);
+
+    updateProgress();
+    saveProgress();
+  }
+
+  function applyAssessmentResult(container, state) {
+    const retryLeft = state.attempts < 2;
+
+    container.innerHTML = `
+      <div class="assessment-score">
+        حصلت على <strong>${state.score}</strong> من <strong>${state.total}</strong> نقطة.
+      </div>
+      <div class="assessment-note">
+        ${retryLeft ? 'يمكنك إعادة المحاولة مرة واحدة فقط.' : 'تم استهلاك فرصة إعادة المحاولة.'}
+      </div>
+    `;
+
+    if (retryLeft) {
+      const btnRetry = document.createElement('button');
+      btnRetry.type = 'button';
+      btnRetry.className = 'btn btn-ghost w-100';
+      btnRetry.textContent = 'إعادة المحاولة (مرة واحدة)';
+      btnRetry.addEventListener('click', () => {
+        assessmentState = {
+          attempts: state.attempts,
+          completed: false,
+          score: null,
+          total: null,
+        };
+
+        assessment.questions.forEach((question) => resetAssessmentQuestion(question));
+        render();
+      });
+      container.appendChild(btnRetry);
+    }
+  }
+
   function renderTextItem(item, idx) {
     const map = {
       goal:     { title: 'الهدف', cls: '' },
@@ -319,6 +656,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
       example2: { title: 'مثال إضافي', cls: 'example' },
       mistake:  { title: 'خطأ شائع', cls: 'warning' },
       note:     { title: 'ملاحظة', cls: 'note' },
+      detail:   { title: 'تفصيل إضافي', cls: 'detail' },
     };
 
     const cfg = map[item.type] || { title: 'محتوى', cls: '' };
@@ -328,11 +666,60 @@ export function initEngine({ week, studentId, data, mountEl }) {
     el.setAttribute('data-step-index', String(idx));
     el.setAttribute('data-step-key', item.type);
 
+    const details = Array.isArray(item.details)
+      ? item.details.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
+      : '';
+
     el.innerHTML = `
       <p class="step-title">${cfg.title}</p>
       <div class="step-text">${escapeHtml(item.text ?? '')}</div>
+      ${details ? `<ul class="step-details">${details}</ul>` : ''}
     `;
     return el;
+  }
+
+  function renderVideoItem(item, idx) {
+    const el = document.createElement('div');
+    el.className = 'step video';
+    el.setAttribute('data-step-index', String(idx));
+    el.setAttribute('data-step-key', 'video');
+
+    const title = item?.title || 'فيديو توضيحي';
+    const description = item?.description || item?.text || '';
+    const url = item?.url || item?.src || '';
+
+    const embed = renderVideoEmbed(url);
+
+    el.innerHTML = `
+      <p class="step-title">${escapeHtml(title)}</p>
+      ${description ? `<div class="step-text">${escapeHtml(description)}</div>` : ''}
+      <div class="video-frame">${embed}</div>
+    `;
+
+    return el;
+  }
+
+  function renderVideoEmbed(url) {
+    if (!url) {
+      return '<div class="video-empty">لم يتم إضافة رابط فيديو بعد.</div>';
+    }
+
+    const youtubeId = getYouTubeId(url);
+    if (youtubeId) {
+      return `
+        <iframe
+          class="video-embed"
+          src="https://www.youtube.com/embed/${youtubeId}"
+          title="فيديو الدرس"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      `;
+    }
+
+    return `
+      <video class="video-embed" controls preload="metadata" src="${escapeHtml(url)}"></video>
+    `;
   }
 
   function renderQuestionItem(item, idx) {
@@ -393,6 +780,144 @@ export function initEngine({ week, studentId, data, mountEl }) {
     }
 
     return wrap;
+  }
+
+  function renderAssessmentQuestion(question, index) {
+    const wrap = document.createElement('div');
+    wrap.className = 'assessment-item';
+
+    const title = document.createElement('p');
+    title.className = 'assessment-title';
+    title.textContent = `${index + 1}. ${question.text}`;
+
+    wrap.appendChild(title);
+
+    if (question.type === 'mcq') {
+      const groupName = `assessment-${index}`;
+
+      (question.choices || []).forEach((choice, cIdx) => {
+        const label = document.createElement('label');
+        label.className = 'choice';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = groupName;
+        radio.value = String(cIdx);
+        radio.checked = question._selectedIndex === cIdx;
+        radio.addEventListener('change', () => {
+          question._selectedIndex = cIdx;
+        });
+
+        const span = document.createElement('span');
+        span.textContent = choice;
+
+        label.appendChild(radio);
+        label.appendChild(span);
+        wrap.appendChild(label);
+      });
+
+      return wrap;
+    }
+
+    const input = document.createElement('input');
+    input.className = 'input ltr';
+    input.type = 'text';
+    input.placeholder = question.placeholder || 'اكتب إجابتك هنا';
+    input.value = question._value || '';
+    input.addEventListener('input', () => {
+      question._value = input.value;
+    });
+
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function resetAssessmentQuestion(question) {
+    delete question._value;
+    delete question._selectedIndex;
+  }
+
+  function scoreAssessment(questions) {
+    let score = 0;
+    let total = 0;
+
+    questions.forEach((question) => {
+      const points = Number.isFinite(question.points) ? question.points : 1;
+      total += points;
+
+      if (question.type === 'mcq') {
+        if (question._selectedIndex === question.correctIndex) score += points;
+        return;
+      }
+
+      const rawUser = question._value ?? '';
+      const rawAns = question.answer ?? '';
+      const ok = compareAnswer(rawUser, rawAns);
+      if (ok) score += points;
+    });
+
+    return { score, total };
+  }
+
+  function compareAnswer(userValue, answerValue) {
+    const user = normalizeSpaces(userValue);
+    const ans = normalizeSpaces(answerValue);
+
+    if (isNumericAnswer(ans)) {
+      const userNum = parseNumericValue(user);
+      const ansNum = parseNumericValue(ans);
+
+      return Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
+    }
+
+    return user !== '' && user === ans;
+  }
+
+  function normalizeSpaces(s) {
+    if (s == null) return '';
+    return String(s).trim().replace(/\s+/g, ' ');
+  }
+
+  function toLatinDigits(str) {
+    const map = {
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+      '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+      '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+    };
+    return String(str).replace(/[٠-٩۰-۹]/g, (d) => map[d] ?? d);
+  }
+
+  function parseNumericValue(value) {
+    if (value == null) return NaN;
+    const normalized = toLatinDigits(String(value))
+      .trim()
+      .replace(',', '.')
+      .replace(/\s+/g, '');
+
+    if (!/^[-+]?(\d+(\.\d+)?|\.\d+)$/.test(normalized)) return NaN;
+
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : NaN;
+  }
+
+  function isNumericAnswer(ans) {
+    return Number.isFinite(parseNumericValue(ans));
+  }
+
+  function getYouTubeId(url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes('youtu.be')) {
+        return parsed.pathname.replace('/', '');
+      }
+      if (parsed.hostname.includes('youtube.com')) {
+        return parsed.searchParams.get('v');
+      }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   function onVerifyOrAdvanceQuestion() {
@@ -487,8 +1012,13 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const concept = concepts[conceptIndex];
     const flow = concept ? getConceptFlow(concept) : [];
 
-    // If we are at the last item of the last concept and trying to advance -> finish
+    // If we are at the last item of the last concept and trying to advance
     if (isLastPosition()) {
+      if (assessment) {
+        stage = STAGES.ASSESSMENT;
+        render();
+        return;
+      }
       finishCard();
       return;
     }
@@ -521,6 +1051,43 @@ export function initEngine({ week, studentId, data, mountEl }) {
     }
   }
 
+  function renderGoalsProgress(currentIndex) {
+    const list = document.createElement('ul');
+    list.className = 'goal-progress';
+
+    if (!goalsList.length) {
+      const empty = document.createElement('li');
+      empty.className = 'goal-progress-item muted';
+      empty.textContent = 'لم يتم تحديد أهداف لهذه البطاقة بعد.';
+      list.appendChild(empty);
+      return list;
+    }
+
+    goalsList.forEach((goal, idx) => {
+      const item = document.createElement('li');
+      let status = 'upcoming';
+      let statusText = 'قادم';
+
+      if (idx < currentIndex) {
+        status = 'done';
+        statusText = 'مكتمل ✔️';
+      } else if (idx === currentIndex) {
+        status = 'current';
+        statusText = 'الهدف الحالي';
+      }
+
+      item.className = `goal-progress-item ${status}`;
+      item.innerHTML = `
+        <span class="goal-status">${statusText}</span>
+        <span class="goal-text">${escapeHtml(goal.text)}</span>
+      `;
+
+      list.appendChild(item);
+    });
+
+    return list;
+  }
+
   function escapeHtml(s) {
     return String(s)
       .replaceAll('&', '&amp;')
@@ -528,6 +1095,38 @@ export function initEngine({ week, studentId, data, mountEl }) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
+  }
+
+  function getGoalsList(dataObj) {
+    if (Array.isArray(dataObj?.goals) && dataObj.goals.length) {
+      return dataObj.goals.map((goal) => ({
+        text: typeof goal === 'string' ? goal : String(goal?.text || ''),
+      })).filter((goal) => goal.text.trim() !== '');
+    }
+
+    const goals = [];
+    (dataObj?.concepts || []).forEach((concept) => {
+      const flow = Array.isArray(concept?.flow) ? concept.flow : [];
+      const goalItem = flow.find((item) => item?.type === 'goal');
+      const text = goalItem?.text || concept?.title || 'هدف';
+      goals.push({ text: String(text) });
+    });
+
+    return goals;
+  }
+
+  function getPrereqList(dataObj) {
+    if (Array.isArray(dataObj?.prerequisites)) {
+      return dataObj.prerequisites.filter((item) => String(item).trim() !== '')
+        .map((item) => String(item));
+    }
+
+    if (Array.isArray(dataObj?.prereq)) {
+      return dataObj.prereq.filter((item) => String(item).trim() !== '')
+        .map((item) => String(item));
+    }
+
+    return [];
   }
 
   // Apply resume (if any) before first render

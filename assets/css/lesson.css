@@ -101,6 +101,128 @@
   flex-direction: column;
   gap: 16px;
 }
+.lesson-stage{
+  display:flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+.stage-header{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stage-badge{
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(37,99,235,.12);
+  border: 1px solid rgba(37,99,235,.18);
+  font-size: 12px;
+  font-weight: 800;
+}
+.stage-title{
+  font-size: 18px;
+  font-weight: 900;
+  margin: 0;
+}
+.stage-desc{
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.stage-body{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stage-empty{
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(17,24,39,.04);
+  border: 1px dashed rgba(17,24,39,.12);
+  font-size: 14px;
+  color: var(--muted);
+}
+.stage-progress{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(17,24,39,.08);
+}
+.goal-list,
+.goal-progress{
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.goal-item{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.08);
+  background: rgba(255,255,255,.9);
+}
+.goal-index{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: rgba(37,99,235,.12);
+  border: 1px solid rgba(37,99,235,.2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 12px;
+  font-weight: 900;
+}
+.goal-progress-item{
+  display:flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.08);
+  background: rgba(255,255,255,.9);
+}
+.goal-progress-item .goal-text{
+  font-size: 15px;
+}
+.goal-progress-item.done{
+  border-color: rgba(16,185,129,.4);
+  background: rgba(16,185,129,.08);
+}
+.goal-progress-item.current{
+  border-color: rgba(37,99,235,.4);
+  background: rgba(37,99,235,.08);
+}
+.goal-progress-item.current .goal-text{
+  font-weight: 900;
+}
+.goal-progress-item.upcoming{
+  color: rgba(17,24,39,.6);
+  background: rgba(17,24,39,.03);
+}
+.goal-progress-item.muted{
+  color: rgba(17,24,39,.5);
+}
+.goal-status{
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.goal-progress-item.current .goal-status{
+  color: #1d4ed8;
+}
+.goal-progress-item.done .goal-status{
+  color: #16a34a;
+}
 
 /* ---------- Steps ---------- */
 .step{
@@ -133,6 +255,38 @@
 .step.note{
   background: rgba(16,185,129,.08);
   border-style: solid;
+}
+.step.detail{
+  background: rgba(99,102,241,.08);
+  border-style: solid;
+}
+.step-details{
+  margin: 10px 0 0;
+  padding-inline-start: 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.step.video{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-frame{
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(17,24,39,.04);
+}
+.video-embed{
+  width: 100%;
+  min-height: 240px;
+  border: 0;
+  display: block;
+}
+.video-empty{
+  padding: 16px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 /* ---------- Question Area ---------- */
@@ -201,6 +355,41 @@
 }
 .lesson-nav .btn{
   min-width: 120px;
+}
+.assessment{
+  border: 1px solid rgba(37,99,235,.12);
+}
+.assessment-body{
+  display:flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.assessment-question{
+  border-radius: 14px;
+  padding: 12px;
+  border: 1px dashed rgba(17,24,39,.12);
+  background: rgba(255,255,255,.92);
+}
+.assessment-title{
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+.assessment-result{
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(59,130,246,.08);
+  border: 1px solid rgba(37,99,235,.2);
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.assessment-score{
+  font-size: 15px;
+}
+.assessment-note{
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ---------- Completion State ---------- */
