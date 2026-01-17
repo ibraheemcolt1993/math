@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — مصمم بطاقات الأسئلة</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/admin.css" />
+  <link rel="stylesheet" href="/assets/css/admin-builder.css" />
+</head>
+
+<body class="is-loading">
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>مصمم البطاقات</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <a class="btn btn-ghost btn-sm" href="/admin.html" aria-label="لوحة الإدارة">
+            العودة للإدارة
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section builder">
+      <section class="stack">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h1 class="h1">نموذج البطاقة</h1>
+              <p class="p">أضف أقسامًا وأنواع أسئلة متعددة كما في نماذج جوجل.</p>
+            </div>
+            <span class="badge primary">بطاقة</span>
+          </div>
+
+          <div class="card-body">
+            <div class="builder-meta">
+              <div class="field">
+                <label class="label">رقم الأسبوع</label>
+                <input id="cardWeek" class="input ltr" />
+              </div>
+              <div class="field">
+                <label class="label">عنوان البطاقة</label>
+                <input id="cardTitle" class="input" />
+              </div>
+              <div class="field">
+                <label class="label">المتطلب السابق (اختياري)</label>
+                <input id="cardPrereq" class="input ltr" placeholder="مثال: 999" />
+              </div>
+            </div>
+
+            <div class="builder-actions">
+              <button id="btnSaveBuilder" class="btn btn-primary btn-sm" type="button">حفظ النموذج</button>
+              <button id="btnAddSection" class="btn btn-ghost btn-sm" type="button">إضافة قسم جديد</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="sectionsList" class="builder-sections"></div>
+      </section>
+    </main>
+
+    <footer class="container section center">
+      <p class="small">© math — مصمم بطاقات الأسئلة</p>
+    </footer>
+  </div>
+
+  <script type="module" src="/assets/js/card-builder.js"></script>
+</body>
+</html>

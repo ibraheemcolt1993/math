@@ -102,14 +102,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return Number.isFinite(value) ? Math.max(max, value) : max;
     }, 0);
 
-    cards.unshift({
+    const newCard = {
+      id: generateId('card'),
       week: maxWeek + 1,
       title: 'بطاقة جديدة',
       prereq: null,
       items: [],
-    });
+      form: {
+        sections: [],
+      },
+    };
+
+    cards.unshift(newCard);
     renderCards(cardsList);
     persistCards();
+    openCardBuilder(newCard.id);
   });
 
   btnSaveCards?.addEventListener('click', () => {
@@ -182,7 +189,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const target = event.target;
     if (!(target instanceof HTMLButtonElement)) return;
 
-    if (target.dataset.action !== 'delete-card') return;
+    const action = target.dataset.action;
+    if (action === 'edit-card') {
+      const cardId = target.dataset.id;
+      if (cardId) {
+        openCardBuilder(cardId);
+      }
+      return;
+    }
+
+    if (action !== 'delete-card') return;
     const index = Number(target.dataset.index);
     if (!Number.isFinite(index)) return;
 
@@ -261,11 +277,17 @@ async function loadCards() {
   const stored = readLocalJson(LS_ADMIN_CARDS);
   if (stored && Array.isArray(stored)) {
     cards = stored;
+    if (ensureCardsShape(cards)) {
+      persistCards();
+    }
     return;
   }
 
   const data = await fetchJson(CARDS_PATH, { noStore: true });
   cards = Array.isArray(data) ? data : [];
+  if (ensureCardsShape(cards)) {
+    persistCards();
+  }
 }
 
 function renderStudents(container) {
@@ -295,9 +317,15 @@ function renderCards(container) {
     cardEl.className = 'admin-card';
 
     const itemsText = Array.isArray(card.items) ? card.items.join('\n') : '';
+    const sections = card.form?.sections ?? [];
+    const questionCount = sections.reduce(
+      (total, section) => total + (Array.isArray(section.questions) ? section.questions.length : 0),
+      0,
+    );
 
     cardEl.innerHTML = `
       <h4>بطاقة الأسبوع ${escapeValue(card.week ?? '--')}</h4>
+      <p class="small">عدد الأقسام: ${sections.length} • عدد الأسئلة: ${questionCount}</p>
       <div class="field">
         <label class="label">رقم الأسبوع</label>
         <input class="input ltr" data-index="${index}" data-field="week" value="${escapeValue(card.week)}" />
@@ -315,6 +343,7 @@ function renderCards(container) {
         <textarea class="input" data-index="${index}" data-field="items" placeholder="مثال: سؤال 1">${escapeValue(itemsText)}</textarea>
       </div>
       <div class="card-actions">
+        <button class="btn btn-primary btn-sm" type="button" data-action="edit-card" data-id="${escapeValue(card.id)}">تحرير النموذج</button>
         <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${index}">حذف البطاقة</button>
       </div>
     `;
@@ -369,4 +398,36 @@ function escapeValue(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function ensureCardsShape(cardsList) {
+  let updated = false;
+  cardsList.forEach((card) => {
+    if (!card.id) {
+      card.id = generateId('card');
+      updated = true;
+    }
+    if (!card.form || typeof card.form !== 'object') {
+      card.form = { sections: [] };
+      updated = true;
+    }
+    if (!Array.isArray(card.form.sections)) {
+      card.form.sections = [];
+      updated = true;
+    }
+  });
+  return updated;
+}
+
+function generateId(prefix) {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function openCardBuilder(cardId) {
+  if (!cardId) return;
+  const url = `/admin-card-builder.html?id=${encodeURIComponent(cardId)}`;
+  window.open(url, '_blank', 'noopener');
 }
