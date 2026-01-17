@@ -59,6 +59,43 @@ app.get('/api/cards', async (req, res, next) => {
   }
 });
 
+app.post('/api/admin/cards/:week/link', async (req, res, next) => {
+  try {
+    const week = Number(req.params.week);
+    if (!Number.isInteger(week)) {
+      return res.status(400).json({ ok: false, error: 'Invalid week parameter.' });
+    }
+
+    const url = String(req.body?.url || '').trim();
+    if (!url) {
+      return res.status(400).json({ ok: false, error: 'Missing url.' });
+    }
+
+    const pool = await getPool();
+    const columnCheck = await pool
+      .request()
+      .query("SELECT COL_LENGTH('Cards', 'CardUrl') AS CardUrlLength");
+
+    if (!columnCheck.recordset?.[0]?.CardUrlLength) {
+      await pool.request().query('ALTER TABLE Cards ADD CardUrl NVARCHAR(2048) NULL');
+    }
+
+    const updateResult = await pool
+      .request()
+      .input('week', sql.Int, week)
+      .input('url', sql.NVarChar(2048), url)
+      .query('UPDATE Cards SET CardUrl = @url WHERE Week = @week');
+
+    if (!updateResult.rowsAffected?.[0]) {
+      return res.status(404).json({ ok: false, error: 'Card not found.' });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/weeks/:week', async (req, res, next) => {
   try {
     const week = Number(req.params.week);
