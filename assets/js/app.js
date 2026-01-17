@@ -114,16 +114,22 @@ function initIndexPage() {
     if (inputBirthYear) inputBirthYear.value = '';
   });
 
+  function setScreenVisibility(screen, isVisible) {
+    if (!screen) return;
+    screen.classList.toggle('hidden', !isVisible);
+    screen.toggleAttribute('hidden', !isVisible);
+  }
+
   function hideAllScreens() {
-    screenId?.classList.add('hidden');
-    screenWelcome?.classList.add('hidden');
-    screenCards?.classList.add('hidden');
+    setScreenVisibility(screenId, false);
+    setScreenVisibility(screenWelcome, false);
+    setScreenVisibility(screenCards, false);
   }
 
   function showId() {
-    screenId?.classList.remove('hidden');
-    screenWelcome?.classList.add('hidden');
-    screenCards?.classList.add('hidden');
+    setScreenVisibility(screenId, true);
+    setScreenVisibility(screenWelcome, false);
+    setScreenVisibility(screenCards, false);
   }
 
   function showWelcome(student) {
@@ -133,18 +139,18 @@ function initIndexPage() {
     if (welcomeTitle) welcomeTitle.textContent = `مرحبًا يا ${firstName} 👋`;
     if (welcomeChip) welcomeChip.textContent = fullName;
 
-    screenId?.classList.add('hidden');
-    screenWelcome?.classList.remove('hidden');
-    screenCards?.classList.add('hidden');
+    setScreenVisibility(screenId, false);
+    setScreenVisibility(screenWelcome, true);
+    setScreenVisibility(screenCards, false);
 
     // ✅ inject sync toggle (idempotent)
     injectSyncToggle();
   }
 
   function showCards() {
-    screenId?.classList.add('hidden');
-    screenWelcome?.classList.add('hidden');
-    screenCards?.classList.remove('hidden');
+    setScreenVisibility(screenId, false);
+    setScreenVisibility(screenWelcome, false);
+    setScreenVisibility(screenCards, true);
     initCardsPage();
   }
 
