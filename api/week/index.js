@@ -2,7 +2,7 @@ const { getPool, sql } = require('../_shared/db');
 
 module.exports = async function (context, req) {
   try {
-    const weekParam = req.params.week;
+    const weekParam = Number(req.params.week);
     if (!Number.isInteger(weekParam)) {
       context.res = {
         status: 400,
