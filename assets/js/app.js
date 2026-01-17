@@ -61,7 +61,7 @@ function initIndexPage() {
     showId();
   }
 
-  btnLogin?.addEventListener('click', async () => {
+  async function attemptLogin() {
     const id = (inputId?.value || '').trim();
     const birthYear = (inputBirthYear?.value || '').trim();
 
@@ -101,7 +101,20 @@ function initIndexPage() {
       console.error(e);
       showToast('خطأ', 'تعذر تحميل قاعدة الطلاب (students.json)', 'error', 4000);
     }
+  }
+
+  btnLogin?.addEventListener('click', () => {
+    attemptLogin();
   });
+
+  const enterHandler = (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    attemptLogin();
+  };
+
+  inputId?.addEventListener('keydown', enterHandler);
+  inputBirthYear?.addEventListener('keydown', enterHandler);
 
   btnToCards?.addEventListener('click', () => showCards());
   btnChangeId?.addEventListener('click', () => showId());
