@@ -145,7 +145,12 @@ function initIndexPage() {
     setScreenVisibility(screenCards, false);
   }
 
+  function setAppReady() {
+    document.body.classList.remove('is-loading');
+  }
+
   function showId() {
+    setAppReady();
     setScreenVisibility(screenId, true);
     setScreenVisibility(screenWelcome, false);
     setScreenVisibility(screenCards, false);
@@ -158,6 +163,7 @@ function initIndexPage() {
     if (welcomeTitle) welcomeTitle.textContent = `مرحبًا يا ${firstName} 👋`;
     if (welcomeChip) welcomeChip.textContent = fullName;
 
+    setAppReady();
     setScreenVisibility(screenId, false);
     setScreenVisibility(screenWelcome, true);
     setScreenVisibility(screenCards, false);
@@ -165,6 +171,7 @@ function initIndexPage() {
   }
 
   function showCards() {
+    setAppReady();
     setScreenVisibility(screenId, false);
     setScreenVisibility(screenWelcome, false);
     setScreenVisibility(screenCards, true);
