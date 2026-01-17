@@ -594,6 +594,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
         total,
       };
 
+      showToast('نتيجة التقييم', `حصلت على ${score} من ${total} نقطة.`, 'success', 3500);
       render();
     });
 

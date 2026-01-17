@@ -43,6 +43,7 @@ function initIndexPage() {
 
   const welcomeTitle = document.getElementById('welcomeTitle');
   const welcomeChip = document.getElementById('welcomeChip');
+  const welcomeName = document.getElementById('welcomeName');
 
   // Ensure Birth Year input exists (inject if missing)
   const inputBirthYear = ensureBirthYearInput(inputId);
@@ -162,6 +163,7 @@ function initIndexPage() {
 
     if (welcomeTitle) welcomeTitle.textContent = `مرحبًا يا ${firstName} 👋`;
     if (welcomeChip) welcomeChip.textContent = fullName;
+    if (welcomeName) welcomeName.textContent = fullName;
 
     setAppReady();
     setScreenVisibility(screenId, false);
