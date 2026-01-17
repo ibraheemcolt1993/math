@@ -864,10 +864,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const ans = normalizeSpaces(answerValue);
 
     if (isNumericAnswer(ans)) {
-      const userDigits = numericOnly(toLatinDigits(user));
-      const ansDigits = numericOnly(toLatinDigits(ans));
-      const userNum = userDigits === '' ? NaN : Number(userDigits);
-      const ansNum = ansDigits === '' ? NaN : Number(ansDigits);
+      const userNum = parseNumericValue(user);
+      const ansNum = parseNumericValue(ans);
 
       return Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
     }
@@ -890,13 +888,21 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return String(str).replace(/[٠-٩۰-۹]/g, (d) => map[d] ?? d);
   }
 
-  function numericOnly(str) {
-    return String(str).replace(/[^0-9]/g, '');
+  function parseNumericValue(value) {
+    if (value == null) return NaN;
+    const normalized = toLatinDigits(String(value))
+      .trim()
+      .replace(',', '.')
+      .replace(/\s+/g, '');
+
+    if (!/^[-+]?(\d+(\.\d+)?|\.\d+)$/.test(normalized)) return NaN;
+
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : NaN;
   }
 
   function isNumericAnswer(ans) {
-    const a = numericOnly(toLatinDigits(normalizeSpaces(ans)));
-    return a.length > 0 && /^[0-9]+$/.test(a);
+    return Number.isFinite(parseNumericValue(ans));
   }
 
   function getYouTubeId(url) {
