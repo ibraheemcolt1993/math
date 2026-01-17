@@ -11,12 +11,12 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Kufi Arabic", "Cairo", "Tajawal", Arial, sans-serif;
 
   /* Colors (Light Material) */
-  --bg: #f7f8fb;
+  --bg: #f6f8fc;
   --surface: #ffffff;
-  --surface-2: #f3f5fb;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: rgba(17, 24, 39, 0.10);
+  --surface-2: #eef2f9;
+  --text: #0b1324;
+  --muted: #586174;
+  --border: rgba(15, 23, 42, 0.08);
 
   /* Brand */
   --primary: #2563eb;
@@ -39,14 +39,14 @@
   --r-lg: 24px;
 
   /* Shadows (soft) */
-  --shadow-xs: 0 1px 2px rgba(17,24,39,.06), 0 1px 1px rgba(17,24,39,.04);
-  --shadow-sm: 0 6px 16px rgba(17,24,39,.08);
-  --shadow-md: 0 14px 30px rgba(17,24,39,.10);
-  --shadow-lg: 0 24px 60px rgba(17,24,39,.14);
+  --shadow-xs: 0 1px 2px rgba(15,23,42,.05), 0 1px 1px rgba(15,23,42,.03);
+  --shadow-sm: 0 10px 20px rgba(15,23,42,.08);
+  --shadow-md: 0 18px 36px rgba(15,23,42,.10);
+  --shadow-lg: 0 30px 68px rgba(15,23,42,.14);
 
   /* Spacing */
-  --container: 980px;
-  --pad: 16px;
+  --container: 1040px;
+  --pad: 18px;
 
   /* Focus */
   --focus: 0 0 0 4px rgba(37, 99, 235, 0.18);
@@ -59,12 +59,16 @@ html{ -webkit-text-size-adjust:100%; }
 body{
   margin:0;
   font-family: var(--font-sans);
-  background: radial-gradient(1200px 700px at 80% -10%, rgba(37,99,235,.10), transparent 60%),
-              radial-gradient(900px 600px at 10% 0%, rgba(16,185,129,.08), transparent 55%),
+  background: radial-gradient(1200px 700px at 80% -10%, rgba(37,99,235,.08), transparent 60%),
+              radial-gradient(900px 600px at 10% 0%, rgba(56,189,248,.08), transparent 55%),
               var(--bg);
   color: var(--text);
-  line-height: 1.55;
+  line-height: 1.75;
   direction: rtl;
+  font-weight: 500;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 img{ max-width:100%; display:block; }
@@ -88,13 +92,13 @@ button, input, select, textarea{
   margin-inline: auto;
 }
 .section{
-  padding-block: 22px;
+  padding-block: 28px;
 }
-.stack{ display:flex; flex-direction: column; gap: 12px; }
+.stack{ display:flex; flex-direction: column; gap: 18px; }
 .row{ display:flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .grid{
   display:grid;
-  gap: 14px;
+  gap: 18px;
 }
 .grid.cards{
   grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -111,12 +115,13 @@ button, input, select, textarea{
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(247,248,251,.78);
+  background: rgba(246,248,252,.95);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(17,24,39,.08);
+  border-bottom: 1px solid rgba(15,23,42,.08);
+  box-shadow: 0 8px 20px rgba(15,23,42,.05);
 }
 .topbar-inner{
-  padding: 12px 0;
+  padding: 14px 0;
   display:flex;
   align-items: center;
   justify-content: space-between;
@@ -152,7 +157,7 @@ button, input, select, textarea{
   line-height: 1.2;
 }
 .brand-title b{
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: .2px;
 }
 .brand-title span{
@@ -162,20 +167,20 @@ button, input, select, textarea{
 
 /* ---------- Typography ---------- */
 .h1{
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 800;
   margin: 0;
-  letter-spacing: .2px;
+  letter-spacing: .1px;
 }
 .h2{
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   margin: 0;
 }
 .p{
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 .small{ font-size: 12px; color: var(--muted); }
 .kbd{
@@ -192,11 +197,12 @@ button, input, select, textarea{
 
 /* ---------- Card ---------- */
 .card{
-  background: var(--surface);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
-  padding: 14px;
+  padding: 20px;
+  transition: box-shadow .2s ease, transform .2s ease;
 }
 .card.soft{
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
@@ -205,8 +211,9 @@ button, input, select, textarea{
   display:flex;
   align-items:flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 .card-title{
   font-weight: 800;
@@ -218,13 +225,13 @@ button, input, select, textarea{
   font-size: 13px;
   color: var(--muted);
 }
-.card-body{ display:flex; flex-direction: column; gap: 10px; }
+.card-body{ display:flex; flex-direction: column; gap: 12px; }
 .card-footer{
   display:flex;
   align-items:center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 /* ---------- Buttons ---------- */
@@ -232,14 +239,15 @@ button, input, select, textarea{
   appearance:none;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 12px 18px;
+  min-height: 44px;
   cursor:pointer;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   gap: 10px;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 15px;
   user-select:none;
   transition: transform .08s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, opacity .18s ease;
 }
@@ -252,12 +260,12 @@ button, input, select, textarea{
 .btn-primary{
   background: linear-gradient(180deg, rgba(37,99,235,1), rgba(29,78,216,1));
   color:#fff;
-  box-shadow: 0 10px 22px rgba(37,99,235,.18);
+  box-shadow: 0 12px 26px rgba(37,99,235,.20);
 }
 .btn-primary:hover{ box-shadow: 0 14px 30px rgba(37,99,235,.22); }
 .btn-outline{
-  background: rgba(255,255,255,.7);
-  border-color: rgba(17,24,39,.14);
+  background: rgba(255,255,255,.9);
+  border-color: rgba(15,23,42,.14);
   color: var(--text);
   box-shadow: var(--shadow-xs);
 }
@@ -273,8 +281,8 @@ button, input, select, textarea{
 .btn-ghost:hover{
   background: rgba(17,24,39,.06);
 }
-.btn-sm{ padding: 8px 12px; font-size: 13px; }
-.btn-lg{ padding: 12px 16px; font-size: 15px; }
+.btn-sm{ padding: 9px 12px; font-size: 13px; min-height: 36px; }
+.btn-lg{ padding: 14px 20px; font-size: 16px; }
 
 /* ---------- Inputs ---------- */
 .field{
@@ -283,19 +291,21 @@ button, input, select, textarea{
   gap: 8px;
 }
 .label{
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
   font-weight: 700;
 }
 .input{
   width: 100%;
-  border: 1px solid rgba(17,24,39,.14);
-  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(15,23,42,.14);
+  background: #fff;
   border-radius: 16px;
-  padding: 12px 12px;
+  padding: 13px 14px;
+  min-height: 44px;
   box-shadow: var(--shadow-xs);
   outline: none;
   transition: box-shadow .18s ease, border-color .18s ease, background .18s ease;
+  font-size: 15px;
 }
 .input::placeholder{ color: rgba(107,114,128,.85); }
 .input:focus{
@@ -313,12 +323,12 @@ button, input, select, textarea{
   display:inline-flex;
   align-items:center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,.72);
+  background: rgba(255,255,255,.8);
 }
 .badge.primary{
   border-color: rgba(37,99,235,.22);
@@ -370,8 +380,8 @@ button, input, select, textarea{
 .hr{
   border: none;
   height: 1px;
-  background: rgba(17,24,39,.10);
-  margin: 10px 0;
+  background: rgba(15,23,42,.10);
+  margin: 12px 0;
 }
 
 /* ---------- Focus ring for buttons/links ---------- */
@@ -390,3 +400,15 @@ button, input, select, textarea{
 .nowrap{ white-space:nowrap; }
 .ltr{ direction:ltr; }
 .rtl{ direction:rtl; }
+
+@media (max-width: 640px){
+  .topbar-inner{ padding: 12px 0; }
+  .section{ padding-block: 22px; }
+  .card{ padding: 16px; }
+  .card-header{ flex-direction: column; align-items: flex-start; }
+  .h1{ font-size: 22px; }
+  .h2{ font-size: 18px; }
+  .p{ font-size: 14px; }
+  .btn{ width: 100%; }
+  .btn.btn-sm{ width: auto; }
+}
