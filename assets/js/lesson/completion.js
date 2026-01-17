@@ -5,14 +5,11 @@
    - Stores last certificate payload in LocalStorage
    - Shows "عرض الشهادة" button on completion (no HTML edits needed)
 
-   UPDATE (2026-01-14):
-   - Optional Sync to Google Sheets (completion + certificate payload)
    ========================================================= */
 
 import { isCardDone, markCardDone } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
-import { enqueueSyncEvent, flushSyncQueue } from '../core/sync.js';
 
 const LS_CURRENT_STUDENT = 'math:currentStudent';       // set by app.js
 const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
@@ -27,30 +24,6 @@ export function completeLesson({ studentId, week, cardTitle = '' }) {
   const student = readCurrentStudent();
   const payload = buildCertificatePayload({ studentId, week, cardTitle, student });
   writeLastCertificate(payload);
-
-  // ✅ Optional Sync (best-effort)
-  enqueueSyncEvent({
-    type: 'completion',
-    studentId,
-    week,
-    payload: {
-      week: Number(week),
-      cardTitle: String(cardTitle || ''),
-      studentId: String(studentId),
-      done: true,
-      issuedAt: payload.issuedAt,
-    },
-  });
-
-  enqueueSyncEvent({
-    type: 'certificate',
-    studentId,
-    week,
-    payload,
-  });
-
-  // try flush now (best effort)
-  flushSyncQueue();
 
   // UI: show completion section if exists
   const completeEl = document.getElementById('lessonComplete');
