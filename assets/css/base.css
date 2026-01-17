@@ -43,6 +43,7 @@
   --shadow-sm: 0 10px 20px rgba(15,23,42,.08);
   --shadow-md: 0 18px 36px rgba(15,23,42,.10);
   --shadow-lg: 0 30px 68px rgba(15,23,42,.14);
+  --shadow-soft: 0 12px 34px rgba(15,23,42,.08);
 
   /* Spacing */
   --container: 1040px;
@@ -69,6 +70,12 @@ body{
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+body.is-loading #screen-id,
+body.is-loading #screen-welcome,
+body.is-loading #screen-cards{
+  display: none !important;
 }
 
 img{ max-width:100%; display:block; }
@@ -115,7 +122,8 @@ button, input, select, textarea{
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #f6f8fc;
+  background: rgba(246,248,252,.92);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(15,23,42,.08);
   box-shadow: 0 6px 14px rgba(15,23,42,.04);
 }
@@ -196,12 +204,28 @@ button, input, select, textarea{
 
 /* ---------- Card ---------- */
 .card{
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
   padding: 20px;
   transition: box-shadow .2s ease, transform .2s ease;
+}
+.card::after{
+  content:"";
+  position:absolute;
+  inset: 0;
+  background: radial-gradient(320px 120px at 15% -20%, rgba(37,99,235,.08), transparent 70%);
+  opacity: .7;
+  pointer-events: none;
+}
+@media (hover: hover){
+  .card:hover{
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-soft);
+  }
 }
 .card.soft{
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
@@ -261,7 +285,7 @@ button, input, select, textarea{
   color:#fff;
   box-shadow: 0 12px 26px rgba(37,99,235,.20);
 }
-.btn-primary:hover{ box-shadow: 0 14px 30px rgba(37,99,235,.22); }
+.btn-primary:hover{ box-shadow: 0 16px 34px rgba(37,99,235,.26); }
 .btn-outline{
   background: rgba(255,255,255,.9);
   border-color: rgba(15,23,42,.14);
@@ -297,7 +321,7 @@ button, input, select, textarea{
 .input{
   width: 100%;
   border: 1px solid rgba(15,23,42,.14);
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   border-radius: 16px;
   padding: 13px 14px;
   min-height: 44px;
