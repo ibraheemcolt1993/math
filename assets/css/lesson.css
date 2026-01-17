@@ -5,7 +5,7 @@
 
 /* ---------- Header (Lesson Title) ---------- */
 .lesson-header{
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .lesson-title{
   display:flex;
@@ -13,11 +13,11 @@
   gap: 6px;
 }
 .lesson-title .h1{
-  font-size: 22px;
+  font-size: 23px;
 }
 .lesson-meta{
   display:flex;
-  gap: 10px;
+  gap: 12px;
   align-items:center;
   flex-wrap: wrap;
 }
@@ -25,7 +25,7 @@
   display:inline-flex;
   align-items:center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: rgba(37,99,235,.10);
   border: 1px solid rgba(37,99,235,.18);
@@ -35,7 +35,7 @@
 
 /* ---------- Progress Bar ---------- */
 .progress-wrap{
-  margin: 18px 0 22px;
+  margin: 20px 0 24px;
 }
 .progress-label{
   display:flex;
@@ -49,7 +49,7 @@
   font-weight: 800;
 }
 .progress{
-  height: 12px;
+  height: 14px;
   border-radius: 999px;
   background: rgba(17,24,39,.10);
   overflow: hidden;
@@ -66,17 +66,18 @@
 
 /* ---------- Concept Card ---------- */
 .concept{
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .concept .card{
-  padding: 18px;
+  padding: 20px;
 }
 .concept-header{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 .concept-index{
   display:inline-flex;
@@ -91,22 +92,23 @@
   font-size: 14px;
 }
 .concept-title{
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 900;
   margin: 0;
 }
 .concept-body{
   display:flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 /* ---------- Steps ---------- */
 .step{
   border-radius: 16px;
-  padding: 14px;
+  padding: 16px;
   border: 1px dashed rgba(17,24,39,.14);
-  background: rgba(255,255,255,.70);
+  background: rgba(255,255,255,.86);
+  box-shadow: var(--shadow-xs);
 }
 .step-title{
   font-weight: 900;
@@ -135,15 +137,15 @@
 
 /* ---------- Question Area ---------- */
 .question-wrap{
-  margin-top: 8px;
-  padding: 16px;
+  margin-top: 10px;
+  padding: 18px;
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,1), rgba(243,245,251,1));
   border: 1px solid rgba(17,24,39,.14);
   box-shadow: var(--shadow-sm);
 }
 .question-title{
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 900;
   margin: 0 0 10px;
 }
@@ -169,11 +171,33 @@
   background: rgba(17,24,39,.18);
 }
 .dot.used{
-@@ -194,28 +194,31 @@
+@@ -173,49 +175,54 @@
+}
+
+/* ---------- Solution Box ---------- */
+.solution{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(220,38,38,.06);
+  border: 1px solid rgba(220,38,38,.18);
+}
+.solution-title{
+  font-size: 13px;
+  font-weight: 900;
+  margin: 0 0 6px;
+}
+.solution-text{
+  font-size: 14px;
+}
+
+/* ---------- Navigation Buttons ---------- */
+.lesson-nav{
   display:flex;
   gap: 10px;
   justify-content: space-between;
   margin-top: 16px;
+  flex-wrap: wrap;
 }
 .lesson-nav .btn{
   min-width: 120px;
@@ -195,8 +219,9 @@
 
 /* ---------- Responsive tweaks ---------- */
 @media (max-width: 480px){
-  .lesson-title .h1{ font-size: 19px; }
+  .lesson-title .h1{ font-size: 20px; }
   .lesson-meta{ gap: 8px; }
+  .progress{ height: 12px; }
   .question-wrap{ padding: 12px; }
   .lesson-nav{ flex-direction: column; }
   .lesson-nav .btn{ width: 100%; }
