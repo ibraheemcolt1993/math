@@ -7,7 +7,6 @@
    UPDATE (2026-01-14):
    - Fix UI flash: hide all screens first, show correct one
    - Remove old auto-welcome based on lastStudentId only
-   - Add optional Sync toggle (Google Sheets) on welcome screen
    ========================================================= */
 
 import { getLastStudentId, setLastStudentId } from './core/storage.js';
@@ -16,7 +15,6 @@ import { getWeekParam } from './core/router.js';
 import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { fetchJson } from './core/api.js';
-import { isSyncEnabled, setSyncEnabled, flushSyncQueue } from './core/sync.js';
 
 const STUDENTS_PATH = '/data/students.json';
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // {id,birthYear,firstName,fullName,class}
@@ -164,8 +162,6 @@ function initIndexPage() {
     setScreenVisibility(screenWelcome, true);
     setScreenVisibility(screenCards, false);
 
-    // ✅ inject sync toggle (idempotent)
-    injectSyncToggle();
   }
 
   function showCards() {
@@ -175,40 +171,6 @@ function initIndexPage() {
     initCardsPage();
   }
 
-  function injectSyncToggle() {
-    const host = screenWelcome?.querySelector('.card-body');
-    if (!host) return;
-    if (host.querySelector('#syncToggle')) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'field';
-    wrap.id = 'syncToggle';
-
-    const enabled = isSyncEnabled();
-
-    wrap.innerHTML = `
-      <label class="label" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <span>مزامنة اختيارية (Google Sheets)</span>
-        <input id="syncEnabled" type="checkbox" ${enabled ? 'checked' : ''} />
-      </label>
-      <div class="help">اختياري: يرفع إنجاز البطاقة + بيانات الشهادة على Google Sheet. إذا فصلته، كل شيء يظل محلي.</div>
-    `;
-
-    host.appendChild(wrap);
-
-    const chk = wrap.querySelector('#syncEnabled');
-    chk?.addEventListener('change', () => {
-      const on = Boolean(chk.checked);
-      setSyncEnabled(on);
-
-      if (on) {
-        showToast('تم', 'تم تفعيل المزامنة الاختيارية', 'success', 2500);
-        flushSyncQueue(); // try sending queued data
-      } else {
-        showToast('تم', 'تم إيقاف المزامنة', 'info', 2500);
-      }
-    });
-  }
 }
 
 /* ---------- Current Student Profile (LocalStorage) ---------- */
