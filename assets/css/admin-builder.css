@@ -1,0 +1,133 @@
+.builder {
+  min-height: 60vh;
+}
+
+.builder-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.builder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.builder-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.builder-section {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.builder-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.builder-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.builder-question {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.builder-question-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.builder-question-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.builder-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.builder-option-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.builder-pairs {
+  display: grid;
+  gap: 10px;
+}
+
+.builder-pair {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: center;
+}
+
+.builder-order {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-order-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: var(--r-xs);
+  border: 1px dashed var(--border);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.builder-order-item.is-dragging {
+  opacity: 0.6;
+}
+
+.drag-handle {
+  cursor: grab;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 6px;
+  color: var(--muted);
+}
+
+.builder-helper {
+  font-size: 12px;
+  color: var(--muted);
+}
