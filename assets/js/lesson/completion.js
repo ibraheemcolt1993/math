@@ -9,7 +9,7 @@
    - Optional Sync to Google Sheets (completion + certificate payload)
    ========================================================= */
 
-import { markCardDone } from '../core/storage.js';
+import { isCardDone, markCardDone } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
 import { enqueueSyncEvent, flushSyncQueue } from '../core/sync.js';
@@ -19,6 +19,7 @@ const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
 const CERT_URL = '/assets/cert/certificate.html';
 
 export function completeLesson({ studentId, week, cardTitle = '' }) {
+  const wasDone = isCardDone(studentId, week);
   // mark card as done
   markCardDone(studentId, week);
 
@@ -55,6 +56,7 @@ export function completeLesson({ studentId, week, cardTitle = '' }) {
   const completeEl = document.getElementById('lessonComplete');
   if (completeEl) {
     completeEl.classList.remove('hidden');
+    completeEl.removeAttribute('hidden');
     completeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     // Inject data for future UI usage
@@ -66,8 +68,10 @@ export function completeLesson({ studentId, week, cardTitle = '' }) {
   }
 
   // Toast includes first name
-  const firstName = payload.firstName || 'بطل';
-  showToast('ممتاز 🎉', `أحسنت يا ${firstName} — تم إنجاز البطاقة`, 'success', 3500);
+  if (!wasDone) {
+    const firstName = payload.firstName || 'بطل';
+    showToast('ممتاز 🎉', `أحسنت يا ${firstName} — تم إنجاز البطاقة`, 'success', 3500);
+  }
 
   // NOTE: we no longer auto-return quickly, to allow opening the certificate
   setTimeout(() => {

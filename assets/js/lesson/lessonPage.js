@@ -41,9 +41,15 @@ export async function initLessonPage() {
   const studentEl = document.getElementById('lessonStudent');
   const weekEl = document.getElementById('lessonWeek');
   const contentEl = document.getElementById('lessonContent');
+  const completeEl = document.getElementById('lessonComplete');
 
   studentEl.textContent = displayName;
   weekEl.textContent = `week ${week}`;
+
+  if (completeEl) {
+    completeEl.classList.add('hidden');
+    completeEl.setAttribute('hidden', 'hidden');
+  }
 
   try {
     const data = await fetchJson(weekJsonPath(week), { noStore: true });

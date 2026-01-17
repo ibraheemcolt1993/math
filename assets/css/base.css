@@ -115,10 +115,9 @@ button, input, select, textarea{
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(246,248,252,.95);
-  backdrop-filter: blur(10px);
+  background: #f6f8fc;
   border-bottom: 1px solid rgba(15,23,42,.08);
-  box-shadow: 0 8px 20px rgba(15,23,42,.05);
+  box-shadow: 0 6px 14px rgba(15,23,42,.04);
 }
 .topbar-inner{
   padding: 14px 0;
