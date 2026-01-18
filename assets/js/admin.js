@@ -8,6 +8,7 @@ const ADMIN_PASS = 'Aa@232323445566';
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
+const ADMIN_STUDENTS_API = '/api/admin/students';
 let students = [];
 let cards = [];
 
@@ -67,11 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   tabs.forEach((tabBtn) => {
-    tabBtn.addEventListener('click', () => {
+    tabBtn.addEventListener('click', async () => {
       const tab = tabBtn.dataset.tab;
       tabs.forEach((btn) => btn.classList.toggle('is-active', btn === tabBtn));
       setScreenVisibility(panelStudents, tab === 'students');
       setScreenVisibility(panelCards, tab === 'cards');
+
+      if (tab === 'students') {
+        await reloadStudentsFromApi();
+        renderStudents(studentsTable);
+      }
     });
   });
 
@@ -89,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveStudents?.addEventListener('click', async () => {
     try {
       await saveStudents();
-      showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في المتصفح', 'success');
+      showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في قاعدة البيانات', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات الطلاب', 'error');
     }
@@ -197,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnLogout?.classList.add('hidden');
   }
 
-  async function showAdmin() {
+async function showAdmin() {
     hideAllScreens();
     setScreenVisibility(adminScreen, true);
     document.body.classList.remove('is-loading');
@@ -232,15 +238,22 @@ async function loadData() {
 }
 
 async function loadStudents() {
-  const stored = readLocalJson(LS_ADMIN_STUDENTS);
-  if (stored && Array.isArray(stored)) {
-    students = stored.map(normalizeStudent);
-    return;
-  }
+  try {
+    students = await loadStudentsFromApi();
+    localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
+  } catch (error) {
+    if (isNetworkError(error)) {
+      const stored = readLocalJson(LS_ADMIN_STUDENTS);
+      if (stored && Array.isArray(stored)) {
+        students = stored.map(normalizeStudent);
+        showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للطلاب', 'warning');
+        return;
+      }
+    }
 
-  const data = await fetchJson(DATA_PATHS.STUDENTS, { noStore: true });
-  const list = Array.isArray(data) ? data : data?.students;
-  students = Array.isArray(list) ? list.map(normalizeStudent) : [];
+    showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
+    students = [];
+  }
 }
 
 async function loadCards() {
@@ -321,6 +334,8 @@ function escapeValue(value) {
 }
 
 async function saveStudents() {
+  await saveStudentsToApi(students);
+  students = await loadStudentsFromApi();
   localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
 }
 
@@ -353,4 +368,90 @@ function readLocalJson(key) {
   } catch {
     return null;
   }
+}
+
+async function loadStudentsFromApi() {
+  const res = await fetch(ADMIN_STUDENTS_API, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+    },
+  });
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch (error) {
+    payload = null;
+  }
+
+  if (!res.ok) {
+    const message = payload?.message || payload?.error || 'تعذر تحميل بيانات الطلاب';
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+
+  if (!payload?.ok || !Array.isArray(payload.students)) {
+    throw new Error('تعذر تحميل بيانات الطلاب');
+  }
+
+  return payload.students.map(normalizeStudent);
+}
+
+async function saveStudentsToApi(studentsArray) {
+  const payload = {
+    students: studentsArray.map((student) => ({
+      StudentId: student.id,
+      BirthYear: student.birthYear,
+      FirstName: student.firstName,
+      FullName: student.fullName,
+      Class: student.class,
+    })),
+  };
+
+  const res = await fetch(ADMIN_STUDENTS_API, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let responsePayload = null;
+  try {
+    responsePayload = await res.json();
+  } catch (error) {
+    responsePayload = null;
+  }
+
+  if (!res.ok || responsePayload?.ok === false) {
+    const message = responsePayload?.message || responsePayload?.error || 'تعذر حفظ بيانات الطلاب';
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+}
+
+async function reloadStudentsFromApi() {
+  try {
+    students = await loadStudentsFromApi();
+    localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
+  } catch (error) {
+    if (isNetworkError(error)) {
+      const stored = readLocalJson(LS_ADMIN_STUDENTS);
+      if (stored && Array.isArray(stored)) {
+        students = stored.map(normalizeStudent);
+        showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للطلاب', 'warning');
+        return;
+      }
+    }
+    showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
+  }
+}
+
+function isNetworkError(error) {
+  return error instanceof TypeError && !('status' in error);
 }
