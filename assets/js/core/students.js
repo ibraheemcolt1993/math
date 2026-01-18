@@ -1,5 +1,6 @@
 import { fetchJson } from './api.js';
 import { DATA_PATHS } from './constants.js';
+import { normalizeDigits } from './normalizeDigits.js';
 
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 
@@ -39,12 +40,12 @@ export async function loadStudents() {
 export async function findStudentByIdentity(id, birthYear) {
   const students = await loadStudents();
 
-  const normalizedId = String(id).trim();
-  const normalizedYear = String(birthYear).trim();
+  const normalizedId = normalizeDigits(String(id).trim());
+  const normalizedYear = normalizeDigits(String(birthYear).trim());
 
   const student = students.find(s =>
-    String(s.id) === normalizedId &&
-    String(s.birthYear) === normalizedYear
+    normalizeDigits(String(s.id)) === normalizedId &&
+    normalizeDigits(String(s.birthYear)) === normalizedYear
   );
 
   return student || null;
