@@ -16,6 +16,36 @@ function parseBody(req) {
   return null;
 }
 
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+
+  return String(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
 module.exports = async function (context, req) {
   try {
     const dbPool = await getPool();
@@ -25,14 +55,14 @@ module.exports = async function (context, req) {
         .request()
         .query(
           `SELECT StudentId, BirthYear, FirstName, FullName, Class
-           FROM Students
+           FROM dbo.Students
            ORDER BY StudentId`
         );
 
       context.res = {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: result.recordset
+        body: { ok: true, students: result.recordset }
       };
       return;
     }
@@ -41,7 +71,7 @@ module.exports = async function (context, req) {
       context.res = {
         status: 405,
         headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Method not allowed.' }
+        body: { ok: false, message: 'Method not allowed.' }
       };
       return;
     }
@@ -51,58 +81,91 @@ module.exports = async function (context, req) {
       context.res = {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'students array is required.' }
+        body: { ok: false, message: 'BAD_REQUEST' }
       };
       return;
     }
 
-    const normalized = payload.students
-      .map((student) => ({
-        studentId: String(student.studentId || student.id || '').trim(),
-        birthYear: String(student.birthYear || '').trim(),
-        firstName: String(student.firstName || '').trim(),
-        fullName: String(student.fullName || '').trim(),
-        class: String(student.class || '').trim()
-      }))
-      .filter((student) => student.studentId && student.birthYear);
+    const normalized = payload.students.map((student) => {
+      const studentId = normalizeDigits(String(student.StudentId ?? student.studentId ?? student.id ?? '').trim());
+      const birthYear = normalizeDigits(String(student.BirthYear ?? student.birthYear ?? '').trim());
+      return {
+        StudentId: studentId,
+        BirthYear: birthYear,
+        FirstName: String(student.FirstName ?? student.firstName ?? '').trim(),
+        FullName: String(student.FullName ?? student.fullName ?? '').trim(),
+        Class: String(student.Class ?? student.class ?? '').trim()
+      };
+    });
+
+    const hasInvalid = normalized.some(
+      (student) =>
+        !student.StudentId ||
+        !student.BirthYear ||
+        !student.FirstName ||
+        !student.FullName ||
+        !student.Class
+    );
+
+    if (hasInvalid) {
+      context.res = {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: { ok: false, message: 'BAD_REQUEST' }
+      };
+      return;
+    }
 
     const transaction = new sql.Transaction(dbPool);
     await transaction.begin();
 
     try {
-      const existing = await new sql.Request(transaction)
-        .query('SELECT StudentId FROM Students');
-      const existingIds = new Set(existing.recordset.map((row) => row.StudentId));
-      const incomingIds = new Set(normalized.map((student) => student.studentId));
+      const request = new sql.Request(transaction);
+      await request.query(
+        `CREATE TABLE #IncomingStudents (
+           StudentId nvarchar(20) NOT NULL,
+           BirthYear nvarchar(10) NOT NULL,
+           FirstName nvarchar(100) NOT NULL,
+           FullName nvarchar(200) NOT NULL,
+           Class nvarchar(20) NOT NULL
+         )`
+      );
 
-      for (const student of normalized) {
-        const updateRequest = new sql.Request(transaction);
-        const updateResult = await updateRequest
-          .input('studentId', sql.NVarChar(20), student.studentId)
-          .input('birthYear', sql.NVarChar(10), student.birthYear)
-          .input('firstName', sql.NVarChar(100), student.firstName)
-          .input('fullName', sql.NVarChar(200), student.fullName)
-          .input('class', sql.NVarChar(20), student.class)
-          .query(
-            `UPDATE Students
-             SET BirthYear = @birthYear, FirstName = @firstName, FullName = @fullName, Class = @class
-             WHERE StudentId = @studentId`
-          );
+      const table = new sql.Table('#IncomingStudents');
+      table.create = false;
+      table.columns.add('StudentId', sql.NVarChar(20), { nullable: false });
+      table.columns.add('BirthYear', sql.NVarChar(10), { nullable: false });
+      table.columns.add('FirstName', sql.NVarChar(100), { nullable: false });
+      table.columns.add('FullName', sql.NVarChar(200), { nullable: false });
+      table.columns.add('Class', sql.NVarChar(20), { nullable: false });
+      normalized.forEach((student) => {
+        table.rows.add(
+          student.StudentId,
+          student.BirthYear,
+          student.FirstName,
+          student.FullName,
+          student.Class
+        );
+      });
 
-        if (!updateResult.rowsAffected?.[0]) {
-          await updateRequest.query(
-            `INSERT INTO Students (StudentId, BirthYear, FirstName, FullName, Class)
-             VALUES (@studentId, @birthYear, @firstName, @fullName, @class)`
-          );
-        }
-      }
+      await request.bulk(table);
 
-      const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
-      for (const studentId of toDelete) {
-        await new sql.Request(transaction)
-          .input('deleteId', sql.NVarChar(20), studentId)
-          .query('DELETE FROM Students WHERE StudentId = @deleteId');
-      }
+      await request.query(
+        `MERGE dbo.Students AS target
+         USING #IncomingStudents AS source
+         ON target.StudentId = source.StudentId
+         WHEN MATCHED THEN
+           UPDATE SET
+             BirthYear = source.BirthYear,
+             FirstName = source.FirstName,
+             FullName = source.FullName,
+             Class = source.Class
+         WHEN NOT MATCHED BY TARGET THEN
+           INSERT (StudentId, BirthYear, FirstName, FullName, Class)
+           VALUES (source.StudentId, source.BirthYear, source.FirstName, source.FullName, source.Class)
+         WHEN NOT MATCHED BY SOURCE THEN
+           DELETE;`
+      );
 
       await transaction.commit();
     } catch (error) {
@@ -119,7 +182,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
+      body: { ok: false, message: 'DB_ERROR', detail: error.message }
     };
   }
 };
