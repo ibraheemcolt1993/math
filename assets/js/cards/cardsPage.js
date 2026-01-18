@@ -7,7 +7,7 @@
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
-import { DATA_PATHS } from '../core/constants.js';
+import { API_PATHS } from '../core/constants.js';
 import { getLastStudentId, isCardDone } from '../core/storage.js';
 import { goToLesson } from '../core/router.js';
 import { showToast } from '../ui/toast.js';
@@ -30,7 +30,7 @@ export async function initCardsPage() {
   if (studentNameEl) studentNameEl.textContent = displayName;
 
   try {
-    const cards = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
+    const cards = await fetchJson(API_PATHS.CARDS, { noStore: true });
     renderCards(listEl, Array.isArray(cards) ? cards : [], studentId);
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
