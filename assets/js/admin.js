@@ -8,7 +8,7 @@ const ADMIN_PASS = 'Aa@232323445566';
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
-const ADMIN_STUDENTS_API = '/api/adminstudents';
+const ADMIN_STUDENTS_API = ['/api/admin/students', '/api/adminstudents'];
 let students = [];
 let cards = [];
 
@@ -371,34 +371,45 @@ function readLocalJson(key) {
 }
 
 async function loadStudentsFromApi() {
-  const res = await fetch(ADMIN_STUDENTS_API, {
-    method: 'GET',
-    cache: 'no-store',
-    headers: {
-      'Cache-Control': 'no-store',
-      Pragma: 'no-cache',
-    },
-  });
+  for (const endpoint of ADMIN_STUDENTS_API) {
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-store',
+        Pragma: 'no-cache',
+      },
+    });
 
-  let payload = null;
-  try {
-    payload = await res.json();
-  } catch (error) {
-    payload = null;
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (error) {
+      payload = null;
+    }
+
+    if (res.status === 404) {
+      continue;
+    }
+
+    if (!res.ok) {
+      const message = payload?.message || payload?.error || 'تعذر تحميل بيانات الطلاب';
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
+    var studentsPayload = Array.isArray(payload) ? payload : payload?.students;
+    if (!Array.isArray(studentsPayload)) {
+      throw new Error('تعذر تحميل بيانات الطلاب');
+    }
+
+    return studentsPayload.map(normalizeStudent);
   }
 
-  if (!res.ok) {
-    const message = payload?.message || payload?.error || 'تعذر تحميل بيانات الطلاب';
-    const err = new Error(message);
-    err.status = res.status;
-    throw err;
-  }
-
-  if (!payload?.ok || !Array.isArray(payload.students)) {
-    throw new Error('تعذر تحميل بيانات الطلاب');
-  }
-
-  return payload.students.map(normalizeStudent);
+  const err = new Error('تعذر تحميل بيانات الطلاب');
+  err.status = 404;
+  throw err;
 }
 
 async function saveStudentsToApi(studentsArray) {
@@ -412,27 +423,39 @@ async function saveStudentsToApi(studentsArray) {
     })),
   };
 
-  const res = await fetch(ADMIN_STUDENTS_API, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  for (const endpoint of ADMIN_STUDENTS_API) {
+    const res = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-  let responsePayload = null;
-  try {
-    responsePayload = await res.json();
-  } catch (error) {
-    responsePayload = null;
+    let responsePayload = null;
+    try {
+      responsePayload = await res.json();
+    } catch (error) {
+      responsePayload = null;
+    }
+
+    if (res.status === 404) {
+      continue;
+    }
+
+    if (!res.ok || responsePayload?.ok === false) {
+      const message = responsePayload?.message || responsePayload?.error || 'تعذر حفظ بيانات الطلاب';
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
+    return;
   }
 
-  if (!res.ok || responsePayload?.ok === false) {
-    const message = responsePayload?.message || responsePayload?.error || 'تعذر حفظ بيانات الطلاب';
-    const err = new Error(message);
-    err.status = res.status;
-    throw err;
-  }
+  const err = new Error('تعذر حفظ بيانات الطلاب');
+  err.status = 404;
+  throw err;
 }
 
 async function reloadStudentsFromApi() {
