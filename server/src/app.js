@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { getPool, sql } = require('./db');
 
 const app = express();
@@ -24,6 +25,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(express.static(path.resolve(__dirname, '..', '..')));
 
 app.get('/api/health', async (req, res, next) => {
   try {
@@ -52,6 +54,213 @@ app.get('/api/cards', async (req, res, next) => {
     const pool = await getPool();
     const result = await pool
       .request()
+      .query(
+        'SELECT Week AS week, Title AS title, PrereqWeek AS prereq FROM Cards ORDER BY Week'
+      );
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/students/login', async (req, res, next) => {
+  try {
+    const studentId = String(req.body?.studentId || '').trim();
+    const birthYear = String(req.body?.birthYear || '').trim();
+
+    if (!studentId || !birthYear) {
+      return res.status(400).json({ ok: false, error: 'Missing student credentials.' });
+    }
+
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('birthYear', sql.NVarChar(10), birthYear)
+      .query(
+        `SELECT StudentId, BirthYear, FirstName, FullName, Class
+         FROM Students
+         WHERE StudentId = @studentId AND BirthYear = @birthYear`
+      );
+
+    if (!result.recordset.length) {
+      return res.status(404).json({ ok: false, error: 'Student not found.' });
+    }
+
+    const student = result.recordset[0];
+    res.json({
+      studentId: student.StudentId,
+      birthYear: student.BirthYear,
+      firstName: student.FirstName,
+      fullName: student.FullName,
+      class: student.Class
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/students/:studentId/completions', async (req, res, next) => {
+  try {
+    const studentId = String(req.params.studentId || '').trim();
+    if (!studentId) {
+      return res.status(400).json({ ok: false, error: 'Missing studentId.' });
+    }
+
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .query(
+        `SELECT CompletionId, StudentId, Week, FinalScore, CompletedAt
+         FROM CardCompletions
+         WHERE StudentId = @studentId
+         ORDER BY Week`
+      );
+
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/students/:studentId/completions', async (req, res, next) => {
+  try {
+    const studentId = String(req.params.studentId || '').trim();
+    const week = Number(req.body?.week);
+    const finalScore = Number.isFinite(Number(req.body?.finalScore))
+      ? Number(req.body.finalScore)
+      : 0;
+
+    if (!studentId || !Number.isInteger(week)) {
+      return res.status(400).json({ ok: false, error: 'Invalid completion payload.' });
+    }
+
+    const pool = await getPool();
+    const existing = await pool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('week', sql.Int, week)
+      .query(
+        `SELECT CompletionId
+         FROM CardCompletions
+         WHERE StudentId = @studentId AND Week = @week`
+      );
+
+    if (existing.recordset.length) {
+      await pool
+        .request()
+        .input('studentId', sql.NVarChar(20), studentId)
+        .input('week', sql.Int, week)
+        .input('finalScore', sql.Int, finalScore)
+        .query(
+          `UPDATE CardCompletions
+           SET FinalScore = @finalScore, CompletedAt = GETDATE()
+           WHERE StudentId = @studentId AND Week = @week`
+        );
+    } else {
+      await pool
+        .request()
+        .input('studentId', sql.NVarChar(20), studentId)
+        .input('week', sql.Int, week)
+        .input('finalScore', sql.Int, finalScore)
+        .query(
+          `INSERT INTO CardCompletions (StudentId, Week, FinalScore, CompletedAt)
+           VALUES (@studentId, @week, @finalScore, GETDATE())`
+        );
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/students', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .query(
+        `SELECT StudentId, BirthYear, FirstName, FullName, Class
+         FROM Students
+         ORDER BY StudentId`
+      );
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/students', async (req, res, next) => {
+  try {
+    const students = Array.isArray(req.body?.students) ? req.body.students : [];
+    const normalized = students
+      .map((student) => ({
+        studentId: String(student.studentId || student.id || '').trim(),
+        birthYear: String(student.birthYear || '').trim(),
+        firstName: String(student.firstName || '').trim(),
+        fullName: String(student.fullName || '').trim(),
+        class: String(student.class || '').trim()
+      }))
+      .filter((student) => student.studentId && student.birthYear);
+
+    const pool = await getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const request = new sql.Request(transaction);
+      const existing = await request.query('SELECT StudentId FROM Students');
+      const existingIds = new Set(existing.recordset.map((row) => row.StudentId));
+      const incomingIds = new Set(normalized.map((student) => student.studentId));
+
+      for (const student of normalized) {
+        const updateRequest = new sql.Request(transaction);
+        const updateResult = await updateRequest
+          .input('studentId', sql.NVarChar(20), student.studentId)
+          .input('birthYear', sql.NVarChar(10), student.birthYear)
+          .input('firstName', sql.NVarChar(100), student.firstName)
+          .input('fullName', sql.NVarChar(200), student.fullName)
+          .input('class', sql.NVarChar(20), student.class)
+          .query(
+            `UPDATE Students
+             SET BirthYear = @birthYear, FirstName = @firstName, FullName = @fullName, Class = @class
+             WHERE StudentId = @studentId`
+          );
+
+        if (!updateResult.rowsAffected?.[0]) {
+          await updateRequest.query(
+            `INSERT INTO Students (StudentId, BirthYear, FirstName, FullName, Class)
+             VALUES (@studentId, @birthYear, @firstName, @fullName, @class)`
+          );
+        }
+      }
+
+      const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
+      for (const studentId of toDelete) {
+        const deleteRequest = new sql.Request(transaction);
+        await deleteRequest
+          .input('deleteId', sql.NVarChar(20), studentId)
+          .query('DELETE FROM Students WHERE StudentId = @deleteId');
+      }
+
+      await transaction.commit();
+      res.json({ ok: true });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/cards', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool
+      .request()
       .query('SELECT Week, Title, PrereqWeek FROM Cards ORDER BY Week');
     res.json(result.recordset);
   } catch (error) {
@@ -59,38 +268,63 @@ app.get('/api/cards', async (req, res, next) => {
   }
 });
 
-app.post('/api/admin/cards/:week/link', async (req, res, next) => {
+app.put('/api/admin/cards', async (req, res, next) => {
   try {
-    const week = Number(req.params.week);
-    if (!Number.isInteger(week)) {
-      return res.status(400).json({ ok: false, error: 'Invalid week parameter.' });
-    }
-
-    const url = String(req.body?.url || '').trim();
-    if (!url) {
-      return res.status(400).json({ ok: false, error: 'Missing url.' });
-    }
+    const cards = Array.isArray(req.body?.cards) ? req.body.cards : [];
+    const normalized = cards
+      .map((card) => ({
+        week: Number(card.week),
+        title: String(card.title || '').trim(),
+        prereqWeek: card.prereq == null || card.prereq === ''
+          ? null
+          : Number(card.prereq)
+      }))
+      .filter((card) => Number.isInteger(card.week) && card.title);
 
     const pool = await getPool();
-    const columnCheck = await pool
-      .request()
-      .query("SELECT COL_LENGTH('Cards', 'CardUrl') AS CardUrlLength");
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    if (!columnCheck.recordset?.[0]?.CardUrlLength) {
-      await pool.request().query('ALTER TABLE Cards ADD CardUrl NVARCHAR(2048) NULL');
+    try {
+      const request = new sql.Request(transaction);
+      const existing = await request.query('SELECT Week FROM Cards');
+      const existingWeeks = new Set(existing.recordset.map((row) => row.Week));
+      const incomingWeeks = new Set(normalized.map((card) => card.week));
+
+      for (const card of normalized) {
+        const updateRequest = new sql.Request(transaction);
+        const updateResult = await updateRequest
+          .input('week', sql.Int, card.week)
+          .input('title', sql.NVarChar(300), card.title)
+          .input('prereqWeek', sql.Int, card.prereqWeek)
+          .query(
+            `UPDATE Cards
+             SET Title = @title, PrereqWeek = @prereqWeek
+             WHERE Week = @week`
+          );
+
+        if (!updateResult.rowsAffected?.[0]) {
+          await updateRequest.query(
+            `INSERT INTO Cards (Week, Title, PrereqWeek)
+             VALUES (@week, @title, @prereqWeek)`
+          );
+        }
+      }
+
+      const toDelete = Array.from(existingWeeks).filter((week) => !incomingWeeks.has(week));
+      for (const week of toDelete) {
+        const deleteRequest = new sql.Request(transaction);
+        await deleteRequest
+          .input('deleteWeek', sql.Int, week)
+          .query('DELETE FROM Cards WHERE Week = @deleteWeek');
+      }
+
+      await transaction.commit();
+      res.json({ ok: true });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
     }
-
-    const updateResult = await pool
-      .request()
-      .input('week', sql.Int, week)
-      .input('url', sql.NVarChar(2048), url)
-      .query('UPDATE Cards SET CardUrl = @url WHERE Week = @week');
-
-    if (!updateResult.rowsAffected?.[0]) {
-      return res.status(404).json({ ok: false, error: 'Card not found.' });
-    }
-
-    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
@@ -306,12 +540,72 @@ app.get('/api/weeks/:week', async (req, res, next) => {
       questions: questionsByAssessment.get(assessment.AssessmentId) || []
     }));
 
+    const weekData = weekResult.recordset[0];
+    const goals = goalsResult.recordset.map((goal) => goal.GoalText);
+    const prerequisites = prereqResult.recordset.map((req) => req.PrerequisiteText);
+
+    const normalizedConcepts = concepts.map(({ concept, flow }) => ({
+      title: concept.Title,
+      flow: flow.map(({ item, details, hints, choices }) => {
+        const type = String(item.ItemType || '').trim().toLowerCase();
+        const mapped = {
+          type,
+          text: item.ItemText,
+          title: item.ItemTitle,
+          description: item.ItemDescription,
+          url: item.ItemUrl,
+          answer: item.Answer,
+          correctIndex: item.CorrectIndex,
+          solution: item.Solution,
+          details: details.map((detail) => detail.DetailText),
+          hints: hints.map((hint) => hint.HintText),
+          choices: choices.map((choice) => choice.ChoiceText)
+        };
+
+        if (!mapped.details.length) delete mapped.details;
+        if (!mapped.hints.length) delete mapped.hints;
+        if (!mapped.choices.length) delete mapped.choices;
+
+        return mapped;
+      })
+    }));
+
+    const normalizedAssessments = assessments.map(({ assessment, questions }) => ({
+      title: assessment.Title,
+      description: assessment.Description,
+      questions: questions.map(({ question, choices }) => {
+        const rawType = String(question.QuestionType || '').trim().toLowerCase();
+        const choiceTexts = choices.map((choice) => choice.ChoiceText);
+        let type = rawType;
+        if (!['mcq', 'input'].includes(type)) {
+          type = choiceTexts.length ? 'mcq' : 'input';
+        }
+
+        const normalized = {
+          type,
+          text: question.QuestionText,
+          points: Number.isFinite(question.Points) ? question.Points : 1
+        };
+
+        if (type === 'mcq') {
+          normalized.choices = choiceTexts;
+          normalized.correctIndex =
+            typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
+        } else {
+          normalized.answer = question.Answer ?? '';
+        }
+
+        return normalized;
+      })
+    }));
+
     res.json({
-      week: weekResult.recordset[0],
-      goals: goalsResult.recordset,
-      prerequisites: prereqResult.recordset,
-      concepts,
-      assessments
+      week: weekData.Week,
+      title: weekData.Title,
+      goals,
+      prerequisites,
+      concepts: normalizedConcepts,
+      assessment: normalizedAssessments[0] || null
     });
   } catch (error) {
     next(error);

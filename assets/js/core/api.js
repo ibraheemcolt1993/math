@@ -1,28 +1,19 @@
 /* =========================================================
-   api.js — JSON Loader (cards & weeks)
+   api.js — JSON Loader (API helpers)
    ========================================================= */
 
-const LOCAL_OVERRIDES = {
-  '/data/students.json': 'math:admin:students',
-  '/data/cards.json': 'math:admin:cards',
-};
-
-export async function fetchJson(url, { noStore = false } = {}) {
-  const overrideKey = LOCAL_OVERRIDES[url];
-  if (overrideKey) {
-    try {
-      const stored = localStorage.getItem(overrideKey);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch {
-      // Fall back to network fetch when parsing fails.
-    }
-  }
-
+export async function fetchJson(url, { noStore = false, method = 'GET', body, headers } = {}) {
   const opts = {
-    headers: {},
+    method,
+    headers: {
+      ...(headers || {}),
+    },
   };
+
+  if (body !== undefined) {
+    opts.body = JSON.stringify(body);
+    opts.headers['Content-Type'] = 'application/json';
+  }
 
   if (noStore) {
     opts.cache = 'no-store';
@@ -32,7 +23,18 @@ export async function fetchJson(url, { noStore = false } = {}) {
 
   const res = await fetch(url, opts);
   if (!res.ok) {
-    throw new Error(`فشل تحميل البيانات: ${url}`);
+    let message = `فشل تحميل البيانات: ${url}`;
+    try {
+      const errorPayload = await res.json();
+      if (errorPayload?.error) {
+        message = errorPayload.error;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
   }
+
+  if (res.status === 204) return null;
   return await res.json();
 }

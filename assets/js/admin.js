@@ -5,13 +5,11 @@ const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'Aa@232323445566';
 
 const LS_ADMIN_SESSION = 'math:admin:session';
-const LS_ADMIN_STUDENTS = 'math:admin:students';
-const LS_ADMIN_CARDS = 'math:admin:cards';
 
-const STUDENTS_PATH = '/data/students.json';
-const CARDS_PATH = '/data/cards.json';
-
-let studentsMeta = { version: 1, note: '' };
+const ADMIN_API = {
+  STUDENTS: '/api/admin/students',
+  CARDS: '/api/admin/cards',
+};
 let students = [];
 let cards = [];
 
@@ -88,12 +86,15 @@ document.addEventListener('DOMContentLoaded', () => {
       class: '',
     });
     renderStudents(studentsTable);
-    persistStudents();
   });
 
-  btnSaveStudents?.addEventListener('click', () => {
-    persistStudents();
-    showToast('تم الحفظ', 'تم حفظ بيانات الطلاب محليًا', 'success');
+  btnSaveStudents?.addEventListener('click', async () => {
+    try {
+      await saveStudents();
+      showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في قاعدة البيانات', 'success');
+    } catch (error) {
+      showToast('خطأ', error.message || 'تعذر حفظ بيانات الطلاب', 'error');
+    }
   });
 
   btnAddCard?.addEventListener('click', () => {
@@ -103,25 +104,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 0);
 
     const newCard = {
-      id: generateId('card'),
       week: maxWeek + 1,
       title: 'بطاقة جديدة',
       prereq: null,
-      items: [],
-      form: {
-        sections: [],
-      },
     };
 
     cards.unshift(newCard);
     renderCards(cardsList);
-    persistCards();
-    openCardBuilder(newCard.id);
   });
 
-  btnSaveCards?.addEventListener('click', () => {
-    persistCards();
-    showToast('تم الحفظ', 'تم حفظ بيانات البطاقات محليًا', 'success');
+  btnSaveCards?.addEventListener('click', async () => {
+    try {
+      await saveCards();
+      showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في قاعدة البيانات', 'success');
+    } catch (error) {
+      showToast('خطأ', error.message || 'تعذر حفظ بيانات البطاقات', 'error');
+    }
   });
 
   studentsTable?.addEventListener('input', (event) => {
@@ -140,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     students[index][field] = target.value.trim();
-    persistStudents();
   });
 
   studentsTable?.addEventListener('click', (event) => {
@@ -153,7 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     students.splice(index, 1);
     renderStudents(studentsTable);
-    persistStudents();
   });
 
   cardsList?.addEventListener('input', (event) => {
@@ -167,37 +163,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = cards[index];
     if (!card) return;
 
-    if (field === 'items') {
-      const lines = target.value
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-      card.items = lines;
-    } else if (field === 'link') {
-      card.link = target.value.trim();
-    } else if (field === 'week' || field === 'prereq') {
+    if (field === 'week' || field === 'prereq') {
       const cleaned = target.value.replace(/[^0-9]/g, '');
       target.value = cleaned;
       card[field] = cleaned === '' ? null : Number(cleaned);
     } else {
       card[field] = target.value.trim();
     }
-
-    persistCards();
     refreshCardHeaders();
-  });
-
-  cardsList?.addEventListener('change', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) return;
-    if (target.dataset.field !== 'link') return;
-
-    const index = Number(target.dataset.index);
-    if (!Number.isFinite(index)) return;
-    const card = cards[index];
-    if (!card) return;
-
-    saveCardLink(card);
   });
 
   cardsList?.addEventListener('click', (event) => {
@@ -205,21 +178,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!(target instanceof HTMLButtonElement)) return;
 
     const action = target.dataset.action;
-    if (action === 'edit-card') {
-      const cardId = target.dataset.id;
-      if (cardId) {
-        openCardBuilder(cardId);
-      }
-      return;
-    }
-
     if (action !== 'delete-card') return;
     const index = Number(target.dataset.index);
     if (!Number.isFinite(index)) return;
 
     cards.splice(index, 1);
     renderCards(cardsList);
-    persistCards();
   });
 
   function hideAllScreens() {
@@ -270,39 +234,27 @@ async function loadData() {
 }
 
 async function loadStudents() {
-  const stored = readLocalJson(LS_ADMIN_STUDENTS);
-  if (stored && Array.isArray(stored.students)) {
-    studentsMeta = {
-      version: stored.version ?? 1,
-      note: stored.note ?? '',
-    };
-    students = stored.students;
-    return;
-  }
-
-  const data = await fetchJson(STUDENTS_PATH, { noStore: true });
-  studentsMeta = {
-    version: data.version ?? 1,
-    note: data.note ?? '',
-  };
-  students = Array.isArray(data.students) ? data.students : [];
+  const data = await fetchJson(ADMIN_API.STUDENTS, { noStore: true });
+  students = Array.isArray(data)
+    ? data.map((row) => ({
+        id: row.StudentId ?? row.studentId ?? row.id ?? '',
+        birthYear: row.BirthYear ?? row.birthYear ?? '',
+        firstName: row.FirstName ?? row.firstName ?? '',
+        fullName: row.FullName ?? row.fullName ?? '',
+        class: row.Class ?? row.class ?? '',
+      }))
+    : [];
 }
 
 async function loadCards() {
-  const stored = readLocalJson(LS_ADMIN_CARDS);
-  if (stored && Array.isArray(stored)) {
-    cards = stored;
-    if (ensureCardsShape(cards)) {
-      persistCards();
-    }
-    return;
-  }
-
-  const data = await fetchJson(CARDS_PATH, { noStore: true });
-  cards = Array.isArray(data) ? data : [];
-  if (ensureCardsShape(cards)) {
-    persistCards();
-  }
+  const data = await fetchJson(ADMIN_API.CARDS, { noStore: true });
+  cards = Array.isArray(data)
+    ? data.map((row) => ({
+        week: row.Week ?? row.week ?? '',
+        title: row.Title ?? row.title ?? '',
+        prereq: row.PrereqWeek ?? row.prereq ?? null,
+      }))
+    : [];
 }
 
 function renderStudents(container) {
@@ -331,16 +283,8 @@ function renderCards(container) {
     const cardEl = document.createElement('div');
     cardEl.className = 'admin-card';
 
-    const itemsText = Array.isArray(card.items) ? card.items.join('\n') : '';
-    const sections = card.form?.sections ?? [];
-    const questionCount = sections.reduce(
-      (total, section) => total + (Array.isArray(section.questions) ? section.questions.length : 0),
-      0,
-    );
-
     cardEl.innerHTML = `
       <h4>بطاقة الأسبوع ${escapeValue(card.week ?? '--')}</h4>
-      <p class="small">عدد الأقسام: ${sections.length} • عدد الأسئلة: ${questionCount}</p>
       <div class="field">
         <label class="label">رقم الأسبوع</label>
         <input class="input ltr" data-index="${index}" data-field="week" value="${escapeValue(card.week)}" />
@@ -353,16 +297,7 @@ function renderCards(container) {
         <label class="label">المتطلب السابق (اختياري)</label>
         <input class="input ltr" data-index="${index}" data-field="prereq" value="${escapeValue(card.prereq ?? '')}" placeholder="مثال: 999" />
       </div>
-      <div class="field">
-        <label class="label">عناصر البطاقة (كل عنصر بسطر)</label>
-        <textarea class="input" data-index="${index}" data-field="items" placeholder="مثال: سؤال 1">${escapeValue(itemsText)}</textarea>
-      </div>
-      <div class="field">
-        <label class="label">رابط البطاقة (سيُحفظ في قاعدة البيانات)</label>
-        <input class="input ltr" data-index="${index}" data-field="link" value="${escapeValue(card.link ?? '')}" placeholder="https://example.com" />
-      </div>
       <div class="card-actions">
-        <button class="btn btn-primary btn-sm" type="button" data-action="edit-card" data-id="${escapeValue(card.id)}">تحرير النموذج</button>
         <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${index}">حذف البطاقة</button>
       </div>
     `;
@@ -380,37 +315,6 @@ function refreshCardHeaders() {
   });
 }
 
-function persistStudents() {
-  const payload = {
-    version: studentsMeta.version,
-    note: studentsMeta.note,
-    students,
-  };
-
-  try {
-    localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(payload));
-  } catch {
-    showToast('خطأ', 'تعذر حفظ بيانات الطلاب في المتصفح', 'error');
-  }
-}
-
-function persistCards() {
-  try {
-    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
-  } catch {
-    showToast('خطأ', 'تعذر حفظ بيانات البطاقات في المتصفح', 'error');
-  }
-}
-
-function readLocalJson(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 function escapeValue(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -419,65 +323,16 @@ function escapeValue(value) {
     .replaceAll('"', '&quot;');
 }
 
-function ensureCardsShape(cardsList) {
-  let updated = false;
-  cardsList.forEach((card) => {
-    if (!card.id) {
-      card.id = generateId('card');
-      updated = true;
-    }
-    if (!card.form || typeof card.form !== 'object') {
-      card.form = { sections: [] };
-      updated = true;
-    }
-    if (!Array.isArray(card.form.sections)) {
-      card.form.sections = [];
-      updated = true;
-    }
+async function saveStudents() {
+  await fetchJson(ADMIN_API.STUDENTS, {
+    method: 'PUT',
+    body: { students },
   });
-  return updated;
 }
 
-function generateId(prefix) {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function openCardBuilder(cardId) {
-  if (!cardId) return;
-  const url = `/admin-card-builder.html?id=${encodeURIComponent(cardId)}`;
-  window.open(url, '_blank', 'noopener');
-}
-
-async function saveCardLink(card) {
-  const week = Number(card.week);
-  if (!Number.isInteger(week)) {
-    showToast('تنبيه', 'يرجى إدخال رقم أسبوع صحيح قبل حفظ الرابط.', 'warning');
-    return;
-  }
-
-  const url = String(card.link || '').trim();
-  if (!url) {
-    showToast('تنبيه', 'يرجى إدخال رابط صحيح قبل الحفظ.', 'warning');
-    return;
-  }
-
-  try {
-    const response = await fetch(`/api/admin/cards/${week}/link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || 'تعذر حفظ الرابط في قاعدة البيانات.');
-    }
-
-    showToast('تم الحفظ', 'تم حفظ الرابط في قاعدة البيانات.', 'success');
-  } catch (error) {
-    showToast('خطأ', error.message || 'تعذر حفظ الرابط في قاعدة البيانات.', 'error');
-  }
+async function saveCards() {
+  await fetchJson(ADMIN_API.CARDS, {
+    method: 'PUT',
+    body: { cards },
+  });
 }

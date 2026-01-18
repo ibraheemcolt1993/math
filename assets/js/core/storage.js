@@ -101,3 +101,13 @@ export function isCardDone(studentId, week) {
   const student = getStudent(studentId);
   return Boolean(student.cards[String(week)]?.done);
 }
+
+export function syncCardCompletions(studentId, completions) {
+  if (!studentId || !Array.isArray(completions)) return;
+  completions.forEach((completion) => {
+    const weekValue = completion?.Week ?? completion?.week;
+    if (Number.isInteger(Number(weekValue))) {
+      markCardDone(studentId, Number(weekValue));
+    }
+  });
+}
