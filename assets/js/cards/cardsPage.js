@@ -8,11 +8,18 @@
 
 import { fetchJson } from '../core/api.js';
 import { API_PATHS } from '../core/constants.js';
-import { getLastStudentId, isCardDone } from '../core/storage.js';
+import { getWeeksForClass } from '../core/gradeMap.js';
+import {
+  getCachedCards,
+  getLastStudentId,
+  getStudentCompletions,
+  getStudentSession,
+  isCardDone,
+  setCachedCards,
+  syncCardCompletions,
+} from '../core/storage.js';
 import { goToLesson } from '../core/router.js';
 import { showToast } from '../ui/toast.js';
-
-const LS_CURRENT_STUDENT = 'math:currentStudent'; // set by app.js
 
 export async function initCardsPage() {
   const studentId = getLastStudentId();
@@ -21,7 +28,7 @@ export async function initCardsPage() {
   const listEl = document.getElementById('cardsList');
   const studentNameEl = document.getElementById('cardsStudentName');
 
-  const student = readCurrentStudent();
+  const student = getStudentSession();
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
@@ -30,24 +37,33 @@ export async function initCardsPage() {
   if (studentNameEl) studentNameEl.textContent = displayName;
 
   try {
+    const cached = getCachedCards();
+    if (cached?.length) {
+      renderCards(listEl, filterCardsForStudent(cached, student), studentId);
+    }
+
+    const progress = getStudentCompletions(studentId);
+    syncCardCompletions(studentId, progress);
+
     const cards = await fetchJson(API_PATHS.CARDS, { noStore: true });
-    renderCards(listEl, Array.isArray(cards) ? cards : [], studentId);
+    const normalized = Array.isArray(cards) ? cards : [];
+    setCachedCards(normalized);
+    renderCards(listEl, filterCardsForStudent(normalized, student), studentId);
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
     console.error(e);
   }
 }
 
-function readCurrentStudent() {
-  try {
-    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+function filterCardsForStudent(cards, student) {
+  const weeks = getWeeksForClass(student?.class);
+  if (!weeks?.length) return cards;
+  const allowed = new Set(weeks.map((week) => Number(week)));
+  return cards.filter((card) => allowed.has(Number(card.week)));
 }
 
 function renderCards(container, cards, studentId) {
+  if (!container) return;
   container.innerHTML = '';
 
   cards.forEach((card) => {

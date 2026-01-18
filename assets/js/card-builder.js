@@ -1,9 +1,10 @@
 import { fetchJson } from './core/api.js';
+import { normalizeDigits } from './core/normalizeDigits.js';
 import { showToast } from './ui/toast.js';
 
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_CARDS = 'math:admin:cards';
-const CARDS_PATH = '/data/cards.json';
+const CARDS_PATH = '/api/cards-mng';
 
 const QUESTION_TYPES = [
   { value: 'true-false', label: 'صواب وخطأ' },
@@ -26,6 +27,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputWeek = document.getElementById('cardWeek');
   const inputTitle = document.getElementById('cardTitle');
   const inputPrereq = document.getElementById('cardPrereq');
+  const inputGoals = document.getElementById('cardGoals');
+  const inputPrerequisites = document.getElementById('cardPrerequisites');
+  const inputAssessmentTitle = document.getElementById('assessmentTitle');
+  const inputAssessmentDescription = document.getElementById('assessmentDescription');
 
   if (!localStorage.getItem(LS_ADMIN_SESSION)) {
     showToast('تنبيه', 'يجب تسجيل الدخول للإدارة أولًا', 'warning');
@@ -44,6 +49,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadCards();
   activeCard = cards.find((card) => card.id === cardId);
+  if (!activeCard) {
+    const weekId = Number(cardId);
+    if (Number.isFinite(weekId)) {
+      activeCard = cards.find((card) => Number(card.week) === weekId);
+    }
+  }
 
   if (!activeCard) {
     showToast('خطأ', 'هذه البطاقة غير موجودة', 'error');
@@ -56,6 +67,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   inputWeek.value = String(activeCard.week ?? '');
   inputTitle.value = String(activeCard.title ?? '');
   inputPrereq.value = activeCard.prereq == null ? '' : String(activeCard.prereq);
+  inputGoals.value = (activeCard.form.goals || []).join('\n');
+  inputPrerequisites.value = (activeCard.form.prerequisites || []).join('\n');
+  inputAssessmentTitle.value = activeCard.form.assessment?.title || '';
+  inputAssessmentDescription.value = activeCard.form.assessment?.description || '';
 
   document.body.classList.remove('is-loading');
 
@@ -67,14 +82,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     persistCards();
   });
 
-  btnSaveBuilder?.addEventListener('click', () => {
-    persistCards();
-    showToast('تم الحفظ', 'تم حفظ نموذج البطاقة بنجاح', 'success');
+  btnSaveBuilder?.addEventListener('click', async () => {
+    if (!btnSaveBuilder) return;
+    const original = btnSaveBuilder.textContent;
+    btnSaveBuilder.disabled = true;
+    btnSaveBuilder.textContent = 'جارٍ الحفظ...';
+    try {
+      persistCards();
+      await saveWeekToApi(activeCard);
+      updateCardsCache(activeCard);
+      showToast('تم الحفظ', 'تم حفظ نموذج البطاقة بنجاح', 'success');
+    } catch (error) {
+      showToast('خطأ', error.message || 'تعذر حفظ نموذج البطاقة', 'error');
+    } finally {
+      btnSaveBuilder.disabled = false;
+      btnSaveBuilder.textContent = original || 'حفظ النموذج';
+    }
   });
 
   inputWeek?.addEventListener('input', () => {
     if (!activeCard) return;
-    const cleaned = inputWeek.value.replace(/[^0-9]/g, '');
+    const cleaned = normalizeDigits(inputWeek.value).replace(/[^0-9]/g, '');
     inputWeek.value = cleaned;
     activeCard.week = cleaned === '' ? null : Number(cleaned);
     persistCards();
@@ -88,9 +116,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   inputPrereq?.addEventListener('input', () => {
     if (!activeCard) return;
-    const cleaned = inputPrereq.value.replace(/[^0-9]/g, '');
+    const cleaned = normalizeDigits(inputPrereq.value).replace(/[^0-9]/g, '');
     inputPrereq.value = cleaned;
     activeCard.prereq = cleaned === '' ? null : Number(cleaned);
+    persistCards();
+  });
+
+  inputGoals?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.form.goals = splitLines(inputGoals.value);
+    persistCards();
+  });
+
+  inputPrerequisites?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.form.prerequisites = splitLines(inputPrerequisites.value);
+    persistCards();
+  });
+
+  inputAssessmentTitle?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.form.assessment.title = inputAssessmentTitle.value.trim();
+    persistCards();
+  });
+
+  inputAssessmentDescription?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.form.assessment.description = inputAssessmentDescription.value.trim();
     persistCards();
   });
 
@@ -292,12 +344,19 @@ async function loadCards() {
   if (stored && Array.isArray(stored)) {
     cards = stored;
     ensureCardsShape(cards);
-    return;
   }
 
-  const data = await fetchJson(CARDS_PATH, { noStore: true });
-  cards = Array.isArray(data) ? data : [];
-  ensureCardsShape(cards);
+  try {
+    const data = await fetchJson(CARDS_PATH, { noStore: true });
+    const list = Array.isArray(data) ? data : data?.cards;
+    if (Array.isArray(list)) {
+      cards = list;
+      ensureCardsShape(cards);
+      persistCards();
+    }
+  } catch (error) {
+    showToast('تنبيه', 'تعذر تحميل بيانات البطاقات من الخادم', 'warning');
+  }
 }
 
 function renderSections(container) {
@@ -530,9 +589,23 @@ function ensureCardsShape(cardsList) {
 }
 
 function normalizeCard(card) {
-  if (!card.id) card.id = generateId('card');
-  if (!card.form || typeof card.form !== 'object') card.form = { sections: [] };
+  if (!card.id) {
+    card.id = card.week != null ? `week-${card.week}` : generateId('card');
+  }
+  if (!card.form || typeof card.form !== 'object') {
+    card.form = {
+      sections: [],
+      goals: [],
+      prerequisites: [],
+      assessment: { title: '', description: '' },
+    };
+  }
   if (!Array.isArray(card.form.sections)) card.form.sections = [];
+  if (!Array.isArray(card.form.goals)) card.form.goals = [];
+  if (!Array.isArray(card.form.prerequisites)) card.form.prerequisites = [];
+  if (!card.form.assessment || typeof card.form.assessment !== 'object') {
+    card.form.assessment = { title: '', description: '' };
+  }
 
   card.form.sections.forEach((section) => normalizeSection(section));
 }
@@ -630,6 +703,136 @@ function persistCards() {
   } catch {
     showToast('خطأ', 'تعذر حفظ بيانات البطاقات في المتصفح', 'error');
   }
+}
+
+async function saveWeekToApi(card) {
+  if (!card?.week) {
+    throw new Error('رقم الأسبوع مطلوب قبل الحفظ');
+  }
+
+  const payload = buildWeekPayload(card);
+  await fetchJson(`/api/weeks/${encodeURIComponent(card.week)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+function buildWeekPayload(card) {
+  const goals = Array.isArray(card.form.goals) ? card.form.goals : [];
+  const prerequisites = Array.isArray(card.form.prerequisites)
+    ? card.form.prerequisites
+    : [];
+
+  const concepts = card.form.sections.map((section) => ({
+    title: section.title || 'قسم',
+    flow: section.questions.map((question) => mapQuestionToFlow(question)),
+  }));
+
+  const assessmentQuestions = card.form.sections.flatMap((section) =>
+    section.questions.map((question) => mapQuestionToAssessment(question)),
+  );
+
+  return {
+    week: Number(card.week),
+    title: String(card.title || '').trim(),
+    prereq: card.prereq == null ? null : Number(card.prereq),
+    goals,
+    prerequisites,
+    concepts,
+    assessment: {
+      title: card.form.assessment?.title || `تقييم الأسبوع ${card.week}`,
+      description: card.form.assessment?.description || '',
+      questions: assessmentQuestions,
+    },
+  };
+}
+
+function mapQuestionToFlow(question) {
+  const base = {
+    type: 'question',
+    text: question.prompt || 'سؤال',
+    title: question.description || '',
+  };
+
+  if (question.type === 'mcq') {
+    return {
+      ...base,
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+    };
+  }
+
+  if (question.type === 'true-false') {
+    return {
+      ...base,
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+    };
+  }
+
+  if (question.type === 'number') {
+    return { ...base, answer: question.answer == null ? '' : String(question.answer) };
+  }
+
+  return { ...base, answer: question.answer ?? '' };
+}
+
+function mapQuestionToAssessment(question) {
+  if (question.type === 'mcq') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      points: 1,
+    };
+  }
+
+  if (question.type === 'true-false') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+      points: 1,
+    };
+  }
+
+  return {
+    type: 'input',
+    text: question.prompt || 'سؤال',
+    answer: question.answer == null ? '' : String(question.answer),
+    points: 1,
+  };
+}
+
+function splitLines(value) {
+  return String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function updateCardsCache(card) {
+  const stored = readLocalJson(LS_ADMIN_CARDS);
+  const list = Array.isArray(stored) ? stored : [];
+  const index = list.findIndex((item) => String(item.id) === String(card.id));
+  const normalized = {
+    ...card,
+    week: card.week,
+    title: card.title,
+    prereq: card.prereq,
+  };
+
+  if (index === -1) {
+    list.unshift(normalized);
+  } else {
+    list[index] = normalized;
+  }
+
+  try {
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(list));
+  } catch {}
 }
 
 function readLocalJson(key) {
