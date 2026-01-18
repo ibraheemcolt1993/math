@@ -8,8 +8,8 @@
 
 import { getWeekParam, goHome } from '../core/router.js';
 import { fetchJson } from '../core/api.js';
-import { weekJsonPath, studentCompletionsPath } from '../core/constants.js';
-import { getLastStudentId, syncCardCompletions } from '../core/storage.js';
+import { weekJsonPath } from '../core/constants.js';
+import { getLastStudentId } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { initEngine } from './engine.js';
 
@@ -52,10 +52,6 @@ export async function initLessonPage() {
   }
 
   try {
-    const completions = await fetchJson(studentCompletionsPath(studentId), { noStore: true })
-      .catch(() => []);
-    syncCardCompletions(studentId, completions);
-
     const data = await fetchJson(weekJsonPath(week), { noStore: true });
 
     titleEl.textContent = data.title || `بطاقة الأسبوع ${week}`;

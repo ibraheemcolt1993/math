@@ -1,6 +1,6 @@
 /* =========================================================
    app.js — App Bootstrap & Page Router
-   - Login uses: (Student ID + Birth Year) against database API
+   - Login uses: (Student ID + Birth Year) against local data
    - Greets by firstName
    - Stores current student profile for later certificates
 
@@ -14,8 +14,7 @@ import { initCardsPage } from './cards/cardsPage.js';
 import { getWeekParam } from './core/router.js';
 import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
-import { fetchJson } from './core/api.js';
-import { DATA_PATHS } from './core/constants.js';
+import { findStudentByIdentity } from './core/students.js';
 
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // {id,birthYear,firstName,fullName,class}
 
@@ -74,17 +73,19 @@ function initIndexPage() {
     }
 
     try {
-      const found = await fetchJson(DATA_PATHS.STUDENT_LOGIN, {
-        method: 'POST',
-        body: { studentId: id, birthYear },
-      });
+      const found = await findStudentByIdentity(id, birthYear);
+
+      if (!found) {
+        showToast('بيانات غير صحيحة', 'تأكد من رقم الهوية وسنة الميلاد', 'warning', 3500);
+        return;
+      }
 
       const student = {
-        id: String(found.studentId),
+        id: String(found.id),
         birthYear: String(found.birthYear),
-        firstName: String(found.firstName || '').trim() || String(found.fullName || '').trim().split(' ')[0] || `طالب ${found.studentId}`,
-        fullName: String(found.fullName || '').trim() || `طالب ${found.studentId}`,
-        class: found.class ? String(found.class) : ''
+        firstName: String(found.firstName || '').trim() || String(found.fullName || '').trim().split(' ')[0] || `طالب ${found.id}`,
+        fullName: String(found.fullName || '').trim() || `طالب ${found.id}`,
+        class: found.class ? String(found.class) : '',
       };
 
       setLastStudentId(student.id);
@@ -93,7 +94,7 @@ function initIndexPage() {
       showToast('تم الدخول', `أهلًا ${student.firstName} 👋`, 'success', 2500);
     } catch (e) {
       console.error(e);
-      showToast('خطأ', 'تعذر التحقق من بيانات الطالب في قاعدة البيانات', 'error', 4000);
+      showToast('خطأ', 'تعذر تحميل بيانات الطلاب', 'error', 4000);
     }
   }
 

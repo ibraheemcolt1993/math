@@ -1,15 +1,13 @@
 import { fetchJson } from './core/api.js';
+import { DATA_PATHS } from './core/constants.js';
 import { showToast } from './ui/toast.js';
 
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'Aa@232323445566';
 
 const LS_ADMIN_SESSION = 'math:admin:session';
-
-const ADMIN_API = {
-  STUDENTS: '/api/admin/students',
-  CARDS: '/api/admin/cards',
-};
+const LS_ADMIN_STUDENTS = 'math:admin:students';
+const LS_ADMIN_CARDS = 'math:admin:cards';
 let students = [];
 let cards = [];
 
@@ -91,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveStudents?.addEventListener('click', async () => {
     try {
       await saveStudents();
-      showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في قاعدة البيانات', 'success');
+      showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في المتصفح', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات الطلاب', 'error');
     }
@@ -116,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveCards?.addEventListener('click', async () => {
     try {
       await saveCards();
-      showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في قاعدة البيانات', 'success');
+      showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في المتصفح', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات البطاقات', 'error');
     }
@@ -234,27 +232,26 @@ async function loadData() {
 }
 
 async function loadStudents() {
-  const data = await fetchJson(ADMIN_API.STUDENTS, { noStore: true });
-  students = Array.isArray(data)
-    ? data.map((row) => ({
-        id: row.StudentId ?? row.studentId ?? row.id ?? '',
-        birthYear: row.BirthYear ?? row.birthYear ?? '',
-        firstName: row.FirstName ?? row.firstName ?? '',
-        fullName: row.FullName ?? row.fullName ?? '',
-        class: row.Class ?? row.class ?? '',
-      }))
-    : [];
+  const stored = readLocalJson(LS_ADMIN_STUDENTS);
+  if (stored && Array.isArray(stored)) {
+    students = stored.map(normalizeStudent);
+    return;
+  }
+
+  const data = await fetchJson(DATA_PATHS.STUDENTS, { noStore: true });
+  const list = Array.isArray(data) ? data : data?.students;
+  students = Array.isArray(list) ? list.map(normalizeStudent) : [];
 }
 
 async function loadCards() {
-  const data = await fetchJson(ADMIN_API.CARDS, { noStore: true });
-  cards = Array.isArray(data)
-    ? data.map((row) => ({
-        week: row.Week ?? row.week ?? '',
-        title: row.Title ?? row.title ?? '',
-        prereq: row.PrereqWeek ?? row.prereq ?? null,
-      }))
-    : [];
+  const stored = readLocalJson(LS_ADMIN_CARDS);
+  if (stored && Array.isArray(stored)) {
+    cards = stored.map(normalizeCard);
+    return;
+  }
+
+  const data = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
+  cards = Array.isArray(data) ? data.map(normalizeCard) : [];
 }
 
 function renderStudents(container) {
@@ -324,15 +321,36 @@ function escapeValue(value) {
 }
 
 async function saveStudents() {
-  await fetchJson(ADMIN_API.STUDENTS, {
-    method: 'PUT',
-    body: { students },
-  });
+  localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
 }
 
 async function saveCards() {
-  await fetchJson(ADMIN_API.CARDS, {
-    method: 'PUT',
-    body: { cards },
-  });
+  localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
+}
+
+function normalizeStudent(row) {
+  return {
+    id: row.StudentId ?? row.studentId ?? row.id ?? '',
+    birthYear: row.BirthYear ?? row.birthYear ?? '',
+    firstName: row.FirstName ?? row.firstName ?? '',
+    fullName: row.FullName ?? row.fullName ?? '',
+    class: row.Class ?? row.class ?? '',
+  };
+}
+
+function normalizeCard(row) {
+  return {
+    week: row.Week ?? row.week ?? '',
+    title: row.Title ?? row.title ?? '',
+    prereq: row.PrereqWeek ?? row.prereq ?? null,
+  };
+}
+
+function readLocalJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
