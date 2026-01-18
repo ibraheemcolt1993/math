@@ -50,9 +50,10 @@ function initIndexPage() {
   hideAllScreens();
 
   const current = readCurrentStudent();
-  if (current?.id && current?.birthYear) {
-    setLastStudentId(current.id);
-    showWelcome(current);
+  const currentProfile = normalizeStoredStudent(current);
+  if (currentProfile?.id && currentProfile?.birthYear) {
+    setLastStudentId(currentProfile.id);
+    showWelcome(currentProfile);
   } else {
     const lastId = getLastStudentId();
     if (lastId && inputId) inputId.value = String(lastId);
@@ -60,8 +61,8 @@ function initIndexPage() {
   }
 
   async function attemptLogin() {
-    const id = (inputId?.value || '').trim();
-    const birthYear = (inputBirthYear?.value || '').trim();
+    const id = toLatinDigits(inputId?.value || '').trim();
+    const birthYear = toLatinDigits(inputBirthYear?.value || '').trim();
 
     if (!id) {
       showToast('تنبيه', 'ادخل رقم الهوية أولًا', 'warning');
@@ -72,7 +73,7 @@ function initIndexPage() {
       return;
     }
 
-    try {
+    const fallbackLogin = async () => {
       const found = await findStudentByIdentity(id, birthYear);
 
       if (!found) {
@@ -92,6 +93,33 @@ function initIndexPage() {
       writeCurrentStudent(student);
       showWelcome(student);
       showToast('تم الدخول', `أهلًا ${student.firstName} 👋`, 'success', 2500);
+    };
+
+    try {
+      const response = await fetch('/api/students/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id, birthYear })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (response.ok && data?.ok && data?.student) {
+        const student = data.student;
+        const profile = normalizeStoredStudent(student);
+
+        writeCurrentStudent(student);
+        if (profile?.id) setLastStudentId(profile.id);
+        showWelcome(profile);
+        showToast('تم الدخول', `أهلًا ${profile.firstName} 👋`, 'success', 2500);
+        return;
+      }
+    } catch (e) {
+      console.warn('API login failed, falling back to local data.', e);
+    }
+
+    try {
+      await fallbackLogin();
     } catch (e) {
       console.error(e);
       showToast('خطأ', 'تعذر تحميل بيانات الطلاب', 'error', 4000);
@@ -178,6 +206,17 @@ function initIndexPage() {
 
 }
 
+function toLatinDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
 /* ---------- Current Student Profile (LocalStorage) ---------- */
 function readCurrentStudent() {
   try {
@@ -198,6 +237,27 @@ function clearCurrentStudent() {
   try {
     localStorage.removeItem(LS_CURRENT_STUDENT);
   } catch {}
+}
+
+function normalizeStoredStudent(student) {
+  if (!student) return null;
+  const normalizedId = student.id ?? student.StudentId ?? '';
+  const normalizedBirthYear = student.birthYear ?? student.BirthYear ?? '';
+  const fullName = student.fullName ?? student.FullName ?? '';
+  const firstName = student.firstName ?? student.FirstName ?? '';
+  const resolvedFullName = String(fullName || '').trim() || `طالب ${normalizedId}`.trim();
+  const resolvedFirstName =
+    String(firstName || '').trim() ||
+    resolvedFullName.split(' ')[0] ||
+    `طالب ${normalizedId}`.trim();
+
+  return {
+    id: String(normalizedId),
+    birthYear: String(normalizedBirthYear),
+    firstName: resolvedFirstName,
+    fullName: resolvedFullName,
+    class: String(student.class ?? student.Class ?? '')
+  };
 }
 
 /* ---------- UI: Birth Year input injection ---------- */

@@ -16,6 +16,17 @@ function parseBody(req) {
   return null;
 }
 
+function toLatinDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
 module.exports = async function (context, req) {
   try {
     const payload = parseBody(req);
@@ -28,8 +39,10 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const studentId = typeof payload.studentId === 'string' ? payload.studentId.trim() : '';
-    const birthYear = typeof payload.birthYear === 'string' ? payload.birthYear.trim() : '';
+    const studentId =
+      typeof payload.studentId === 'string' ? toLatinDigits(payload.studentId).trim() : '';
+    const birthYear =
+      typeof payload.birthYear === 'string' ? toLatinDigits(payload.birthYear).trim() : '';
 
     if (!studentId || !birthYear) {
       context.res = {
@@ -46,16 +59,16 @@ module.exports = async function (context, req) {
       .input('studentId', sql.NVarChar(20), studentId)
       .input('birthYear', sql.NVarChar(10), birthYear)
       .query(
-        `SELECT StudentId, BirthYear, FirstName, FullName, Class
-         FROM Students
+        `SELECT TOP (1) StudentId, BirthYear, FirstName, FullName, Class
+         FROM dbo.Students
          WHERE StudentId = @studentId AND BirthYear = @birthYear`
       );
 
     if (!result.recordset.length) {
       context.res = {
-        status: 404,
+        status: 401,
         headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Student not found.' }
+        body: { ok: false, message: 'INVALID_CREDENTIALS' }
       };
       return;
     }
@@ -66,18 +79,21 @@ module.exports = async function (context, req) {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: {
-        studentId: student.StudentId,
-        birthYear: student.BirthYear,
-        firstName: student.FirstName,
-        fullName: student.FullName,
-        class: student.Class
+        ok: true,
+        student: {
+          StudentId: student.StudentId,
+          BirthYear: student.BirthYear,
+          FirstName: student.FirstName,
+          FullName: student.FullName,
+          Class: student.Class
+        }
       }
     };
   } catch (error) {
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
+      body: { ok: false, message: 'DB_ERROR' }
     };
   }
 };
