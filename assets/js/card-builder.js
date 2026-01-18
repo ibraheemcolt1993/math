@@ -61,6 +61,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const weekId = Number(cardId);
     if (Number.isFinite(weekId)) {
       activeCard = cards.find((card) => Number(card.week) === weekId);
+      if (!activeCard) {
+        activeCard = {
+          id: `week-${weekId}`,
+          week: weekId,
+          title: 'بطاقة جديدة',
+          prereq: null,
+          form: {
+            sections: [],
+            goals: [],
+            prerequisites: [],
+            assessment: { title: '', description: '' },
+          },
+        };
+        cards.unshift(activeCard);
+        persistCards();
+      }
     }
   }
 
