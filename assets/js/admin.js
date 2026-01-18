@@ -415,6 +415,11 @@ async function loadStudentsFromApi() {
 async function saveStudentsToApi(studentsArray) {
   const payload = {
     students: studentsArray.map((student) => ({
+      studentId: student.id,
+      birthYear: student.birthYear,
+      firstName: student.firstName,
+      fullName: student.fullName,
+      class: student.class,
       StudentId: student.id,
       BirthYear: student.birthYear,
       FirstName: student.firstName,
