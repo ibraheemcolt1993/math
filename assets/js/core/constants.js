@@ -21,7 +21,7 @@ export const DATA_PATHS = {
 // API paths
 export const API_PATHS = {
   CARDS: '/api/cards',
-  ADMIN_CARDS: '/api/admin-cards',
+  ADMIN_CARDS: '/api/cards-mng',
 };
 
 // Lesson / Engine

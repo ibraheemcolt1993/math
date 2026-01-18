@@ -8,6 +8,7 @@ const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
 const ADMIN_STUDENTS_API = ['/api/astu'];
+const ADMIN_CARDS_API = [API_PATHS.ADMIN_CARDS];
 let students = [];
 let cards = [];
 
