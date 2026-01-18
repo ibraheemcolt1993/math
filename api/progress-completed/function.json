@@ -5,8 +5,8 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["post"],
-      "route": "progress/complete"
+      "methods": ["get"],
+      "route": "progress-completed"
     },
     {
       "type": "http",
