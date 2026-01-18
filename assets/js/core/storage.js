@@ -19,6 +19,35 @@ function writeRoot(root) {
   localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(root));
 }
 
+function readJson(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+/* ---------- Student Session ---------- */
+export function getStudentSession() {
+  return readJson(STORAGE_KEYS.STUDENT_SESSION, null);
+}
+
+export function setStudentSession(session) {
+  if (!session) return;
+  writeJson(STORAGE_KEYS.STUDENT_SESSION, session);
+}
+
+export function clearStudentSession() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.STUDENT_SESSION);
+  } catch {}
+}
+
 /* ---------- Student ID ---------- */
 export function getLastStudentId() {
   return localStorage.getItem(STORAGE_KEYS.LAST_STUDENT_ID);
@@ -110,4 +139,39 @@ export function syncCardCompletions(studentId, completions) {
       markCardDone(studentId, Number(weekValue));
     }
   });
+}
+
+/* ---------- Cards cache ---------- */
+export function getCachedCards() {
+  return readJson(STORAGE_KEYS.CACHED_CARDS, []);
+}
+
+export function setCachedCards(cards) {
+  if (!Array.isArray(cards)) return;
+  writeJson(STORAGE_KEYS.CACHED_CARDS, cards);
+}
+
+/* ---------- Progress cache ---------- */
+export function getStudentCompletions(studentId) {
+  if (!studentId) return [];
+  const root = readJson(STORAGE_KEYS.STUDENT_COMPLETIONS, {});
+  return Array.isArray(root[studentId]) ? root[studentId] : [];
+}
+
+export function setStudentCompletions(studentId, completions) {
+  if (!studentId || !Array.isArray(completions)) return;
+  const root = readJson(STORAGE_KEYS.STUDENT_COMPLETIONS, {});
+  root[studentId] = completions;
+  writeJson(STORAGE_KEYS.STUDENT_COMPLETIONS, root);
+}
+
+export function upsertStudentCompletion(studentId, completion) {
+  if (!studentId || !completion) return;
+  const root = readJson(STORAGE_KEYS.STUDENT_COMPLETIONS, {});
+  const current = Array.isArray(root[studentId]) ? root[studentId] : [];
+  const weekValue = completion?.Week ?? completion?.week;
+  const next = current.filter((item) => (item?.Week ?? item?.week) !== weekValue);
+  next.unshift(completion);
+  root[studentId] = next;
+  writeJson(STORAGE_KEYS.STUDENT_COMPLETIONS, root);
 }

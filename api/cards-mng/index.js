@@ -23,7 +23,7 @@ module.exports = async function (context, req) {
     if (req.method === 'GET') {
       const result = await dbPool
         .request()
-        .query('SELECT Week, Title, PrereqWeek FROM Cards ORDER BY Week');
+        .query('SELECT Week, Title, PrereqWeek FROM dbo.Cards ORDER BY Week');
 
       context.res = {
         status: 200,
@@ -65,7 +65,7 @@ module.exports = async function (context, req) {
 
     try {
       const existing = await new sql.Request(transaction)
-        .query('SELECT Week FROM Cards');
+        .query('SELECT Week FROM dbo.Cards');
       const existingWeeks = new Set(existing.recordset.map((row) => row.Week));
       const incomingWeeks = new Set(normalized.map((card) => card.week));
       const allowedPrereqs = new Set([...existingWeeks, ...incomingWeeks]);
@@ -90,14 +90,14 @@ module.exports = async function (context, req) {
           .input('title', sql.NVarChar(300), card.title)
           .input('prereqWeek', sql.Int, card.prereqWeek)
           .query(
-            `UPDATE Cards
+            `UPDATE dbo.Cards
              SET Title = @title, PrereqWeek = @prereqWeek
              WHERE Week = @week`
           );
 
         if (!updateResult.rowsAffected?.[0]) {
           await updateRequest.query(
-            `INSERT INTO Cards (Week, Title, PrereqWeek)
+            `INSERT INTO dbo.Cards (Week, Title, PrereqWeek)
              VALUES (@week, @title, @prereqWeek)`
           );
         }
@@ -107,7 +107,7 @@ module.exports = async function (context, req) {
       for (const week of toDelete) {
         await new sql.Request(transaction)
           .input('deleteWeek', sql.Int, week)
-          .query('DELETE FROM Cards WHERE Week = @deleteWeek');
+          .query('DELETE FROM dbo.Cards WHERE Week = @deleteWeek');
       }
 
       await transaction.commit();

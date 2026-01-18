@@ -1,4 +1,5 @@
 import { API_PATHS } from './core/constants.js';
+import { normalizeDigits } from './core/normalizeDigits.js';
 import { showToast } from './ui/toast.js';
 
 const ADMIN_USER = 'admin';
@@ -7,7 +8,7 @@ const ADMIN_PASS = 'Aa@232323445566';
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
-const ADMIN_STUDENTS_API = ['/api/astu'];
+const ADMIN_STUDENTS_API = [API_PATHS.ADMIN_STUDENTS];
 const ADMIN_CARDS_API = [API_PATHS.ADMIN_CARDS];
 let students = [];
 let cards = [];
@@ -75,8 +76,23 @@ document.addEventListener('DOMContentLoaded', () => {
       setScreenVisibility(panelCards, tab === 'cards');
 
       if (tab === 'students') {
-        await reloadStudentsFromApi();
+        const cached = readLocalJson(LS_ADMIN_STUDENTS);
+        if (cached && Array.isArray(cached)) {
+          students = cached.map(normalizeStudent);
+        }
         renderStudents(studentsTable);
+        await refreshStudents({ silent: Boolean(cached) });
+        renderStudents(studentsTable);
+      }
+
+      if (tab === 'cards') {
+        const cachedCards = readLocalJson(LS_ADMIN_CARDS);
+        if (cachedCards && Array.isArray(cachedCards)) {
+          cards = cachedCards.map(normalizeCard);
+        }
+        renderCards(cardsList);
+        await refreshCards({ silent: Boolean(cachedCards) });
+        renderCards(cardsList);
       }
     });
   });
@@ -93,11 +109,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnSaveStudents?.addEventListener('click', async () => {
+    if (!btnSaveStudents) return;
+    const original = btnSaveStudents.textContent;
+    btnSaveStudents.disabled = true;
+    btnSaveStudents.textContent = 'جارٍ الحفظ...';
     try {
       await saveStudents();
       showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في قاعدة البيانات', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات الطلاب', 'error');
+    } finally {
+      btnSaveStudents.disabled = false;
+      btnSaveStudents.textContent = original || 'حفظ الآن';
     }
   });
 
@@ -118,11 +141,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnSaveCards?.addEventListener('click', async () => {
+    if (!btnSaveCards) return;
+    const original = btnSaveCards.textContent;
+    btnSaveCards.disabled = true;
+    btnSaveCards.textContent = 'جارٍ الحفظ...';
     try {
       await saveCards();
       showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في قاعدة البيانات', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات البطاقات', 'error');
+    } finally {
+      btnSaveCards.disabled = false;
+      btnSaveCards.textContent = original || 'حفظ الآن';
     }
   });
 
@@ -138,7 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!students[index]) return;
 
     if (field === 'id' || field === 'birthYear') {
-      target.value = target.value.replace(/[^0-9]/g, '');
+      const cleaned = normalizeDigits(target.value).replace(/[^0-9]/g, '');
+      target.value = cleaned;
     }
 
     students[index][field] = target.value.trim();
@@ -209,9 +240,16 @@ async function showAdmin() {
     document.body.classList.remove('is-loading');
     btnLogout?.classList.remove('hidden');
 
-    await loadData();
+    const { hasCachedStudents, hasCachedCards } = loadData();
     renderStudents(studentsTable);
     renderCards(cardsList);
+
+    refreshStudents({ silent: hasCachedStudents })
+      .then(() => renderStudents(studentsTable))
+      .catch(() => {});
+    refreshCards({ silent: hasCachedCards })
+      .then(() => renderCards(cardsList))
+      .catch(() => {});
   }
 
   function setScreenVisibility(screen, isVisible) {
@@ -233,44 +271,52 @@ function isLoggedIn() {
   return Boolean(localStorage.getItem(LS_ADMIN_SESSION));
 }
 
-async function loadData() {
-  await Promise.all([loadStudents(), loadCards()]);
+function loadData() {
+  const cachedStudents = readLocalJson(LS_ADMIN_STUDENTS);
+  if (cachedStudents && Array.isArray(cachedStudents)) {
+    students = cachedStudents.map(normalizeStudent);
+  }
+
+  const cachedCards = readLocalJson(LS_ADMIN_CARDS);
+  if (cachedCards && Array.isArray(cachedCards)) {
+    cards = cachedCards.map(normalizeCard);
+  }
+  return {
+    hasCachedStudents: Boolean(cachedStudents),
+    hasCachedCards: Boolean(cachedCards),
+  };
 }
 
-async function loadStudents() {
+async function refreshStudents({ silent = false } = {}) {
   try {
     students = await loadStudentsFromApi();
     localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
   } catch (error) {
-    if (isNetworkError(error)) {
-      const stored = readLocalJson(LS_ADMIN_STUDENTS);
-      if (stored && Array.isArray(stored)) {
-        students = stored.map(normalizeStudent);
+    if (!silent) {
+      if (isNetworkError(error)) {
         showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للطلاب', 'warning');
         return;
       }
-    }
 
-    showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
+      showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
+    }
     students = [];
   }
 }
 
-async function loadCards() {
+async function refreshCards({ silent = false } = {}) {
   try {
     cards = await loadCardsFromApi();
     localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
   } catch (error) {
-    if (isNetworkError(error)) {
-      const stored = readLocalJson(LS_ADMIN_CARDS);
-      if (stored && Array.isArray(stored)) {
-        cards = stored.map(normalizeCard);
+    if (!silent) {
+      if (isNetworkError(error)) {
         showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للبطاقات', 'warning');
         return;
       }
-    }
 
-    showToast('خطأ', error.message || 'تعذر تحميل بيانات البطاقات', 'error');
+      showToast('خطأ', error.message || 'تعذر تحميل بيانات البطاقات', 'error');
+    }
     cards = [];
   }
 }
@@ -425,13 +471,13 @@ async function loadStudentsFromApi() {
 async function saveStudentsToApi(studentsArray) {
   const payload = {
     students: studentsArray.map((student) => ({
-      studentId: student.id,
-      birthYear: student.birthYear,
+      studentId: normalizeDigits(String(student.id || '').trim()),
+      birthYear: normalizeDigits(String(student.birthYear || '').trim()),
       firstName: student.firstName,
       fullName: student.fullName,
       class: student.class,
-      StudentId: student.id,
-      BirthYear: student.birthYear,
+      StudentId: normalizeDigits(String(student.id || '').trim()),
+      BirthYear: normalizeDigits(String(student.birthYear || '').trim()),
       FirstName: student.firstName,
       FullName: student.fullName,
       Class: student.class,
@@ -557,23 +603,6 @@ async function saveCardsToApi(cardsArray) {
   const err = new Error('تعذر حفظ بيانات البطاقات');
   err.status = 404;
   throw err;
-}
-
-async function reloadStudentsFromApi() {
-  try {
-    students = await loadStudentsFromApi();
-    localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
-  } catch (error) {
-    if (isNetworkError(error)) {
-      const stored = readLocalJson(LS_ADMIN_STUDENTS);
-      if (stored && Array.isArray(stored)) {
-        students = stored.map(normalizeStudent);
-        showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للطلاب', 'warning');
-        return;
-      }
-    }
-    showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
-  }
 }
 
 function isNetworkError(error) {
