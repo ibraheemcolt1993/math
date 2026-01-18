@@ -131,50 +131,27 @@ module.exports = async function (context, req) {
     await transaction.begin();
 
     try {
-      const request = new sql.Request(transaction);
-      await request.query(
-        `CREATE TABLE #IncomingStudents (
-           StudentId nvarchar(20) NOT NULL,
-           BirthYear nvarchar(10) NOT NULL,
-           FirstName nvarchar(100) NOT NULL,
-           FullName nvarchar(200) NOT NULL,
-           Class nvarchar(20) NOT NULL
-         )`
-      );
+      for (const student of normalized) {
+        const updateRequest = new sql.Request(transaction);
+        const updateResult = await updateRequest
+          .input('studentId', sql.NVarChar(20), student.StudentId)
+          .input('birthYear', sql.NVarChar(10), student.BirthYear)
+          .input('firstName', sql.NVarChar(100), student.FirstName)
+          .input('fullName', sql.NVarChar(200), student.FullName)
+          .input('class', sql.NVarChar(20), student.Class)
+          .query(
+            `UPDATE dbo.Students
+             SET BirthYear = @birthYear, FirstName = @firstName, FullName = @fullName, Class = @class
+             WHERE StudentId = @studentId`
+          );
 
-      const table = new sql.Table('#IncomingStudents');
-      table.create = false;
-      table.columns.add('StudentId', sql.NVarChar(20), { nullable: false });
-      table.columns.add('BirthYear', sql.NVarChar(10), { nullable: false });
-      table.columns.add('FirstName', sql.NVarChar(100), { nullable: false });
-      table.columns.add('FullName', sql.NVarChar(200), { nullable: false });
-      table.columns.add('Class', sql.NVarChar(20), { nullable: false });
-      normalized.forEach((student) => {
-        table.rows.add(
-          student.StudentId,
-          student.BirthYear,
-          student.FirstName,
-          student.FullName,
-          student.Class
-        );
-      });
-
-      await request.bulk(table);
-
-      await request.query(
-        `MERGE dbo.Students AS target
-         USING #IncomingStudents AS source
-         ON target.StudentId = source.StudentId
-         WHEN MATCHED THEN
-           UPDATE SET
-             BirthYear = source.BirthYear,
-             FirstName = source.FirstName,
-             FullName = source.FullName,
-             Class = source.Class
-         WHEN NOT MATCHED BY TARGET THEN
-           INSERT (StudentId, BirthYear, FirstName, FullName, Class)
-           VALUES (source.StudentId, source.BirthYear, source.FirstName, source.FullName, source.Class);`
-      );
+        if (!updateResult.rowsAffected?.[0]) {
+          await updateRequest.query(
+            `INSERT INTO dbo.Students (StudentId, BirthYear, FirstName, FullName, Class)
+             VALUES (@studentId, @birthYear, @firstName, @fullName, @class)`
+          );
+        }
+      }
 
       await transaction.commit();
     } catch (error) {
