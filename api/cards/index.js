@@ -6,10 +6,15 @@ module.exports = async function (context) {
     const result = await dbPool
       .request()
       .query('SELECT Week, Title, PrereqWeek FROM Cards ORDER BY Week');
+    const normalized = result.recordset.map((card) => ({
+      week: card.Week,
+      title: card.Title,
+      prereq: card.PrereqWeek
+    }));
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: result.recordset
+      body: normalized
     };
   } catch (error) {
     context.res = {

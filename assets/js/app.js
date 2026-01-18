@@ -1,6 +1,6 @@
 /* =========================================================
    app.js — App Bootstrap & Page Router
-   - Login uses: (Student ID + Birth Year) against /data/students.json
+   - Login uses: (Student ID + Birth Year) against database API
    - Greets by firstName
    - Stores current student profile for later certificates
 
@@ -15,8 +15,8 @@ import { getWeekParam } from './core/router.js';
 import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { fetchJson } from './core/api.js';
+import { DATA_PATHS } from './core/constants.js';
 
-const STUDENTS_PATH = '/data/students.json';
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // {id,birthYear,firstName,fullName,class}
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -74,21 +74,16 @@ function initIndexPage() {
     }
 
     try {
-      const db = await fetchJson(STUDENTS_PATH, { noStore: true });
-      const list = Array.isArray(db?.students) ? db.students : [];
-
-      const found = list.find(s => String(s.id) === String(id) && String(s.birthYear) === String(birthYear));
-
-      if (!found) {
-        showToast('معلومة غير صحيحة', 'تأكد من رقم الهوية وسنة الميلاد', 'error', 3500);
-        return;
-      }
+      const found = await fetchJson(DATA_PATHS.STUDENT_LOGIN, {
+        method: 'POST',
+        body: { studentId: id, birthYear },
+      });
 
       const student = {
-        id: String(found.id),
+        id: String(found.studentId),
         birthYear: String(found.birthYear),
-        firstName: String(found.firstName || '').trim() || String(found.fullName || '').trim().split(' ')[0] || `طالب ${found.id}`,
-        fullName: String(found.fullName || '').trim() || `طالب ${found.id}`,
+        firstName: String(found.firstName || '').trim() || String(found.fullName || '').trim().split(' ')[0] || `طالب ${found.studentId}`,
+        fullName: String(found.fullName || '').trim() || `طالب ${found.studentId}`,
         class: found.class ? String(found.class) : ''
       };
 
@@ -98,7 +93,7 @@ function initIndexPage() {
       showToast('تم الدخول', `أهلًا ${student.firstName} 👋`, 'success', 2500);
     } catch (e) {
       console.error(e);
-      showToast('خطأ', 'تعذر تحميل قاعدة الطلاب (students.json)', 'error', 4000);
+      showToast('خطأ', 'تعذر التحقق من بيانات الطالب في قاعدة البيانات', 'error', 4000);
     }
   }
 

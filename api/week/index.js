@@ -220,15 +220,77 @@ module.exports = async function (context, req) {
       questions: questionsByAssessment.get(assessment.AssessmentId) || []
     }));
 
+    const weekData = weekResult.recordset[0];
+    const goals = goalsResult.recordset.map((goal) => goal.GoalText);
+    const prerequisites = prerequisitesResult.recordset.map(
+      (prereq) => prereq.PrerequisiteText
+    );
+
+    const normalizedConcepts = concepts.map(({ concept, flow }) => ({
+      title: concept.Title,
+      flow: flow.map(({ item, details, hints, choices }) => {
+        const type = String(item.ItemType || '').trim().toLowerCase();
+        const mapped = {
+          type,
+          text: item.ItemText,
+          title: item.ItemTitle,
+          description: item.ItemDescription,
+          url: item.ItemUrl,
+          answer: item.Answer,
+          correctIndex: item.CorrectIndex,
+          solution: item.Solution,
+          details: details.map((detail) => detail.DetailText),
+          hints: hints.map((hint) => hint.HintText),
+          choices: choices.map((choice) => choice.ChoiceText)
+        };
+
+        if (!mapped.details.length) delete mapped.details;
+        if (!mapped.hints.length) delete mapped.hints;
+        if (!mapped.choices.length) delete mapped.choices;
+
+        return mapped;
+      })
+    }));
+
+    const normalizedAssessments = assessments.map(({ assessment, questions }) => ({
+      title: assessment.Title,
+      description: assessment.Description,
+      questions: questions.map(({ question, choices }) => {
+        const rawType = String(question.QuestionType || '').trim().toLowerCase();
+        const choiceTexts = choices.map((choice) => choice.ChoiceText);
+        let type = rawType;
+        if (!['mcq', 'input'].includes(type)) {
+          type = choiceTexts.length ? 'mcq' : 'input';
+        }
+
+        const normalized = {
+          type,
+          text: question.QuestionText,
+          points: Number.isFinite(question.Points) ? question.Points : 1
+        };
+
+        if (type === 'mcq') {
+          normalized.choices = choiceTexts;
+          normalized.correctIndex =
+            typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
+        } else {
+          normalized.answer = question.Answer ?? '';
+        }
+
+        return normalized;
+      })
+    }));
+
     context.res = {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: {
-        week: weekResult.recordset[0],
-        goals: goalsResult.recordset,
-        prerequisites: prerequisitesResult.recordset,
-        concepts,
-        assessments
+        week: weekData.Week,
+        title: weekData.Title,
+        goals,
+        prerequisites,
+        concepts: normalizedConcepts,
+        assessment: normalizedAssessments[0] || null
       }
     };
   } catch (error) {

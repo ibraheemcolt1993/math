@@ -7,6 +7,8 @@
 
    ========================================================= */
 
+import { fetchJson } from '../core/api.js';
+import { DATA_PATHS } from '../core/constants.js';
 import { isCardDone, markCardDone } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
@@ -15,10 +17,12 @@ const LS_CURRENT_STUDENT = 'math:currentStudent';       // set by app.js
 const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
 const CERT_URL = '/assets/cert/certificate.html';
 
-export function completeLesson({ studentId, week, cardTitle = '' }) {
+export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0 }) {
   const wasDone = isCardDone(studentId, week);
   // mark card as done
   markCardDone(studentId, week);
+
+  persistCompletion({ studentId, week, finalScore });
 
   // Prepare certificate payload
   const student = readCurrentStudent();
@@ -120,5 +124,22 @@ function writeLastCertificate(payload) {
     localStorage.setItem(LS_LAST_CERTIFICATE, JSON.stringify(payload));
   } catch {
     // ignore storage errors
+  }
+}
+
+async function persistCompletion({ studentId, week, finalScore }) {
+  if (!studentId || !Number.isInteger(Number(week))) return;
+
+  try {
+    await fetchJson(DATA_PATHS.PROGRESS_COMPLETE, {
+      method: 'POST',
+      body: {
+        studentId: String(studentId),
+        week: Number(week),
+        finalScore: Number.isFinite(Number(finalScore)) ? Number(finalScore) : 0,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to persist completion', error);
   }
 }
