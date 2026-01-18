@@ -131,6 +131,11 @@ module.exports = async function (context, req) {
     await transaction.begin();
 
     try {
+      const existing = await new sql.Request(transaction)
+        .query('SELECT StudentId FROM dbo.Students');
+      const existingIds = new Set(existing.recordset.map((row) => row.StudentId));
+      const incomingIds = new Set(normalized.map((student) => student.StudentId));
+
       for (const student of normalized) {
         const updateRequest = new sql.Request(transaction);
         const updateResult = await updateRequest
@@ -151,6 +156,13 @@ module.exports = async function (context, req) {
              VALUES (@studentId, @birthYear, @firstName, @fullName, @class)`
           );
         }
+      }
+
+      const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
+      for (const studentId of toDelete) {
+        await new sql.Request(transaction)
+          .input('deleteId', sql.NVarChar(20), studentId)
+          .query('DELETE FROM dbo.Students WHERE StudentId = @deleteId');
       }
 
       await transaction.commit();
