@@ -234,6 +234,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const listIndex = Number(target.dataset.listIndex);
       if (!Number.isFinite(listIndex)) return;
       item.items[listIndex] = target.value.trim();
+    } else if (field === 'hint') {
+      const hintIndex = Number(target.dataset.hintIndex);
+      if (!Number.isFinite(hintIndex)) return;
+      if (!Array.isArray(item.hints)) item.hints = [];
+      item.hints[hintIndex] = target.value.trim();
+    } else if (field === 'solution') {
+      item.solution = target.value.trim();
     }
 
     persistCards();
@@ -372,6 +379,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       persistCards();
       return;
     }
+
+    if (action === 'add-hint') {
+      if (!Array.isArray(item.hints)) item.hints = [];
+      if (item.hints.length < 2) {
+        item.hints.push('');
+        renderSections(container);
+        persistCards();
+      }
+      return;
+    }
+
+    if (action === 'add-solution') {
+      item.solution = item.solution || '';
+      renderSections(container);
+      persistCards();
+      return;
+    }
+
+    if (action === 'set-true') {
+      item.answer = 'true';
+      renderSections(container);
+      persistCards();
+      return;
+    }
+
+    if (action === 'set-false') {
+      item.answer = 'false';
+      renderSections(container);
+      persistCards();
+      return;
+    }
   }
 });
 
@@ -486,11 +524,12 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
     return `
       <div class="field">
         <label class="label">الإجابة الصحيحة</label>
-        <select class="input" data-field="true-false-answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
-          <option value="true" ${item.answer === 'true' ? 'selected' : ''}>صواب</option>
-          <option value="false" ${item.answer === 'false' ? 'selected' : ''}>خطأ</option>
-        </select>
+        <div class="row" style="gap: 10px;">
+          <button class="btn ${item.answer === 'true' ? 'btn-primary' : 'btn-outline'}" type="button" data-action="set-true" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">✅</button>
+          <button class="btn ${item.answer === 'false' ? 'btn-primary' : 'btn-outline'}" type="button" data-action="set-false" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">❌</button>
+        </div>
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -500,6 +539,7 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
         <label class="label">الإجابة الرقمية</label>
         <input class="input ltr" type="number" data-field="numeric-answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.answer ?? '')}" />
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -525,6 +565,7 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
           .join('')}
         <button class="btn btn-ghost btn-sm" type="button" data-action="add-option" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة خيار</button>
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -544,6 +585,7 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
           .join('')}
         <button class="btn btn-ghost btn-sm" type="button" data-action="add-pair" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة توصيل</button>
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -564,6 +606,7 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
           .join('')}
         <button class="btn btn-ghost btn-sm" type="button" data-action="add-order-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة عنصر ترتيب</button>
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -573,6 +616,7 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
         <label class="label">الإجابة المتوقعة (اختياري)</label>
         <textarea class="input" data-field="answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="نص الإجابة الطويلة">${escapeValue(item.answer ?? '')}</textarea>
       </div>
+      ${renderHintsSection(item, sectionIndex, itemIndex)}
     `;
   }
 
@@ -580,6 +624,43 @@ function renderQuestionBody(item, sectionIndex, itemIndex) {
     <div class="field">
       <label class="label">الإجابة المتوقعة (اختياري)</label>
       <input class="input" data-field="answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.answer ?? '')}" placeholder="إجابة قصيرة" />
+    </div>
+    ${renderHintsSection(item, sectionIndex, itemIndex)}
+  `;
+}
+
+function renderHintsSection(item, sectionIndex, itemIndex) {
+  const hints = Array.isArray(item.hints) ? item.hints : [];
+  const hintOne = hints[0] ?? '';
+  const hintTwo = hints[1] ?? '';
+  const hasHintOne = hintOne !== '';
+  const hasHintTwo = hintTwo !== '';
+  const hasSolution = item.solution !== undefined;
+
+  return `
+    <div class="builder-helper">التلميحات والحل</div>
+    ${hasHintOne || hints.length ? `
+      <div class="field">
+        <label class="label">تلميح أول</label>
+        <textarea class="input" rows="2" data-field="hint" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-hint-index="0" placeholder="اكتب التلميح الأول">${escapeValue(hintOne)}</textarea>
+      </div>
+    ` : ''}
+    ${hasHintTwo || hints.length > 1 ? `
+      <div class="field">
+        <label class="label">تلميح ثاني</label>
+        <textarea class="input" rows="2" data-field="hint" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-hint-index="1" placeholder="اكتب التلميح الثاني">${escapeValue(hintTwo)}</textarea>
+      </div>
+    ` : ''}
+    ${hasSolution ? `
+      <div class="field">
+        <label class="label">حل نموذجي (تلميح ثالث)</label>
+        <textarea class="input" rows="2" data-field="solution" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="اكتب الحل النموذجي">${escapeValue(item.solution ?? '')}</textarea>
+      </div>
+    ` : ''}
+    <div class="row" style="gap: 10px; margin-top: 8px;">
+      ${!hasHintOne ? `<button class="btn btn-ghost btn-sm" type="button" data-action="add-hint" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة تلميح أول</button>` : ''}
+      ${hasHintOne && !hasHintTwo ? `<button class="btn btn-ghost btn-sm" type="button" data-action="add-hint" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة تلميح ثاني</button>` : ''}
+      ${!hasSolution ? `<button class="btn btn-ghost btn-sm" type="button" data-action="add-solution" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة حل نموذجي</button>` : ''}
     </div>
   `;
 }
@@ -719,6 +800,8 @@ function applyQuestionType(question, questionType) {
     prompt: question.prompt || 'سؤال جديد',
     description: question.description || '',
     required: question.required ?? false,
+    hints: Array.isArray(question.hints) ? question.hints : [],
+    solution: question.solution,
   };
 
   if (questionType === 'true-false') {
@@ -856,6 +939,8 @@ function mapQuestionToFlow(question) {
       ...base,
       choices: Array.isArray(question.options) ? question.options : [],
       correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
     };
   }
 
@@ -864,14 +949,26 @@ function mapQuestionToFlow(question) {
       ...base,
       choices: ['صواب', 'خطأ'],
       correctIndex: question.answer === 'false' ? 1 : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
     };
   }
 
   if (question.questionType === 'number') {
-    return { ...base, answer: question.answer == null ? '' : String(question.answer) };
+    return {
+      ...base,
+      answer: question.answer == null ? '' : String(question.answer),
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
   }
 
-  return { ...base, answer: question.answer ?? '' };
+  return {
+    ...base,
+    answer: question.answer ?? '',
+    ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+    ...(question.solution ? { solution: question.solution } : {}),
+  };
 }
 
 function mapQuestionToAssessment(question) {
