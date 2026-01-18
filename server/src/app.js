@@ -181,7 +181,7 @@ app.post('/api/students/:studentId/completions', async (req, res, next) => {
   }
 });
 
-app.get('/api/admin/students', async (req, res, next) => {
+app.get('/api/astu', async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await pool
@@ -197,7 +197,7 @@ app.get('/api/admin/students', async (req, res, next) => {
   }
 });
 
-app.put('/api/admin/students', async (req, res, next) => {
+app.put('/api/astu', async (req, res, next) => {
   try {
     const students = Array.isArray(req.body?.students) ? req.body.students : [];
     const normalized = students
@@ -215,11 +215,6 @@ app.put('/api/admin/students', async (req, res, next) => {
     await transaction.begin();
 
     try {
-      const request = new sql.Request(transaction);
-      const existing = await request.query('SELECT StudentId FROM Students');
-      const existingIds = new Set(existing.recordset.map((row) => row.StudentId));
-      const incomingIds = new Set(normalized.map((student) => student.studentId));
-
       for (const student of normalized) {
         const updateRequest = new sql.Request(transaction);
         const updateResult = await updateRequest
@@ -242,14 +237,6 @@ app.put('/api/admin/students', async (req, res, next) => {
         }
       }
 
-      const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
-      for (const studentId of toDelete) {
-        const deleteRequest = new sql.Request(transaction);
-        await deleteRequest
-          .input('deleteId', sql.NVarChar(20), studentId)
-          .query('DELETE FROM Students WHERE StudentId = @deleteId');
-      }
-
       await transaction.commit();
       res.json({ ok: true });
     } catch (error) {
@@ -261,7 +248,7 @@ app.put('/api/admin/students', async (req, res, next) => {
   }
 });
 
-app.get('/api/admin/cards', async (req, res, next) => {
+app.get('/api/cards-mng', async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await pool
@@ -273,7 +260,7 @@ app.get('/api/admin/cards', async (req, res, next) => {
   }
 });
 
-app.put('/api/admin/cards', async (req, res, next) => {
+app.put('/api/cards-mng', async (req, res, next) => {
   try {
     const cards = Array.isArray(req.body?.cards) ? req.body.cards : [];
     const normalized = cards
@@ -295,6 +282,15 @@ app.put('/api/admin/cards', async (req, res, next) => {
       const existing = await request.query('SELECT Week FROM Cards');
       const existingWeeks = new Set(existing.recordset.map((row) => row.Week));
       const incomingWeeks = new Set(normalized.map((card) => card.week));
+      const allowedPrereqs = new Set([...existingWeeks, ...incomingWeeks]);
+      const invalidPrereq = normalized.find(
+        (card) => card.prereqWeek != null && !allowedPrereqs.has(card.prereqWeek)
+      );
+
+      if (invalidPrereq) {
+        await transaction.rollback();
+        return res.status(400).json({ ok: false, error: 'INVALID_PREREQ_WEEK' });
+      }
 
       for (const card of normalized) {
         const updateRequest = new sql.Request(transaction);
