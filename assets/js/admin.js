@@ -8,7 +8,7 @@ const ADMIN_PASS = 'Aa@232323445566';
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
-const ADMIN_STUDENTS_API = '/api/admin/students';
+const ADMIN_STUDENTS_API = ['/api/admin/students', '/api/adminstudents'];
 let students = [];
 let cards = [];
 
@@ -399,17 +399,17 @@ async function loadStudentsFromApi() {
       throw err;
     }
 
-    const studentsPayload = Array.isArray(payload) ? payload : payload?.students;
+    var studentsPayload = Array.isArray(payload) ? payload : payload?.students;
     if (!Array.isArray(studentsPayload)) {
       throw new Error('تعذر تحميل بيانات الطلاب');
     }
 
-  const studentsPayload = Array.isArray(payload) ? payload : payload?.students;
-  if (!Array.isArray(studentsPayload)) {
-    throw new Error('تعذر تحميل بيانات الطلاب');
+    return studentsPayload.map(normalizeStudent);
   }
 
-  return studentsPayload.map(normalizeStudent);
+  const err = new Error('تعذر تحميل بيانات الطلاب');
+  err.status = 404;
+  throw err;
 }
 
 async function saveStudentsToApi(studentsArray) {
