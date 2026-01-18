@@ -5,7 +5,7 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-       "methods": ["GET", "PUT"],
+       "methods": ["get", "put"],
       "route": "adminstudents"
     },
     {
