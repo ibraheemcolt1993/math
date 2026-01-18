@@ -5,7 +5,7 @@ module.exports = async function (context) {
     const dbPool = await getPool();
     const result = await dbPool
       .request()
-      .query('SELECT Week, Title, PrereqWeek FROM Cards ORDER BY Week');
+      .query('SELECT Week, Title, PrereqWeek FROM dbo.Cards ORDER BY Week');
     const normalized = result.recordset.map((card) => ({
       week: card.Week,
       title: card.Title,

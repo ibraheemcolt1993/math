@@ -7,11 +7,12 @@
 
    ========================================================= */
 
-import { isCardDone, markCardDone } from '../core/storage.js';
+import { fetchJson } from '../core/api.js';
+import { API_PATHS } from '../core/constants.js';
+import { getStudentSession, isCardDone, markCardDone, upsertStudentCompletion } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
 
-const LS_CURRENT_STUDENT = 'math:currentStudent';       // set by app.js
 const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
 const CERT_URL = '/assets/cert/certificate.html';
 
@@ -21,7 +22,7 @@ export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0
   markCardDone(studentId, week);
 
   // Prepare certificate payload
-  const student = readCurrentStudent();
+  const student = getStudentSession();
   const payload = buildCertificatePayload({ studentId, week, cardTitle, student });
   writeLastCertificate(payload);
 
@@ -45,6 +46,8 @@ export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0
     const firstName = payload.firstName || 'بطل';
     showToast('ممتاز 🎉', `أحسنت يا ${firstName} — تم إنجاز البطاقة`, 'success', 3500);
   }
+
+  syncCompletionToApi({ studentId, week, finalScore });
 
   // NOTE: we no longer auto-return quickly, to allow opening the certificate
   setTimeout(() => {
@@ -82,12 +85,20 @@ function ensureCertActions(completeEl) {
 }
 
 /* ---------- Certificate Hook Helpers ---------- */
-function readCurrentStudent() {
+async function syncCompletionToApi({ studentId, week, finalScore }) {
   try {
-    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+    const response = await fetchJson(API_PATHS.PROGRESS_COMPLETE, {
+      method: 'POST',
+      body: { studentId, week, finalScore },
+    });
+
+    if (response?.ok === false) {
+      throw new Error(response?.error || 'تعذر تسجيل الإنجاز');
+    }
+
+    upsertStudentCompletion(studentId, response);
+  } catch (error) {
+    showToast('تنبيه', error.message || 'تعذر تحديث الإنجاز في الخادم', 'warning');
   }
 }
 

@@ -9,14 +9,26 @@
    - Remove old auto-welcome based on lastStudentId only
    ========================================================= */
 
-import { getLastStudentId, setLastStudentId } from './core/storage.js';
+import {
+  clearStudentSession,
+  getLastStudentId,
+  getStudentSession,
+  setCachedCards,
+  setLastStudentId,
+  setStudentCompletions,
+  setStudentSession,
+  syncCardCompletions,
+} from './core/storage.js';
 import { initCardsPage } from './cards/cardsPage.js';
 import { getWeekParam } from './core/router.js';
 import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { findStudentByIdentity } from './core/students.js';
+import { fetchJson } from './core/api.js';
+import { API_PATHS } from './core/constants.js';
+import { normalizeDigits } from './core/normalizeDigits.js';
 
-const LS_CURRENT_STUDENT = 'math:currentStudent'; // {id,birthYear,firstName,fullName,class}
+const LS_CURRENT_STUDENT = 'math:currentStudent'; // legacy cache
 
 document.addEventListener('DOMContentLoaded', () => {
   const week = getWeekParam();
@@ -49,11 +61,11 @@ function initIndexPage() {
 
   hideAllScreens();
 
-  const current = readCurrentStudent();
-  const currentProfile = normalizeStoredStudent(current);
-  if (currentProfile?.id && currentProfile?.birthYear) {
-    setLastStudentId(currentProfile.id);
-    showWelcome(currentProfile);
+  const currentSession = normalizeStoredStudent(getStudentSession());
+  if (currentSession?.id && currentSession?.birthYear) {
+    setLastStudentId(currentSession.id);
+    showCards();
+    loadStudentData(currentSession, { silent: true });
   } else {
     const lastId = getLastStudentId();
     if (lastId && inputId) inputId.value = String(lastId);
@@ -61,8 +73,8 @@ function initIndexPage() {
   }
 
   async function attemptLogin() {
-    const id = toLatinDigits(inputId?.value || '').trim();
-    const birthYear = toLatinDigits(inputBirthYear?.value || '').trim();
+    const id = normalizeDigits(inputId?.value || '').trim();
+    const birthYear = normalizeDigits(inputBirthYear?.value || '').trim();
 
     if (!id) {
       showToast('تنبيه', 'ادخل رقم الهوية أولًا', 'warning');
@@ -90,32 +102,36 @@ function initIndexPage() {
       };
 
       setLastStudentId(student.id);
+      setStudentSession(student);
       writeCurrentStudent(student);
       showWelcome(student);
       showToast('تم الدخول', `أهلًا ${student.firstName} 👋`, 'success', 2500);
+      await loadStudentData(student);
     };
 
     try {
-      const response = await fetch('/api/students/login', {
+      setLoginLoading(true);
+      const data = await fetchJson(API_PATHS.STUDENT_LOGIN, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: id, birthYear })
+        body: { studentId: id, birthYear },
       });
-
-      const data = await response.json().catch(() => null);
 
       const payload = data?.student ?? data;
       const profile = normalizeStoredStudent(payload);
 
-      if (response.ok && profile?.id && profile?.birthYear) {
+      if (profile?.id && profile?.birthYear) {
         writeCurrentStudent(payload);
+        setStudentSession(profile);
         if (profile?.id) setLastStudentId(profile.id);
         showWelcome(profile);
         showToast('تم الدخول', `أهلًا ${profile.firstName} 👋`, 'success', 2500);
+        await loadStudentData(profile);
         return;
       }
     } catch (e) {
       console.warn('API login failed, falling back to local data.', e);
+    } finally {
+      setLoginLoading(false);
     }
 
     try {
@@ -144,6 +160,7 @@ function initIndexPage() {
 
   btnLogout?.addEventListener('click', () => {
     clearCurrentStudent();
+    clearStudentSession();
     try { localStorage.removeItem('math:lastStudentId'); } catch {}
     showId();
     if (inputId) inputId.value = '';
@@ -172,6 +189,12 @@ function initIndexPage() {
 
   function setAppReady() {
     document.body.classList.remove('is-loading');
+  }
+
+  function setLoginLoading(isLoading) {
+    if (!btnLogin) return;
+    btnLogin.disabled = isLoading;
+    btnLogin.textContent = isLoading ? 'جارٍ التحقق...' : 'دخول';
   }
 
   function showId() {
@@ -206,27 +229,6 @@ function initIndexPage() {
 
 }
 
-function toLatinDigits(value) {
-  const map = {
-    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-  };
-
-  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
-}
-
-/* ---------- Current Student Profile (LocalStorage) ---------- */
-function readCurrentStudent() {
-  try {
-    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 function writeCurrentStudent(student) {
   try {
     localStorage.setItem(LS_CURRENT_STUDENT, JSON.stringify(student));
@@ -237,6 +239,37 @@ function clearCurrentStudent() {
   try {
     localStorage.removeItem(LS_CURRENT_STUDENT);
   } catch {}
+}
+
+async function loadStudentData(student, { silent = false } = {}) {
+  if (!student?.id) return;
+
+  const btnToCards = document.getElementById('btnToCards');
+  const originalLabel = btnToCards?.textContent;
+  if (btnToCards) {
+    btnToCards.disabled = true;
+    btnToCards.textContent = 'جاري التحميل...';
+  }
+
+  try {
+    const [progress, cards] = await Promise.all([
+      fetchJson(`${API_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(student.id)}`, { noStore: true }),
+      fetchJson(API_PATHS.CARDS, { noStore: true }),
+    ]);
+
+    setStudentCompletions(student.id, Array.isArray(progress) ? progress : []);
+    syncCardCompletions(student.id, Array.isArray(progress) ? progress : []);
+    setCachedCards(Array.isArray(cards) ? cards : []);
+  } catch (error) {
+    if (!silent) {
+      showToast('خطأ', error.message || 'تعذر تحميل بيانات الطالب', 'error');
+    }
+  } finally {
+    if (btnToCards) {
+      btnToCards.disabled = false;
+      btnToCards.textContent = originalLabel || 'الانتقال للبطاقات';
+    }
+  }
 }
 
 function normalizeStoredStudent(student) {
@@ -284,14 +317,14 @@ function ensureBirthYearInput(inputIdEl) {
   el = wrap.querySelector('#studentBirthYear');
 
   el.addEventListener('input', () => {
-    el.value = String(el.value || '').replace(/[^0-9]/g, '').slice(0, 4);
+    el.value = normalizeDigits(String(el.value || '')).replace(/[^0-9]/g, '').slice(0, 4);
   });
 
   el.addEventListener('keydown', (e) => {
     const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Home','End','Enter'];
     if (allowed.includes(e.key)) return;
     if (e.ctrlKey || e.metaKey) return;
-    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+    if (!/^[0-9٠-٩۰-۹]$/.test(e.key)) e.preventDefault();
   });
 
   return el;
