@@ -8,7 +8,7 @@
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
-import { studentCompletionsPath } from '../core/constants.js';
+import { DATA_PATHS } from '../core/constants.js';
 import { isCardDone, markCardDone } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { goHome } from '../core/router.js';
@@ -131,9 +131,10 @@ async function persistCompletion({ studentId, week, finalScore }) {
   if (!studentId || !Number.isInteger(Number(week))) return;
 
   try {
-    await fetchJson(studentCompletionsPath(studentId), {
+    await fetchJson(DATA_PATHS.PROGRESS_COMPLETE, {
       method: 'POST',
       body: {
+        studentId: String(studentId),
         week: Number(week),
         finalScore: Number.isFinite(Number(finalScore)) ? Number(finalScore) : 0,
       },
