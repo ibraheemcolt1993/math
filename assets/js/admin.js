@@ -8,7 +8,7 @@ const ADMIN_PASS = 'Aa@232323445566';
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
-const ADMIN_STUDENTS_API = '/api/admin/students';
+const ADMIN_STUDENTS_API = '/api/adminstudents';
 let students = [];
 let cards = [];
 
