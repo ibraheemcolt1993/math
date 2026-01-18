@@ -1,14 +1,14 @@
 /* =========================================================
    cardsPage.js — Cards List Logic (index.html)
-   - Loads cards.json
+   - Loads cards from API
    - Applies sequential locking via prereq
    - Shows completed cards as gold + star (base.css styles)
    - Shows student name (firstName/fullName) instead of "طالب {id}"
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
-import { DATA_PATHS } from '../core/constants.js';
-import { getLastStudentId, isCardDone } from '../core/storage.js';
+import { DATA_PATHS, studentCompletionsPath } from '../core/constants.js';
+import { getLastStudentId, isCardDone, syncCardCompletions } from '../core/storage.js';
 import { goToLesson } from '../core/router.js';
 import { showToast } from '../ui/toast.js';
 
@@ -30,8 +30,13 @@ export async function initCardsPage() {
   if (studentNameEl) studentNameEl.textContent = displayName;
 
   try {
-    const cards = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
-    renderCards(listEl, cards, studentId);
+    const [cards, completions] = await Promise.all([
+      fetchJson(DATA_PATHS.CARDS, { noStore: true }),
+      fetchJson(studentCompletionsPath(studentId), { noStore: true }).catch(() => []),
+    ]);
+
+    syncCardCompletions(studentId, completions);
+    renderCards(listEl, Array.isArray(cards) ? cards : [], studentId);
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
     console.error(e);

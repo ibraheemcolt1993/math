@@ -295,9 +295,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     // Pass title for certificate hook readiness
     const cardTitle = String(data?.title || '');
+    const finalScore = Number.isFinite(assessmentState?.score) ? assessmentState.score : 0;
 
     // Use existing completion handler (shows UI + returns home)
-    completeLesson({ studentId, week, cardTitle });
+    completeLesson({ studentId, week, cardTitle, finalScore });
   }
 
   function render() {
