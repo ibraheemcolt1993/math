@@ -13,11 +13,9 @@ export const STORAGE_KEYS = {
 
 // Data paths
 export const DATA_PATHS = {
-  CARDS: '/api/cards',
-  WEEKS_DIR: '/api/weeks',
-  STUDENT_LOGIN: '/api/students/login',
-  PROGRESS_COMPLETE: '/api/progress/complete',
-  PROGRESS_COMPLETED: '/api/progress/completed',
+  CARDS: '/data/cards.json',
+  WEEKS_DIR: '/data/weeks',
+  STUDENTS: '/data/students.json',
 };
 
 // Lesson / Engine
@@ -41,8 +39,4 @@ export const PROGRESS = {
 // Helpers
 export function weekJsonPath(week) {
   return `${DATA_PATHS.WEEKS_DIR}/${week}`;
-}
-
-export function studentCompletionsPath(studentId) {
-  return `${DATA_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(studentId)}`;
 }

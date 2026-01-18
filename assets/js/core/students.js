@@ -1,36 +1,32 @@
-/* 
-CHANGELOG:
-- [STEP 1] Added students data loader from API
-- [STEP 1] Added student identity validation (ID + birthYear)
-- [STEP 1] Non-breaking addition: no dependency on UI or storage
-- [STEP 1] Prepared foundation for future login integration
-*/
-
 import { fetchJson } from './api.js';
+import { DATA_PATHS } from './constants.js';
+
+const LS_ADMIN_STUDENTS = 'math:admin:students';
 
 let studentsCache = null;
 
 /**
- * Load students database (cached after first load)
+ * Load students list (cached after first load)
  */
 export async function loadStudents() {
   if (studentsCache) {
     return studentsCache;
   }
 
-  const data = await fetchJson('/api/admin/students', { noStore: true });
-
-  if (!Array.isArray(data)) {
-    throw new Error('Students database format is invalid');
+  const stored = readLocalJson(LS_ADMIN_STUDENTS);
+  if (stored && Array.isArray(stored)) {
+    studentsCache = stored.map(normalizeStudent);
+    return studentsCache;
   }
 
-  studentsCache = data.map((student) => ({
-    id: student.StudentId ?? student.studentId ?? student.id ?? '',
-    birthYear: student.BirthYear ?? student.birthYear ?? '',
-    firstName: student.FirstName ?? student.firstName ?? '',
-    fullName: student.FullName ?? student.fullName ?? '',
-    class: student.Class ?? student.class ?? '',
-  }));
+  const data = await fetchJson(DATA_PATHS.STUDENTS, { noStore: true });
+  const list = Array.isArray(data) ? data : data?.students;
+
+  if (!Array.isArray(list)) {
+    throw new Error('Students list format is invalid');
+  }
+
+  studentsCache = list.map(normalizeStudent);
   return studentsCache;
 }
 
@@ -52,4 +48,23 @@ export async function findStudentByIdentity(id, birthYear) {
   );
 
   return student || null;
+}
+
+function normalizeStudent(student) {
+  return {
+    id: student.StudentId ?? student.studentId ?? student.id ?? '',
+    birthYear: student.BirthYear ?? student.birthYear ?? '',
+    firstName: student.FirstName ?? student.firstName ?? '',
+    fullName: student.FullName ?? student.fullName ?? '',
+    class: student.Class ?? student.class ?? '',
+  };
+}
+
+function readLocalJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
