@@ -88,12 +88,17 @@ app.post('/api/students/login', async (req, res, next) => {
     }
 
     const student = result.recordset[0];
+    const payload = {
+      StudentId: student.StudentId,
+      BirthYear: student.BirthYear,
+      FirstName: student.FirstName,
+      FullName: student.FullName,
+      Class: student.Class
+    };
     res.json({
-      studentId: student.StudentId,
-      birthYear: student.BirthYear,
-      firstName: student.FirstName,
-      fullName: student.FullName,
-      class: student.Class
+      ok: true,
+      student: payload,
+      ...payload
     });
   } catch (error) {
     next(error);

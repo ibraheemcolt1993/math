@@ -104,11 +104,11 @@ function initIndexPage() {
 
       const data = await response.json().catch(() => null);
 
-      if (response.ok && data?.ok && data?.student) {
-        const student = data.student;
-        const profile = normalizeStoredStudent(student);
+      const payload = data?.student ?? data;
+      const profile = normalizeStoredStudent(payload);
 
-        writeCurrentStudent(student);
+      if (response.ok && profile?.id && profile?.birthYear) {
+        writeCurrentStudent(payload);
         if (profile?.id) setLastStudentId(profile.id);
         showWelcome(profile);
         showToast('تم الدخول', `أهلًا ${profile.firstName} 👋`, 'success', 2500);
@@ -241,7 +241,7 @@ function clearCurrentStudent() {
 
 function normalizeStoredStudent(student) {
   if (!student) return null;
-  const normalizedId = student.id ?? student.StudentId ?? '';
+  const normalizedId = student.id ?? student.studentId ?? student.StudentId ?? '';
   const normalizedBirthYear = student.birthYear ?? student.BirthYear ?? '';
   const fullName = student.fullName ?? student.FullName ?? '';
   const firstName = student.firstName ?? student.FirstName ?? '';
