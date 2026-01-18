@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["post"],
-      "route": "progress-complete"
+      "route": "progress/complete"
     },
     {
       "type": "http",
