@@ -1,4 +1,4 @@
-const { getPool, sql } = require('../../_shared/db');
+const { getPool, sql } = require('../_shared/db');
 
 module.exports = async function (context, req) {
   try {

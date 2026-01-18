@@ -1,4 +1,4 @@
-const { getPool, sql } = require('../../_shared/db');
+const { getPool, sql } = require('../_shared/db');
 
 function parseBody(req) {
   if (req.body && typeof req.body === 'object') {
