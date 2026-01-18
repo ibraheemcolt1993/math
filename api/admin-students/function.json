@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
        "methods": ["GET", "PUT"],
-      "route": "admin/students"
+      "route": "adminstudents"
     },
     {
       "type": "http",
