@@ -116,6 +116,17 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const studentIds = normalized.map((student) => student.StudentId);
+    const uniqueIds = new Set(studentIds);
+    if (uniqueIds.size !== studentIds.length) {
+      context.res = {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: { ok: false, message: 'DUPLICATE_STUDENT_ID' }
+      };
+      return;
+    }
+
     const transaction = new sql.Transaction(dbPool);
     await transaction.begin();
 
@@ -162,13 +173,12 @@ module.exports = async function (context, req) {
              Class = source.Class
          WHEN NOT MATCHED BY TARGET THEN
            INSERT (StudentId, BirthYear, FirstName, FullName, Class)
-           VALUES (source.StudentId, source.BirthYear, source.FirstName, source.FullName, source.Class)
-         WHEN NOT MATCHED BY SOURCE THEN
-           DELETE;`
+           VALUES (source.StudentId, source.BirthYear, source.FirstName, source.FullName, source.Class);`
       );
 
       await transaction.commit();
     } catch (error) {
+      context.log('astu upsert failed', { message: error.message });
       await transaction.rollback();
       throw error;
     }
@@ -179,6 +189,7 @@ module.exports = async function (context, req) {
       body: { ok: true }
     };
   } catch (error) {
+    context.log('astu request failed', { message: error.message });
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
