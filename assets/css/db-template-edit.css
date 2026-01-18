@@ -1,0 +1,138 @@
+:root {
+  --db-border: #e2e8f0;
+  --db-muted: #64748b;
+  --db-bg: #f8fafc;
+}
+
+body {
+  background: var(--db-bg);
+}
+
+.db-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@media (min-width: 960px) {
+  .db-layout {
+    grid-template-columns: 320px 1fr;
+    align-items: start;
+  }
+}
+
+.note {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.tables-list {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.table-item {
+  border: 1px solid var(--db-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  cursor: pointer;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.table-item.is-active {
+  border-color: #2563eb;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15);
+}
+
+.table-item span {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.table-item button {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-size: 14px;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+}
+
+.columns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+.columns-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.column-card {
+  border: 1px solid var(--db-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.column-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.column-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  color: var(--db-muted);
+  font-size: 12px;
+}
+
+.column-footer button {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--db-muted);
+}
+
+.json-preview {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px;
+  border-radius: 12px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
