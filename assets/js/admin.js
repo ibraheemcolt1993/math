@@ -1,5 +1,4 @@
-import { fetchJson } from './core/api.js';
-import { DATA_PATHS } from './core/constants.js';
+import { API_PATHS } from './core/constants.js';
 import { showToast } from './ui/toast.js';
 
 const ADMIN_USER = 'admin';
@@ -9,6 +8,7 @@ const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
 const ADMIN_STUDENTS_API = ['/api/admin/students', '/api/adminstudents'];
+const ADMIN_CARDS_API = [API_PATHS.ADMIN_CARDS];
 let students = [];
 let cards = [];
 
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveCards?.addEventListener('click', async () => {
     try {
       await saveCards();
-      showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في المتصفح', 'success');
+      showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في قاعدة البيانات', 'success');
     } catch (error) {
       showToast('خطأ', error.message || 'تعذر حفظ بيانات البطاقات', 'error');
     }
@@ -257,14 +257,22 @@ async function loadStudents() {
 }
 
 async function loadCards() {
-  const stored = readLocalJson(LS_ADMIN_CARDS);
-  if (stored && Array.isArray(stored)) {
-    cards = stored.map(normalizeCard);
-    return;
-  }
+  try {
+    cards = await loadCardsFromApi();
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
+  } catch (error) {
+    if (isNetworkError(error)) {
+      const stored = readLocalJson(LS_ADMIN_CARDS);
+      if (stored && Array.isArray(stored)) {
+        cards = stored.map(normalizeCard);
+        showToast('تنبيه', 'تعذر الاتصال بالخادم، تم عرض نسخة محلية للبطاقات', 'warning');
+        return;
+      }
+    }
 
-  const data = await fetchJson(DATA_PATHS.CARDS, { noStore: true });
-  cards = Array.isArray(data) ? data.map(normalizeCard) : [];
+    showToast('خطأ', error.message || 'تعذر تحميل بيانات البطاقات', 'error');
+    cards = [];
+  }
 }
 
 function renderStudents(container) {
@@ -340,6 +348,8 @@ async function saveStudents() {
 }
 
 async function saveCards() {
+  await saveCardsToApi(cards);
+  cards = await loadCardsFromApi();
   localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
 }
 
@@ -459,6 +469,92 @@ async function saveStudentsToApi(studentsArray) {
   }
 
   const err = new Error('تعذر حفظ بيانات الطلاب');
+  err.status = 404;
+  throw err;
+}
+
+async function loadCardsFromApi() {
+  for (const endpoint of ADMIN_CARDS_API) {
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-store',
+        Pragma: 'no-cache',
+      },
+    });
+
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (error) {
+      payload = null;
+    }
+
+    if (res.status === 404) {
+      continue;
+    }
+
+    if (!res.ok) {
+      const message = payload?.message || payload?.error || 'تعذر تحميل بيانات البطاقات';
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
+    const cardsPayload = Array.isArray(payload) ? payload : payload?.cards;
+    if (!Array.isArray(cardsPayload)) {
+      throw new Error('تعذر تحميل بيانات البطاقات');
+    }
+
+    return cardsPayload.map(normalizeCard);
+  }
+
+  const err = new Error('تعذر تحميل بيانات البطاقات');
+  err.status = 404;
+  throw err;
+}
+
+async function saveCardsToApi(cardsArray) {
+  const payload = {
+    cards: cardsArray.map((card) => ({
+      week: card.week,
+      title: card.title,
+      prereq: card.prereq,
+    })),
+  };
+
+  for (const endpoint of ADMIN_CARDS_API) {
+    const res = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    let responsePayload = null;
+    try {
+      responsePayload = await res.json();
+    } catch (error) {
+      responsePayload = null;
+    }
+
+    if (res.status === 404) {
+      continue;
+    }
+
+    if (!res.ok || responsePayload?.ok === false) {
+      const message = responsePayload?.message || responsePayload?.error || 'تعذر حفظ بيانات البطاقات';
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
+    return;
+  }
+
+  const err = new Error('تعذر حفظ بيانات البطاقات');
   err.status = 404;
   throw err;
 }

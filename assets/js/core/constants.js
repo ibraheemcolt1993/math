@@ -18,6 +18,12 @@ export const DATA_PATHS = {
   STUDENTS: '/data/students.json',
 };
 
+// API paths
+export const API_PATHS = {
+  CARDS: '/api/cards',
+  ADMIN_CARDS: '/api/admin-cards',
+};
+
 // Lesson / Engine
 export const ENGINE = {
   MAX_ATTEMPTS: 3,
