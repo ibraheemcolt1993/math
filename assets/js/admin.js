@@ -362,6 +362,9 @@ function renderCards(container) {
         <input class="input ltr" data-index="${index}" data-field="prereq" value="${escapeValue(card.prereq ?? '')}" placeholder="مثال: 999" />
       </div>
       <div class="card-actions">
+        <a class="btn btn-outline btn-sm" href="/admin-card-builder.html?id=${encodeURIComponent(card.week ?? '')}">
+          تعديل محتوى البطاقة
+        </a>
         <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${index}">حذف البطاقة</button>
       </div>
     `;

@@ -6,14 +6,22 @@ const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_CARDS = 'math:admin:cards';
 const CARDS_PATH = '/api/cards-mng';
 
+const ITEM_TYPES = [
+  { value: 'question', label: 'سؤال' },
+  { value: 'example', label: 'مثال' },
+  { value: 'explain', label: 'شرح' },
+  { value: 'note', label: 'ملاحظة' },
+  { value: 'goal', label: 'هدف' },
+];
+
 const QUESTION_TYPES = [
+  { value: 'mcq', label: 'اختيار من متعدد' },
   { value: 'true-false', label: 'صواب وخطأ' },
   { value: 'number', label: 'ادخل الجواب (عدد)' },
-  { value: 'mcq', label: 'اختيار من متعدد' },
-  { value: 'matching', label: 'توصيل' },
-  { value: 'ordering', label: 'ترتيب (سحب وإفلات)' },
   { value: 'short-text', label: 'إجابة قصيرة' },
   { value: 'long-text', label: 'فقرة طويلة' },
+  { value: 'matching', label: 'توصيل' },
+  { value: 'ordering', label: 'ترتيب (سحب وإفلات)' },
 ];
 
 let cards = [];
@@ -171,35 +179,45 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const questionIndex = Number(target.dataset.questionIndex);
-    if (!Number.isFinite(questionIndex)) return;
-    const question = section.questions[questionIndex];
-    if (!question) return;
+    const itemIndex = Number(target.dataset.itemIndex);
+    if (!Number.isFinite(itemIndex)) return;
+    const item = section.items[itemIndex];
+    if (!item) return;
 
     const field = target.dataset.field;
     if (!field) return;
 
+    if (item.type !== 'question') {
+      if (field === 'text') {
+        item.text = target.value.trim();
+      } else if (field === 'details') {
+        item.details = splitLines(target.value);
+      }
+      persistCards();
+      return;
+    }
+
     if (field === 'prompt' || field === 'description') {
-      question[field] = target.value.trim();
+      item[field] = target.value.trim();
     } else if (field === 'answer') {
-      question.answer = target.value.trim();
+      item.answer = target.value.trim();
     } else if (field === 'numeric-answer') {
-      question.answer = target.value === '' ? null : Number(target.value);
+      item.answer = target.value === '' ? null : Number(target.value);
     } else if (field === 'option') {
       const optionIndex = Number(target.dataset.optionIndex);
       if (!Number.isFinite(optionIndex)) return;
-      question.options[optionIndex] = target.value.trim();
+      item.options[optionIndex] = target.value.trim();
     } else if (field === 'pair-left' || field === 'pair-right') {
       const pairIndex = Number(target.dataset.pairIndex);
       if (!Number.isFinite(pairIndex)) return;
-      const pair = question.pairs[pairIndex];
+      const pair = item.pairs[pairIndex];
       if (!pair) return;
       if (field === 'pair-left') pair.left = target.value.trim();
       if (field === 'pair-right') pair.right = target.value.trim();
     } else if (field === 'order-item') {
-      const itemIndex = Number(target.dataset.itemIndex);
-      if (!Number.isFinite(itemIndex)) return;
-      question.items[itemIndex] = target.value.trim();
+      const listIndex = Number(target.dataset.listIndex);
+      if (!Number.isFinite(listIndex)) return;
+      item.items[listIndex] = target.value.trim();
     }
 
     persistCards();
@@ -212,24 +230,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!Number.isFinite(sectionIndex)) return;
     const section = activeCard?.form.sections[sectionIndex];
     if (!section) return;
-    const questionIndex = Number(target.dataset.questionIndex);
-    if (!Number.isFinite(questionIndex)) return;
-    const question = section.questions[questionIndex];
-    if (!question) return;
+    const itemIndex = Number(target.dataset.itemIndex);
+    if (!Number.isFinite(itemIndex)) return;
+    const item = section.items[itemIndex];
+    if (!item) return;
 
     const field = target.dataset.field;
     if (!field) return;
 
-    if (field === 'type') {
+    if (field === 'question-type') {
       const nextType = target.value;
-      section.questions[questionIndex] = applyQuestionType(question, nextType);
+      section.items[itemIndex] = applyQuestionType(item, nextType);
       persistCards();
       renderSections(container);
       return;
     }
 
     if (field === 'required') {
-      question.required = target.checked;
+      item.required = target.checked;
       persistCards();
       return;
     }
@@ -237,12 +255,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (field === 'correct-index') {
       const optionIndex = Number(target.dataset.optionIndex);
       if (!Number.isFinite(optionIndex)) return;
-      question.correctIndex = optionIndex;
+      item.correctIndex = optionIndex;
       persistCards();
     }
 
     if (field === 'true-false-answer') {
-      question.answer = target.value;
+      item.answer = target.value;
       persistCards();
     }
   }
@@ -265,29 +283,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (action === 'add-question') {
+    if (action === 'add-item') {
       const typeSelect = target.previousElementSibling;
-      const type = typeSelect instanceof HTMLSelectElement ? typeSelect.value : 'mcq';
-      section.questions.push(createQuestion(type));
+      const itemType = typeSelect instanceof HTMLSelectElement ? typeSelect.value : 'question';
+      section.items.push(createItem(itemType));
       renderSections(container);
       persistCards();
       return;
     }
 
-    const questionIndex = Number(target.dataset.questionIndex);
-    if (!Number.isFinite(questionIndex)) return;
-    const question = section.questions[questionIndex];
-    if (!question) return;
+    const itemIndex = Number(target.dataset.itemIndex);
+    if (!Number.isFinite(itemIndex)) return;
+    const item = section.items[itemIndex];
+    if (!item) return;
 
-    if (action === 'delete-question') {
-      section.questions.splice(questionIndex, 1);
+    if (action === 'delete-item') {
+      section.items.splice(itemIndex, 1);
       renderSections(container);
       persistCards();
       return;
     }
+
+    if (item.type !== 'question') return;
 
     if (action === 'add-option') {
-      question.options.push('');
+      item.options.push('');
       renderSections(container);
       persistCards();
       return;
@@ -296,9 +316,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (action === 'remove-option') {
       const optionIndex = Number(target.dataset.optionIndex);
       if (!Number.isFinite(optionIndex)) return;
-      question.options.splice(optionIndex, 1);
-      if (question.correctIndex >= question.options.length) {
-        question.correctIndex = Math.max(0, question.options.length - 1);
+      item.options.splice(optionIndex, 1);
+      if (item.correctIndex >= item.options.length) {
+        item.correctIndex = Math.max(0, item.options.length - 1);
       }
       renderSections(container);
       persistCards();
@@ -306,7 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (action === 'add-pair') {
-      question.pairs.push({ left: '', right: '' });
+      item.pairs.push({ left: '', right: '' });
       renderSections(container);
       persistCards();
       return;
@@ -315,23 +335,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (action === 'remove-pair') {
       const pairIndex = Number(target.dataset.pairIndex);
       if (!Number.isFinite(pairIndex)) return;
-      question.pairs.splice(pairIndex, 1);
+      item.pairs.splice(pairIndex, 1);
       renderSections(container);
       persistCards();
       return;
     }
 
     if (action === 'add-order-item') {
-      question.items.push('');
+      item.items.push('');
       renderSections(container);
       persistCards();
       return;
     }
 
     if (action === 'remove-order-item') {
-      const itemIndex = Number(target.dataset.itemIndex);
-      if (!Number.isFinite(itemIndex)) return;
-      question.items.splice(itemIndex, 1);
+      const listIndex = Number(target.dataset.listIndex);
+      if (!Number.isFinite(listIndex)) return;
+      item.items.splice(listIndex, 1);
       renderSections(container);
       persistCards();
       return;
@@ -380,9 +400,9 @@ function renderSections(container) {
         </div>
         <div class="builder-section-actions">
           <select class="input" aria-label="نوع السؤال">
-            ${QUESTION_TYPES.map((type) => `<option value="${type.value}">${type.label}</option>`).join('')}
+            ${ITEM_TYPES.map((type) => `<option value="${type.value}">${type.label}</option>`).join('')}
           </select>
-          <button class="btn btn-primary btn-sm" type="button" data-action="add-question" data-section-index="${sectionIndex}">إضافة سؤال</button>
+          <button class="btn btn-primary btn-sm" type="button" data-action="add-item" data-section-index="${sectionIndex}">إضافة عنصر</button>
           <button class="btn btn-ghost btn-sm" type="button" data-action="delete-section" data-section-index="${sectionIndex}">حذف القسم</button>
         </div>
       </div>
@@ -391,40 +411,53 @@ function renderSections(container) {
     const questionsWrap = document.createElement('div');
     questionsWrap.className = 'builder-sections';
 
-    section.questions.forEach((question, questionIndex) => {
-      const questionEl = document.createElement('div');
-      questionEl.className = 'builder-question';
-      questionEl.innerHTML = `
+    section.items.forEach((item, itemIndex) => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'builder-question';
+      itemEl.innerHTML = `
         <div class="builder-question-header">
           <div class="builder-question-meta">
+            ${item.type === 'question'
+              ? `
             <div class="field">
               <label class="label">نوع السؤال</label>
-              <select class="input" data-field="type" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">
+              <select class="input" data-field="question-type" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
                 ${QUESTION_TYPES.map(
                   (type) =>
-                    `<option value="${type.value}" ${type.value === question.type ? 'selected' : ''}>${type.label}</option>`,
+                    `<option value="${type.value}" ${type.value === item.questionType ? 'selected' : ''}>${type.label}</option>`,
                 ).join('')}
               </select>
             </div>
             <div class="field">
               <label class="label">نص السؤال</label>
-              <input class="input" data-field="prompt" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" value="${escapeValue(question.prompt)}" placeholder="اكتب السؤال هنا" />
+              <input class="input" data-field="prompt" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.prompt)}" placeholder="اكتب السؤال هنا" />
             </div>
             <div class="field">
               <label class="label">وصف إضافي</label>
-              <input class="input" data-field="description" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" value="${escapeValue(question.description)}" placeholder="شرح أو تلميح" />
+              <input class="input" data-field="description" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.description)}" placeholder="شرح أو تلميح" />
             </div>
             <label class="row">
-              <input type="checkbox" data-field="required" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" ${question.required ? 'checked' : ''} />
+              <input type="checkbox" data-field="required" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" ${item.required ? 'checked' : ''} />
               <span class="small">سؤال مطلوب</span>
             </label>
+            `
+              : `
+            <div class="field">
+              <label class="label">نص العنصر</label>
+              <textarea class="input" data-field="text" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="اكتب النص هنا">${escapeValue(item.text ?? '')}</textarea>
+            </div>
+            <div class="field">
+              <label class="label">تفاصيل إضافية</label>
+              <textarea class="input" rows="2" data-field="details" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="كل تفصيل في سطر">${escapeValue((item.details || []).join('\n'))}</textarea>
+            </div>
+            `}
           </div>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-question" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">حذف السؤال</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">حذف العنصر</button>
         </div>
-        ${renderQuestionBody(question, sectionIndex, questionIndex)}
+        ${item.type === 'question' ? renderQuestionBody(item, sectionIndex, itemIndex) : ''}
       `;
 
-      questionsWrap.appendChild(questionEl);
+      questionsWrap.appendChild(itemEl);
     });
 
     sectionEl.appendChild(questionsWrap);
@@ -432,97 +465,97 @@ function renderSections(container) {
   });
 }
 
-function renderQuestionBody(question, sectionIndex, questionIndex) {
-  if (question.type === 'true-false') {
+function renderQuestionBody(item, sectionIndex, itemIndex) {
+  if (item.questionType === 'true-false') {
     return `
       <div class="field">
         <label class="label">الإجابة الصحيحة</label>
-        <select class="input" data-field="true-false-answer" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">
-          <option value="true" ${question.answer === 'true' ? 'selected' : ''}>صواب</option>
-          <option value="false" ${question.answer === 'false' ? 'selected' : ''}>خطأ</option>
+        <select class="input" data-field="true-false-answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
+          <option value="true" ${item.answer === 'true' ? 'selected' : ''}>صواب</option>
+          <option value="false" ${item.answer === 'false' ? 'selected' : ''}>خطأ</option>
         </select>
       </div>
     `;
   }
 
-  if (question.type === 'number') {
+  if (item.questionType === 'number') {
     return `
       <div class="field">
         <label class="label">الإجابة الرقمية</label>
-        <input class="input ltr" type="number" data-field="numeric-answer" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" value="${escapeValue(question.answer ?? '')}" />
+        <input class="input ltr" type="number" data-field="numeric-answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.answer ?? '')}" />
       </div>
     `;
   }
 
-  if (question.type === 'mcq') {
+  if (item.questionType === 'mcq') {
     return `
       <div class="builder-question-options">
         <div class="builder-helper">حدد الإجابة الصحيحة من الخيارات.</div>
-        ${question.options
+        ${item.options
           .map(
             (option, optionIndex) => `
               <div class="builder-option">
-                <input class="input" data-field="option" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-option-index="${optionIndex}" value="${escapeValue(option)}" placeholder="خيار ${optionIndex + 1}" />
+                <input class="input" data-field="option" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-option-index="${optionIndex}" value="${escapeValue(option)}" placeholder="خيار ${optionIndex + 1}" />
                 <div class="builder-option-controls">
                   <label class="row">
-                    <input type="radio" name="mcq-correct-${sectionIndex}-${questionIndex}" data-field="correct-index" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-option-index="${optionIndex}" ${question.correctIndex === optionIndex ? 'checked' : ''} />
+                    <input type="radio" name="mcq-correct-${sectionIndex}-${itemIndex}" data-field="correct-index" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-option-index="${optionIndex}" ${item.correctIndex === optionIndex ? 'checked' : ''} />
                     <span class="small">صحيح</span>
                   </label>
-                  <button class="btn btn-ghost btn-sm" type="button" data-action="remove-option" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-option-index="${optionIndex}">حذف</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-action="remove-option" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-option-index="${optionIndex}">حذف</button>
                 </div>
               </div>
             `,
           )
           .join('')}
-        <button class="btn btn-ghost btn-sm" type="button" data-action="add-option" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">إضافة خيار</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="add-option" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة خيار</button>
       </div>
     `;
   }
 
-  if (question.type === 'matching') {
+  if (item.questionType === 'matching') {
     return `
       <div class="builder-pairs">
-        ${question.pairs
+        ${item.pairs
           .map(
             (pair, pairIndex) => `
               <div class="builder-pair">
-                <input class="input" data-field="pair-left" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-pair-index="${pairIndex}" value="${escapeValue(pair.left)}" placeholder="عنصر" />
-                <input class="input" data-field="pair-right" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-pair-index="${pairIndex}" value="${escapeValue(pair.right)}" placeholder="الإجابة" />
-                <button class="btn btn-ghost btn-sm" type="button" data-action="remove-pair" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-pair-index="${pairIndex}">حذف</button>
+                <input class="input" data-field="pair-left" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-pair-index="${pairIndex}" value="${escapeValue(pair.left)}" placeholder="عنصر" />
+                <input class="input" data-field="pair-right" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-pair-index="${pairIndex}" value="${escapeValue(pair.right)}" placeholder="الإجابة" />
+                <button class="btn btn-ghost btn-sm" type="button" data-action="remove-pair" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-pair-index="${pairIndex}">حذف</button>
               </div>
             `,
           )
           .join('')}
-        <button class="btn btn-ghost btn-sm" type="button" data-action="add-pair" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">إضافة توصيل</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="add-pair" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة توصيل</button>
       </div>
     `;
   }
 
-  if (question.type === 'ordering') {
+  if (item.questionType === 'ordering') {
     return `
       <div class="builder-order">
         <div class="builder-helper">اسحب العناصر لإعادة ترتيبها.</div>
-        ${question.items
+        ${item.items
           .map(
-            (item, itemIndex) => `
-              <div class="builder-order-item" draggable="true" data-drag-type="ordering" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-item-index="${itemIndex}">
+            (orderItem, listIndex) => `
+              <div class="builder-order-item" draggable="true" data-drag-type="ordering" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-list-index="${listIndex}">
                 <span class="drag-handle" aria-hidden="true">⋮⋮</span>
-                <input class="input" data-field="order-item" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item)}" placeholder="عنصر ${itemIndex + 1}" />
-                <button class="btn btn-ghost btn-sm" type="button" data-action="remove-order-item" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" data-item-index="${itemIndex}">حذف</button>
+                <input class="input" data-field="order-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-list-index="${listIndex}" value="${escapeValue(orderItem)}" placeholder="عنصر ${listIndex + 1}" />
+                <button class="btn btn-ghost btn-sm" type="button" data-action="remove-order-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" data-list-index="${listIndex}">حذف</button>
               </div>
             `,
           )
           .join('')}
-        <button class="btn btn-ghost btn-sm" type="button" data-action="add-order-item" data-section-index="${sectionIndex}" data-question-index="${questionIndex}">إضافة عنصر ترتيب</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="add-order-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">إضافة عنصر ترتيب</button>
       </div>
     `;
   }
 
-  if (question.type === 'long-text') {
+  if (item.questionType === 'long-text') {
     return `
       <div class="field">
         <label class="label">الإجابة المتوقعة (اختياري)</label>
-        <textarea class="input" data-field="answer" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" placeholder="نص الإجابة الطويلة">${escapeValue(question.answer ?? '')}</textarea>
+        <textarea class="input" data-field="answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="نص الإجابة الطويلة">${escapeValue(item.answer ?? '')}</textarea>
       </div>
     `;
   }
@@ -530,7 +563,7 @@ function renderQuestionBody(question, sectionIndex, questionIndex) {
   return `
     <div class="field">
       <label class="label">الإجابة المتوقعة (اختياري)</label>
-      <input class="input" data-field="answer" data-section-index="${sectionIndex}" data-question-index="${questionIndex}" value="${escapeValue(question.answer ?? '')}" placeholder="إجابة قصيرة" />
+      <input class="input" data-field="answer" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.answer ?? '')}" placeholder="إجابة قصيرة" />
     </div>
   `;
 }
@@ -540,10 +573,10 @@ function handleDragStart(event) {
   if (!(target instanceof HTMLElement)) return;
   if (target.dataset.dragType !== 'ordering') return;
   const sectionIndex = Number(target.dataset.sectionIndex);
-  const questionIndex = Number(target.dataset.questionIndex);
   const itemIndex = Number(target.dataset.itemIndex);
-  if (!Number.isFinite(sectionIndex) || !Number.isFinite(questionIndex) || !Number.isFinite(itemIndex)) return;
-  dragState = { sectionIndex, questionIndex, itemIndex };
+  const listIndex = Number(target.dataset.listIndex);
+  if (!Number.isFinite(sectionIndex) || !Number.isFinite(itemIndex) || !Number.isFinite(listIndex)) return;
+  dragState = { sectionIndex, itemIndex, listIndex };
   target.classList.add('is-dragging');
 }
 
@@ -560,17 +593,17 @@ function handleDrop(event) {
   if (!(dropTarget instanceof HTMLElement)) return;
 
   const sectionIndex = Number(dropTarget.dataset.sectionIndex);
-  const questionIndex = Number(dropTarget.dataset.questionIndex);
   const itemIndex = Number(dropTarget.dataset.itemIndex);
+  const listIndex = Number(dropTarget.dataset.listIndex);
 
-  if (!Number.isFinite(sectionIndex) || !Number.isFinite(questionIndex) || !Number.isFinite(itemIndex)) return;
+  if (!Number.isFinite(sectionIndex) || !Number.isFinite(itemIndex) || !Number.isFinite(listIndex)) return;
   if (!activeCard) return;
 
-  const question = activeCard.form.sections[sectionIndex]?.questions[questionIndex];
-  if (!question || !Array.isArray(question.items)) return;
+  const item = activeCard.form.sections[sectionIndex]?.items[itemIndex];
+  if (!item || !Array.isArray(item.items)) return;
 
-  const [moved] = question.items.splice(dragState.itemIndex, 1);
-  question.items.splice(itemIndex, 0, moved);
+  const [moved] = item.items.splice(dragState.listIndex, 1);
+  item.items.splice(listIndex, 0, moved);
   dragState = null;
   persistCards();
   renderSections(document.getElementById('sectionsList'));
@@ -614,8 +647,16 @@ function normalizeSection(section) {
   if (!section.id) section.id = generateId('section');
   if (!section.title) section.title = 'قسم جديد';
   if (!section.description) section.description = '';
-  if (!Array.isArray(section.questions)) section.questions = [];
-  section.questions.forEach((question) => applyQuestionDefaults(question));
+  if (!Array.isArray(section.items)) {
+    const legacyQuestions = Array.isArray(section.questions) ? section.questions : [];
+    section.items = legacyQuestions.map((question) => ({
+      ...applyQuestionType(question, question.type || question.questionType || 'short-text'),
+      type: 'question',
+      questionType: question.type || question.questionType || 'short-text',
+    }));
+    delete section.questions;
+  }
+  section.items.forEach((item) => applyItemDefaults(item));
 }
 
 function createSection() {
@@ -623,47 +664,62 @@ function createSection() {
     id: generateId('section'),
     title: 'قسم جديد',
     description: '',
-    questions: [],
+    items: [],
   };
 }
 
-function createQuestion(type) {
+function createItem(type) {
+  if (type === 'question') {
+    return createQuestionItem('mcq');
+  }
+
+  return {
+    id: generateId('item'),
+    type,
+    text: '',
+    details: [],
+  };
+}
+
+function createQuestionItem(questionType) {
   return applyQuestionType(
     {
       id: generateId('question'),
-      type,
+      type: 'question',
+      questionType,
       prompt: 'سؤال جديد',
       description: '',
       required: false,
     },
-    type,
+    questionType,
   );
 }
 
-function applyQuestionType(question, type) {
+function applyQuestionType(question, questionType) {
   const base = {
     id: question.id || generateId('question'),
-    type,
+    type: 'question',
+    questionType,
     prompt: question.prompt || 'سؤال جديد',
     description: question.description || '',
     required: question.required ?? false,
   };
 
-  if (type === 'true-false') {
+  if (questionType === 'true-false') {
     return {
       ...base,
       answer: question.answer ?? 'true',
     };
   }
 
-  if (type === 'number') {
+  if (questionType === 'number') {
     return {
       ...base,
       answer: Number.isFinite(question.answer) ? question.answer : null,
     };
   }
 
-  if (type === 'mcq') {
+  if (questionType === 'mcq') {
     const options = Array.isArray(question.options) && question.options.length ? question.options : [''];
     return {
       ...base,
@@ -672,14 +728,14 @@ function applyQuestionType(question, type) {
     };
   }
 
-  if (type === 'matching') {
+  if (questionType === 'matching') {
     return {
       ...base,
       pairs: Array.isArray(question.pairs) && question.pairs.length ? question.pairs : [{ left: '', right: '' }],
     };
   }
 
-  if (type === 'ordering') {
+  if (questionType === 'ordering') {
     return {
       ...base,
       items: Array.isArray(question.items) && question.items.length ? question.items : [''],
@@ -692,9 +748,17 @@ function applyQuestionType(question, type) {
   };
 }
 
-function applyQuestionDefaults(question) {
-  const normalized = applyQuestionType(question, question.type || 'short-text');
-  Object.assign(question, normalized);
+function applyItemDefaults(item) {
+  if (item.type === 'question') {
+    const normalized = applyQuestionType(item, item.questionType || 'short-text');
+    Object.assign(item, normalized);
+    return;
+  }
+
+  item.id = item.id || generateId('item');
+  item.type = item.type || 'note';
+  item.text = item.text ?? '';
+  item.details = Array.isArray(item.details) ? item.details : [];
 }
 
 function persistCards() {
@@ -725,11 +789,13 @@ function buildWeekPayload(card) {
 
   const concepts = card.form.sections.map((section) => ({
     title: section.title || 'قسم',
-    flow: section.questions.map((question) => mapQuestionToFlow(question)),
+    flow: section.items.map((item) => mapItemToFlow(item)),
   }));
 
   const assessmentQuestions = card.form.sections.flatMap((section) =>
-    section.questions.map((question) => mapQuestionToAssessment(question)),
+    section.items
+      .filter((item) => item.type === 'question')
+      .map((item) => mapQuestionToAssessment(item)),
   );
 
   return {
@@ -747,6 +813,21 @@ function buildWeekPayload(card) {
   };
 }
 
+function mapItemToFlow(item) {
+  if (item.type !== 'question') {
+    const mapped = {
+      type: item.type || 'note',
+      text: item.text || '',
+    };
+    if (Array.isArray(item.details) && item.details.length) {
+      mapped.details = item.details;
+    }
+    return mapped;
+  }
+
+  return mapQuestionToFlow(item);
+}
+
 function mapQuestionToFlow(question) {
   const base = {
     type: 'question',
@@ -754,7 +835,7 @@ function mapQuestionToFlow(question) {
     title: question.description || '',
   };
 
-  if (question.type === 'mcq') {
+  if (question.questionType === 'mcq') {
     return {
       ...base,
       choices: Array.isArray(question.options) ? question.options : [],
@@ -762,7 +843,7 @@ function mapQuestionToFlow(question) {
     };
   }
 
-  if (question.type === 'true-false') {
+  if (question.questionType === 'true-false') {
     return {
       ...base,
       choices: ['صواب', 'خطأ'],
@@ -770,7 +851,7 @@ function mapQuestionToFlow(question) {
     };
   }
 
-  if (question.type === 'number') {
+  if (question.questionType === 'number') {
     return { ...base, answer: question.answer == null ? '' : String(question.answer) };
   }
 
@@ -778,7 +859,7 @@ function mapQuestionToFlow(question) {
 }
 
 function mapQuestionToAssessment(question) {
-  if (question.type === 'mcq') {
+  if (question.questionType === 'mcq') {
     return {
       type: 'mcq',
       text: question.prompt || 'سؤال',
@@ -788,7 +869,7 @@ function mapQuestionToAssessment(question) {
     };
   }
 
-  if (question.type === 'true-false') {
+  if (question.questionType === 'true-false') {
     return {
       type: 'mcq',
       text: question.prompt || 'سؤال',
