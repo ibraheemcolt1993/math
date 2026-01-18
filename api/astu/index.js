@@ -116,59 +116,58 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const studentIds = normalized.map((student) => student.StudentId);
+    const uniqueIds = new Set(studentIds);
+    if (uniqueIds.size !== studentIds.length) {
+      context.res = {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: { ok: false, message: 'DUPLICATE_STUDENT_ID' }
+      };
+      return;
+    }
+
     const transaction = new sql.Transaction(dbPool);
     await transaction.begin();
 
     try {
-      const request = new sql.Request(transaction);
-      await request.query(
-        `CREATE TABLE #IncomingStudents (
-           StudentId nvarchar(20) NOT NULL,
-           BirthYear nvarchar(10) NOT NULL,
-           FirstName nvarchar(100) NOT NULL,
-           FullName nvarchar(200) NOT NULL,
-           Class nvarchar(20) NOT NULL
-         )`
-      );
+      const existing = await new sql.Request(transaction)
+        .query('SELECT StudentId FROM dbo.Students');
+      const existingIds = new Set(existing.recordset.map((row) => row.StudentId));
+      const incomingIds = new Set(normalized.map((student) => student.StudentId));
 
-      const table = new sql.Table('#IncomingStudents');
-      table.create = false;
-      table.columns.add('StudentId', sql.NVarChar(20), { nullable: false });
-      table.columns.add('BirthYear', sql.NVarChar(10), { nullable: false });
-      table.columns.add('FirstName', sql.NVarChar(100), { nullable: false });
-      table.columns.add('FullName', sql.NVarChar(200), { nullable: false });
-      table.columns.add('Class', sql.NVarChar(20), { nullable: false });
-      normalized.forEach((student) => {
-        table.rows.add(
-          student.StudentId,
-          student.BirthYear,
-          student.FirstName,
-          student.FullName,
-          student.Class
-        );
-      });
+      for (const student of normalized) {
+        const updateRequest = new sql.Request(transaction);
+        const updateResult = await updateRequest
+          .input('studentId', sql.NVarChar(20), student.StudentId)
+          .input('birthYear', sql.NVarChar(10), student.BirthYear)
+          .input('firstName', sql.NVarChar(100), student.FirstName)
+          .input('fullName', sql.NVarChar(200), student.FullName)
+          .input('class', sql.NVarChar(20), student.Class)
+          .query(
+            `UPDATE dbo.Students
+             SET BirthYear = @birthYear, FirstName = @firstName, FullName = @fullName, Class = @class
+             WHERE StudentId = @studentId`
+          );
 
-      await request.bulk(table);
+        if (!updateResult.rowsAffected?.[0]) {
+          await updateRequest.query(
+            `INSERT INTO dbo.Students (StudentId, BirthYear, FirstName, FullName, Class)
+             VALUES (@studentId, @birthYear, @firstName, @fullName, @class)`
+          );
+        }
+      }
 
-      await request.query(
-        `MERGE dbo.Students AS target
-         USING #IncomingStudents AS source
-         ON target.StudentId = source.StudentId
-         WHEN MATCHED THEN
-           UPDATE SET
-             BirthYear = source.BirthYear,
-             FirstName = source.FirstName,
-             FullName = source.FullName,
-             Class = source.Class
-         WHEN NOT MATCHED BY TARGET THEN
-           INSERT (StudentId, BirthYear, FirstName, FullName, Class)
-           VALUES (source.StudentId, source.BirthYear, source.FirstName, source.FullName, source.Class)
-         WHEN NOT MATCHED BY SOURCE THEN
-           DELETE;`
-      );
+      const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
+      for (const studentId of toDelete) {
+        await new sql.Request(transaction)
+          .input('deleteId', sql.NVarChar(20), studentId)
+          .query('DELETE FROM dbo.Students WHERE StudentId = @deleteId');
+      }
 
       await transaction.commit();
     } catch (error) {
+      context.log('astu upsert failed', { message: error.message });
       await transaction.rollback();
       throw error;
     }
@@ -179,6 +178,7 @@ module.exports = async function (context, req) {
       body: { ok: true }
     };
   } catch (error) {
+    context.log('astu request failed', { message: error.message });
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

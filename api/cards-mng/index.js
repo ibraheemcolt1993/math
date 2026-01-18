@@ -68,6 +68,20 @@ module.exports = async function (context, req) {
         .query('SELECT Week FROM Cards');
       const existingWeeks = new Set(existing.recordset.map((row) => row.Week));
       const incomingWeeks = new Set(normalized.map((card) => card.week));
+      const allowedPrereqs = new Set([...existingWeeks, ...incomingWeeks]);
+      const invalidPrereq = normalized.find(
+        (card) => card.prereqWeek != null && !allowedPrereqs.has(card.prereqWeek)
+      );
+
+      if (invalidPrereq) {
+        context.res = {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: { ok: false, error: 'INVALID_PREREQ_WEEK' }
+        };
+        await transaction.rollback();
+        return;
+      }
 
       for (const card of normalized) {
         const updateRequest = new sql.Request(transaction);
