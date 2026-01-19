@@ -25,6 +25,7 @@
         </div>
 
         <div class="row">
+          <button id="toolbarSave" class="btn btn-primary btn-sm" type="button">حفظ</button>
           <a class="btn btn-ghost btn-sm" href="/admin.html" aria-label="لوحة الإدارة">
             العودة للإدارة
           </a>
@@ -50,6 +51,15 @@
                 <input id="cardWeek" class="input ltr" />
               </div>
               <div class="field">
+                <label class="label">الصف</label>
+                <input id="cardClass" class="input" placeholder="مثال: الصف الرابع" />
+              </div>
+              <div class="field">
+                <label class="label">الشعب (يمكن اختيار أكثر من شعبة)</label>
+                <input id="cardSections" class="input" placeholder="مثال: أ، ب، ج" />
+                <div class="builder-helper">افصل بين الشعب بفاصلة.</div>
+              </div>
+              <div class="field">
                 <label class="label">عنوان البطاقة</label>
                 <input id="cardTitle" class="input" />
               </div>
@@ -71,14 +81,22 @@
 
         <div class="builder-block" data-context="goals">
           <div class="builder-block-header">
-            <h3 class="h3">الأهداف التعليمية</h3>
+            <div>
+              <h3 class="h3">ماذا سنتعلم اليوم</h3>
+              <p class="builder-helper">أضف أهداف الحصة بشكل عام.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="btnAddGoal">إضافة هدف</button>
           </div>
           <div id="goalsList" class="builder-sections"></div>
         </div>
 
         <div class="builder-block" data-context="prereqs">
           <div class="builder-block-header">
-            <h3 class="h3">المتطلبات السابقة</h3>
+            <div>
+              <h3 class="h3">المتطلبات السابقة</h3>
+              <p class="builder-helper">أضف اختبر نفسي للمهارات اللازمة قبل الدرس.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="btnAddPrereq">إضافة متطلب سابق</button>
           </div>
           <div id="prereqsList" class="builder-sections"></div>
         </div>
@@ -98,9 +116,18 @@
   </div>
 
   <div class="floating-actions">
+    <button id="floatingPreview" class="floating-preview" type="button">معاينة</button>
+    <button id="floatingApply" class="floating-apply" type="button">تطبيق</button>
     <button id="floatingSave" class="floating-save" type="button" aria-live="polite">تم الحفظ ✓</button>
     <button id="floatingAdd" class="floating-add" type="button" aria-label="إضافة">+</button>
     <div id="floatingMenu" class="floating-menu hidden" hidden></div>
+  </div>
+
+  <div id="builderLoading" class="loading-overlay hidden" hidden>
+    <div class="loading-panel" role="status" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <span>جاري تحميل بيانات البطاقة...</span>
+    </div>
   </div>
 
   <script type="module" src="/assets/js/card-builder.js"></script>

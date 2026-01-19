@@ -17,6 +17,13 @@ const ITEM_TYPES = [
   { value: 'video', label: 'فيديو يوتيوب' },
 ];
 
+const SECTION_TYPES = [
+  { value: 'goal', label: 'هدف' },
+  { value: 'prereq', label: 'متطلب سابق' },
+  { value: 'goals', label: 'أهداف البطاقة' },
+  { value: 'assessment', label: 'اختبر نفسي' },
+];
+
 const QUESTION_TYPES = [
   { value: 'mcq', label: 'اختيار من متعدد' },
   { value: 'true-false', label: 'صواب وخطأ' },
@@ -37,15 +44,23 @@ const AUTO_SAVE_TOAST_WINDOW = 8000;
 document.addEventListener('DOMContentLoaded', async () => {
   const sectionsList = document.getElementById('sectionsList');
   const inputWeek = document.getElementById('cardWeek');
+  const inputClass = document.getElementById('cardClass');
+  const inputSections = document.getElementById('cardSections');
   const inputTitle = document.getElementById('cardTitle');
   const inputPrereq = document.getElementById('cardPrereq');
   const inputAssessmentTitle = document.getElementById('assessmentTitle');
   const inputAssessmentDescription = document.getElementById('assessmentDescription');
   const goalsList = document.getElementById('goalsList');
   const prereqsList = document.getElementById('prereqsList');
+  const btnAddGoal = document.getElementById('btnAddGoal');
+  const btnAddPrereq = document.getElementById('btnAddPrereq');
+  const toolbarSave = document.getElementById('toolbarSave');
   const floatingSave = document.getElementById('floatingSave');
+  const floatingApply = document.getElementById('floatingApply');
+  const floatingPreview = document.getElementById('floatingPreview');
   const floatingAdd = document.getElementById('floatingAdd');
   const floatingMenu = document.getElementById('floatingMenu');
+  const builderLoading = document.getElementById('builderLoading');
 
   let saveState = 'saved';
   let saveTimer = null;
@@ -54,6 +69,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   let activeItemIndex = null;
   let isInitializing = true;
   let isNewCard = false;
+  let hasPendingChanges = false;
+  let isApplied = true;
 
   if (!localStorage.getItem(LS_ADMIN_SESSION)) {
     showToast('تنبيه', 'يجب تسجيل الدخول للإدارة أولًا', 'warning');
@@ -66,10 +83,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cardId = new URLSearchParams(window.location.search).get('id');
   if (!cardId) {
     showToast('خطأ', 'تعذر العثور على البطاقة المطلوبة', 'error');
+    setLoading(builderLoading, false);
     document.body.classList.remove('is-loading');
     return;
   }
 
+  setLoading(builderLoading, true, 'جاري تحميل بيانات البطاقة...');
   await loadCards();
   activeCard = cards.find((card) => card.id === cardId);
   if (!activeCard) {
@@ -80,8 +99,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         activeCard = {
           id: `week-${weekId}`,
           week: weekId,
-          title: 'بطاقة جديدة',
+          title: '',
           prereq: null,
+          className: '',
+          sections: [],
           form: {
             sections: [],
             goals: [],
@@ -98,6 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (!activeCard) {
     showToast('خطأ', 'هذه البطاقة غير موجودة', 'error');
+    setLoading(builderLoading, false);
     document.body.classList.remove('is-loading');
     return;
   }
@@ -105,24 +127,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   normalizeCard(activeCard);
 
   inputWeek.value = String(activeCard.week ?? '');
+  inputClass.value = String(activeCard.className ?? '');
+  inputSections.value = Array.isArray(activeCard.sections) ? activeCard.sections.join('، ') : '';
   inputTitle.value = String(activeCard.title ?? '');
   inputPrereq.value = activeCard.prereq == null ? '' : String(activeCard.prereq);
   inputAssessmentTitle.value = activeCard.form.assessment?.title || '';
   inputAssessmentDescription.value = activeCard.form.assessment?.description || '';
 
   document.body.classList.remove('is-loading');
+  setLoading(builderLoading, false);
 
   renderGoals();
   renderPrereqs();
   renderSections(sectionsList);
   setSaveState(isNewCard ? 'dirty' : 'saved');
+  if (isNewCard) {
+    hasPendingChanges = true;
+    isApplied = false;
+  }
   isInitializing = false;
+  updateSaveControls();
 
   inputWeek?.addEventListener('input', () => {
     if (!activeCard) return;
     const cleaned = normalizeDigits(inputWeek.value).replace(/[^0-9]/g, '');
     inputWeek.value = cleaned;
     activeCard.week = cleaned === '' ? null : Number(cleaned);
+    persistCards();
+  });
+
+  inputClass?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.className = inputClass.value.trim();
+    persistCards();
+  });
+
+  inputSections?.addEventListener('input', () => {
+    if (!activeCard) return;
+    activeCard.sections = splitInlineList(inputSections.value);
     persistCards();
   });
 
@@ -156,9 +198,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   goalsList?.addEventListener('click', (event) => handleGoalActions(event));
   prereqsList?.addEventListener('input', (event) => handlePrereqInput(event));
   prereqsList?.addEventListener('click', (event) => handlePrereqActions(event));
+  btnAddGoal?.addEventListener('click', () => addGoal());
+  btnAddPrereq?.addEventListener('click', () => addPrereq());
 
   floatingSave?.addEventListener('click', async () => {
     await manualSave();
+  });
+
+  toolbarSave?.addEventListener('click', async () => {
+    await manualSave();
+  });
+
+  floatingApply?.addEventListener('click', () => {
+    applyChanges();
+  });
+
+  floatingPreview?.addEventListener('click', () => {
+    previewCard();
   });
 
   floatingAdd?.addEventListener('click', () => {
@@ -235,6 +291,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       item[field] = target.value.trim();
     } else if (field === 'answer') {
       item.answer = target.value.trim();
+    } else if (field === 'points') {
+      item.points = target.value === '' ? 1 : Number(target.value);
     } else if (field === 'numeric-answer') {
       item.answer = target.value === '' ? null : Number(target.value);
     } else if (field === 'option') {
@@ -271,13 +329,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!Number.isFinite(sectionIndex)) return;
     const section = activeCard?.form.sections[sectionIndex];
     if (!section) return;
+
+    const field = target.dataset.field;
+    if (!field) return;
+
+    if (field === 'section-type') {
+      section.sectionType = target.value;
+      persistCards();
+      return;
+    }
+
+    if (field === 'section-goal') {
+      section.goalIndex = Number(target.value);
+      persistCards();
+      return;
+    }
+
     const itemIndex = Number(target.dataset.itemIndex);
     if (!Number.isFinite(itemIndex)) return;
     const item = section.items[itemIndex];
     if (!item) return;
-
-    const field = target.dataset.field;
-    if (!field) return;
 
     if (field === 'question-type') {
       const nextType = target.value;
@@ -506,6 +577,7 @@ function handleGoalInput(event) {
   if (!Number.isFinite(index) || !activeCard) return;
   activeCard.form.goals[index] = target.value.trim();
   persistCards();
+  renderSections(document.getElementById('sectionsList'));
 }
 
 function handleGoalActions(event) {
@@ -518,6 +590,7 @@ function handleGoalActions(event) {
   if (action === 'delete-goal') {
     activeCard.form.goals.splice(index, 1);
     renderGoals();
+    renderSections(document.getElementById('sectionsList'));
     persistCards();
   }
 
@@ -525,6 +598,7 @@ function handleGoalActions(event) {
     const value = activeCard.form.goals[index] || '';
     activeCard.form.goals.splice(index + 1, 0, value);
     renderGoals();
+    renderSections(document.getElementById('sectionsList'));
     persistCards();
   }
 }
@@ -592,6 +666,29 @@ function renderSections(container) {
       <div class="builder-section-header">
         <div class="builder-question-meta">
           <div class="field">
+            <label class="label">نوع القسم</label>
+            <select class="input" data-field="section-type" data-section-index="${sectionIndex}">
+              ${SECTION_TYPES.map(
+                (type) =>
+                  `<option value="${type.value}" ${type.value === section.sectionType ? 'selected' : ''}>${type.label}</option>`,
+              ).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label class="label">الهدف المرتبط</label>
+            <select class="input" data-field="section-goal" data-section-index="${sectionIndex}">
+              ${(activeCard.form.goals || []).length
+                ? activeCard.form.goals
+                  .map((goal, goalIndex) => `
+                    <option value="${goalIndex}" ${goalIndex === section.goalIndex ? 'selected' : ''}>
+                      ${escapeValue(goal || `الهدف ${goalIndex + 1}`)}
+                    </option>
+                  `)
+                  .join('')
+                : '<option value="0">أضف هدفًا أولًا</option>'}
+            </select>
+          </div>
+          <div class="field">
             <label class="label">عنوان القسم</label>
             <input class="input" data-scope="section" data-field="title" data-section-index="${sectionIndex}" value="${escapeValue(section.title)}" placeholder="مثال: مقدمة" />
           </div>
@@ -634,6 +731,10 @@ function renderSections(container) {
             <div class="field">
               <label class="label">وصف إضافي</label>
               <input class="input" data-field="description" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.description)}" placeholder="شرح أو تلميح" />
+            </div>
+            <div class="field">
+              <label class="label">نقاط السؤال</label>
+              <input class="input ltr" type="number" min="1" data-field="points" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.points ?? 1)}" />
             </div>
             <label class="row">
               <input type="checkbox" data-field="required" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" ${item.required ? 'checked' : ''} />
@@ -886,6 +987,8 @@ function normalizeCard(card) {
   if (!card.id) {
     card.id = card.week != null ? `week-${card.week}` : generateId('card');
   }
+  card.className = card.className || '';
+  card.sections = Array.isArray(card.sections) ? card.sections : [];
   if (!card.form || typeof card.form !== 'object') {
     card.form = {
       sections: [],
@@ -908,6 +1011,8 @@ function normalizeSection(section) {
   if (!section.id) section.id = generateId('section');
   if (!section.title) section.title = 'قسم جديد';
   if (!section.description) section.description = '';
+  section.sectionType = section.sectionType || 'goal';
+  section.goalIndex = Number.isFinite(section.goalIndex) ? section.goalIndex : 0;
   if (!Array.isArray(section.items)) {
     const legacyQuestions = Array.isArray(section.questions) ? section.questions : [];
     section.items = legacyQuestions.map((question) => ({
@@ -925,6 +1030,8 @@ function createSection() {
     id: generateId('section'),
     title: 'قسم جديد',
     description: '',
+    sectionType: 'goal',
+    goalIndex: 0,
     items: [],
   };
 }
@@ -952,6 +1059,7 @@ function createQuestionItem(questionType) {
       prompt: 'سؤال جديد',
       description: '',
       required: false,
+      points: 1,
     },
     questionType,
   );
@@ -967,6 +1075,7 @@ function applyQuestionType(question, questionType) {
     required: question.required ?? false,
     hints: Array.isArray(question.hints) ? question.hints : [],
     solution: question.solution,
+    points: Number.isFinite(question.points) ? Number(question.points) : 1,
   };
 
   if (questionType === 'true-false') {
@@ -1041,8 +1150,10 @@ function persistCards() {
 
 function markDirty() {
   if (!activeCard) return;
+  hasPendingChanges = true;
+  isApplied = false;
   setSaveState('dirty');
-  scheduleAutoSave();
+  updateSaveControls();
 }
 
 function scheduleAutoSave() {
@@ -1078,6 +1189,14 @@ async function autoSave() {
 
 async function manualSave() {
   if (!activeCard) return;
+  if (!isApplied) {
+    showToast('تنبيه', 'يرجى الضغط على تطبيق قبل الحفظ', 'warning');
+    return;
+  }
+  if (!hasPendingChanges) {
+    showToast('تنبيه', 'لا يوجد تغييرات جديدة للحفظ', 'info');
+    return;
+  }
   if (!activeCard.week || !String(activeCard.title || '').trim()) {
     showToast('تنبيه', 'يرجى إدخال رقم الأسبوع وعنوان البطاقة قبل الحفظ', 'warning');
     return;
@@ -1088,6 +1207,9 @@ async function manualSave() {
     await saveWeekToApi(activeCard);
     updateCardsCache(activeCard);
     setSaveState('saved');
+    hasPendingChanges = false;
+    isApplied = true;
+    updateSaveControls();
     showToast('تم الحفظ', 'تم حفظ نموذج البطاقة بنجاح', 'success');
   } catch (error) {
     setSaveState('dirty');
@@ -1109,11 +1231,9 @@ function setSaveState(state) {
 
   if (state === 'dirty') {
     floatingSave.classList.add('is-dirty');
-    floatingSave.textContent = 'يوجد تغييرات غير محفوظة ●';
-    return;
   }
 
-  floatingSave.textContent = 'تم الحفظ ✓';
+  updateSaveControls();
 }
 
 function toggleFloatingMenu() {
@@ -1135,6 +1255,54 @@ function hideFloatingMenu() {
   menu.setAttribute('hidden', 'hidden');
 }
 
+function applyChanges() {
+  if (!hasPendingChanges) {
+    showToast('تنبيه', 'لا يوجد تغييرات لتطبيقها', 'info');
+    return;
+  }
+  isApplied = true;
+  updateSaveControls();
+  showToast('تم التطبيق', 'أصبح بإمكانك حفظ التغييرات الآن', 'success');
+}
+
+function previewCard() {
+  if (!activeCard?.week) {
+    showToast('تنبيه', 'يرجى إدخال رقم الأسبوع قبل المعاينة', 'warning');
+    return;
+  }
+  window.open(`/lesson.html?week=${encodeURIComponent(activeCard.week)}`, '_blank');
+}
+
+function updateSaveControls() {
+  const floatingSave = document.getElementById('floatingSave');
+  const floatingApply = document.getElementById('floatingApply');
+  const toolbarSave = document.getElementById('toolbarSave');
+
+  const canSave = Boolean(isApplied && hasPendingChanges);
+  const disableSave = saveState === 'saving' || !canSave;
+
+  if (floatingSave) {
+    floatingSave.disabled = disableSave;
+    if (saveState === 'saving') {
+      floatingSave.textContent = 'جارٍ الحفظ... ⏳';
+    } else if (!hasPendingChanges) {
+      floatingSave.textContent = 'تم الحفظ ✓';
+    } else if (!isApplied) {
+      floatingSave.textContent = 'اضغط تطبيق قبل الحفظ';
+    } else {
+      floatingSave.textContent = 'جاهز للحفظ ✓';
+    }
+  }
+
+  if (floatingApply) {
+    floatingApply.disabled = !hasPendingChanges || saveState === 'saving';
+  }
+
+  if (toolbarSave) {
+    toolbarSave.disabled = disableSave;
+  }
+}
+
 function renderFloatingMenu() {
   const menu = document.getElementById('floatingMenu');
   if (!menu) return;
@@ -1143,7 +1311,10 @@ function renderFloatingMenu() {
   const items = [];
   if (context === 'card') {
     items.push(
-      { label: 'إضافة قسم جديد', action: () => addSection() },
+      { label: 'إضافة قسم (هدف)', action: () => addSection('goal') },
+      { label: 'إضافة قسم (متطلب سابق)', action: () => addSection('prereq') },
+      { label: 'إضافة قسم (أهداف البطاقة)', action: () => addSection('goals') },
+      { label: 'إضافة قسم (اختبر نفسي)', action: () => addSection('assessment') },
       { label: 'إضافة هدف تعليمي', action: () => addGoal() },
       { label: 'إضافة متطلب سابق', action: () => addPrereq() },
     );
@@ -1187,9 +1358,11 @@ function renderFloatingMenu() {
   });
 }
 
-function addSection() {
+function addSection(sectionType = 'goal') {
   if (!activeCard) return;
-  activeCard.form.sections.push(createSection());
+  const nextSection = createSection();
+  nextSection.sectionType = sectionType;
+  activeCard.form.sections.push(nextSection);
   renderSections(document.getElementById('sectionsList'));
   persistCards();
   focusLastSectionTitle();
@@ -1285,12 +1458,19 @@ function buildWeekPayload(card) {
     ? card.form.prerequisites
     : [];
 
-  const concepts = card.form.sections.map((section) => ({
+  const sections = Array.isArray(card.form.sections) ? card.form.sections : [];
+  const assessmentSections = sections.filter((section) => section.sectionType === 'assessment');
+  const conceptSections = sections.filter((section) => section.sectionType !== 'assessment');
+
+  const concepts = conceptSections.map((section) => ({
     title: section.title || 'قسم',
     flow: section.items.map((item) => mapItemToFlow(item)),
+    sectionType: section.sectionType || 'goal',
+    goalIndex: Number.isFinite(section.goalIndex) ? section.goalIndex : 0,
   }));
 
-  const assessmentQuestions = card.form.sections.flatMap((section) =>
+  const assessmentSource = assessmentSections.length ? assessmentSections : sections;
+  const assessmentQuestions = assessmentSource.flatMap((section) =>
     section.items
       .filter((item) => item.type === 'question')
       .map((item) => mapQuestionToAssessment(item)),
@@ -1300,6 +1480,8 @@ function buildWeekPayload(card) {
     week: Number(card.week),
     title: String(card.title || '').trim(),
     prereq: card.prereq == null ? null : Number(card.prereq),
+    className: String(card.className || ''),
+    sections: Array.isArray(card.sections) ? card.sections : [],
     goals,
     prerequisites,
     concepts,
@@ -1380,7 +1562,7 @@ function mapQuestionToAssessment(question) {
       text: question.prompt || 'سؤال',
       choices: Array.isArray(question.options) ? question.options : [],
       correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
-      points: 1,
+      points: Number.isFinite(question.points) ? Number(question.points) : 1,
     };
   }
 
@@ -1390,7 +1572,7 @@ function mapQuestionToAssessment(question) {
       text: question.prompt || 'سؤال',
       choices: ['صواب', 'خطأ'],
       correctIndex: question.answer === 'false' ? 1 : 0,
-      points: 1,
+      points: Number.isFinite(question.points) ? Number(question.points) : 1,
     };
   }
 
@@ -1398,7 +1580,7 @@ function mapQuestionToAssessment(question) {
     type: 'input',
     text: question.prompt || 'سؤال',
     answer: question.answer == null ? '' : String(question.answer),
-    points: 1,
+    points: Number.isFinite(question.points) ? Number(question.points) : 1,
   };
 }
 
@@ -1414,6 +1596,13 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
+function splitInlineList(value) {
+  return String(value || '')
+    .split(/[,،]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function updateCardsCache(card) {
   const stored = readLocalJson(LS_ADMIN_CARDS);
   const list = Array.isArray(stored) ? stored : [];
@@ -1423,6 +1612,8 @@ function updateCardsCache(card) {
     week: card.week,
     title: card.title,
     prereq: card.prereq,
+    className: card.className,
+    sections: Array.isArray(card.sections) ? card.sections : [],
   };
 
   if (index === -1) {
@@ -1454,12 +1645,19 @@ function buildWeekPayload(card) {
     ? card.form.prerequisites
     : [];
 
-  const concepts = card.form.sections.map((section) => ({
+  const sections = Array.isArray(card.form.sections) ? card.form.sections : [];
+  const assessmentSections = sections.filter((section) => section.sectionType === 'assessment');
+  const conceptSections = sections.filter((section) => section.sectionType !== 'assessment');
+
+  const concepts = conceptSections.map((section) => ({
     title: section.title || 'قسم',
     flow: section.items.map((item) => mapItemToFlow(item)),
+    sectionType: section.sectionType || 'goal',
+    goalIndex: Number.isFinite(section.goalIndex) ? section.goalIndex : 0,
   }));
 
-  const assessmentQuestions = card.form.sections.flatMap((section) =>
+  const assessmentSource = assessmentSections.length ? assessmentSections : sections;
+  const assessmentQuestions = assessmentSource.flatMap((section) =>
     section.items
       .filter((item) => item.type === 'question')
       .map((item) => mapQuestionToAssessment(item)),
@@ -1469,6 +1667,8 @@ function buildWeekPayload(card) {
     week: Number(card.week),
     title: String(card.title || '').trim(),
     prereq: card.prereq == null ? null : Number(card.prereq),
+    className: String(card.className || ''),
+    sections: Array.isArray(card.sections) ? card.sections : [],
     goals,
     prerequisites,
     concepts,
@@ -1486,6 +1686,9 @@ function mapItemToFlow(item) {
       type: item.type || 'note',
       text: item.text || '',
     };
+    if (item.url) {
+      mapped.url = item.url;
+    }
     if (Array.isArray(item.details) && item.details.length) {
       mapped.details = item.details;
     }
@@ -1546,7 +1749,7 @@ function mapQuestionToAssessment(question) {
       text: question.prompt || 'سؤال',
       choices: Array.isArray(question.options) ? question.options : [],
       correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
-      points: 1,
+      points: Number.isFinite(question.points) ? Number(question.points) : 1,
     };
   }
 
@@ -1556,7 +1759,7 @@ function mapQuestionToAssessment(question) {
       text: question.prompt || 'سؤال',
       choices: ['صواب', 'خطأ'],
       correctIndex: question.answer === 'false' ? 1 : 0,
-      points: 1,
+      points: Number.isFinite(question.points) ? Number(question.points) : 1,
     };
   }
 
@@ -1564,7 +1767,7 @@ function mapQuestionToAssessment(question) {
     type: 'input',
     text: question.prompt || 'سؤال',
     answer: question.answer == null ? '' : String(question.answer),
-    points: 1,
+    points: Number.isFinite(question.points) ? Number(question.points) : 1,
   };
 }
 
@@ -1584,6 +1787,8 @@ function updateCardsCache(card) {
     week: card.week,
     title: card.title,
     prereq: card.prereq,
+    className: card.className,
+    sections: Array.isArray(card.sections) ? card.sections : [],
   };
 
   if (index === -1) {
@@ -1603,6 +1808,16 @@ function readLocalJson(key) {
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
+  }
+}
+
+function setLoading(overlay, isVisible, message) {
+  if (!overlay) return;
+  overlay.classList.toggle('hidden', !isVisible);
+  overlay.toggleAttribute('hidden', !isVisible);
+  if (message) {
+    const text = overlay.querySelector('span:last-child');
+    if (text) text.textContent = message;
   }
 }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { getPool, sql } = require('./db');
 
 const app = express();
@@ -26,6 +27,17 @@ app.use(
 
 app.use(express.json());
 app.use(express.static(path.resolve(__dirname, '..', '..')));
+
+function createPasswordHash(password, salt) {
+  return crypto
+    .createHash('sha256')
+    .update(`${salt}:${password}`)
+    .digest('hex');
+}
+
+function createSalt() {
+  return crypto.randomBytes(16).toString('hex');
+}
 
 app.get('/api/health', async (req, res, next) => {
   try {
@@ -58,6 +70,101 @@ app.get('/api/cards', async (req, res, next) => {
         'SELECT Week AS week, Title AS title, PrereqWeek AS prereq FROM Cards ORDER BY Week'
       );
     res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/login', async (req, res, next) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '').trim();
+
+    if (!username || !password) {
+      return res.status(400).json({ ok: false, error: 'Missing admin credentials.' });
+    }
+
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('username', sql.NVarChar(80), username)
+      .query(
+        `SELECT AdminId, Username, PasswordHash, PasswordSalt, IsActive
+         FROM AdminUsers
+         WHERE Username = @username`
+      );
+
+    if (!result.recordset.length) {
+      return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
+    }
+
+    const admin = result.recordset[0];
+    if (admin.IsActive === false || admin.IsActive === 0) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
+    }
+
+    const expected = createPasswordHash(password, admin.PasswordSalt);
+    if (expected !== admin.PasswordHash) {
+      return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
+    }
+
+    res.json({ ok: true, user: { username: admin.Username } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/password', async (req, res, next) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const currentPassword = String(req.body?.currentPassword || '').trim();
+    const newPassword = String(req.body?.newPassword || '').trim();
+
+    if (!username || !currentPassword || !newPassword) {
+      return res.status(400).json({ ok: false, error: 'Missing password payload.' });
+    }
+
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('username', sql.NVarChar(80), username)
+      .query(
+        `SELECT AdminId, Username, PasswordHash, PasswordSalt, IsActive
+         FROM AdminUsers
+         WHERE Username = @username`
+      );
+
+    if (!result.recordset.length) {
+      return res.status(404).json({ ok: false, error: 'ADMIN_NOT_FOUND' });
+    }
+
+    const admin = result.recordset[0];
+    if (admin.IsActive === false || admin.IsActive === 0) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
+    }
+
+    const expected = createPasswordHash(currentPassword, admin.PasswordSalt);
+    if (expected !== admin.PasswordHash) {
+      return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
+    }
+
+    const nextSalt = createSalt();
+    const nextHash = createPasswordHash(newPassword, nextSalt);
+
+    await pool
+      .request()
+      .input('adminId', sql.Int, admin.AdminId)
+      .input('passwordHash', sql.NVarChar(128), nextHash)
+      .input('passwordSalt', sql.NVarChar(64), nextSalt)
+      .query(
+        `UPDATE AdminUsers
+         SET PasswordHash = @passwordHash,
+             PasswordSalt = @passwordSalt,
+             UpdatedAt = SYSUTCDATETIME()
+         WHERE AdminId = @adminId`
+      );
+
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
