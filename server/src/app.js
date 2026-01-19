@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { getPool, sql } = require('./db');
 
 const app = express();
@@ -28,6 +29,9 @@ app.use(
 app.use(express.json());
 app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));
 
+const adminJwtSecret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'dev-admin-secret';
+const adminJwtOptions = { expiresIn: '8h' };
+
 function createPasswordHash(password, salt) {
   return crypto
     .createHash('sha256')
@@ -37,6 +41,27 @@ function createPasswordHash(password, salt) {
 
 function createSalt() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+  return authHeader.slice('Bearer '.length).trim();
+}
+
+function requireAdminToken(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    return res.status(401).json({ ok: false, error: 'ADMIN_AUTH_REQUIRED' });
+  }
+
+  try {
+    const payload = jwt.verify(token, adminJwtSecret);
+    req.admin = payload;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ ok: false, error: 'ADMIN_AUTH_INVALID' });
+  }
 }
 
 app.get('/api/health', async (req, res, next) => {
@@ -108,11 +133,20 @@ app.post('/api/admin/login', async (req, res, next) => {
       return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
     }
 
-    res.json({ ok: true, user: { username: admin.Username } });
+    const token = jwt.sign(
+      { adminId: admin.AdminId, username: admin.Username },
+      adminJwtSecret,
+      adminJwtOptions
+    );
+    res.json({ ok: true, user: { username: admin.Username }, token });
   } catch (error) {
     next(error);
   }
 });
+
+app.use('/api/astu', requireAdminToken);
+app.use('/api/cards-mng', requireAdminToken);
+app.use('/api/admin/password', requireAdminToken);
 
 app.put('/api/admin/password', async (req, res, next) => {
   try {
@@ -120,14 +154,21 @@ app.put('/api/admin/password', async (req, res, next) => {
     const currentPassword = String(req.body?.currentPassword || '').trim();
     const newPassword = String(req.body?.newPassword || '').trim();
 
-    if (!username || !currentPassword || !newPassword) {
+    const tokenUsername = req.admin?.username ? String(req.admin.username) : '';
+    const effectiveUsername = username || tokenUsername;
+
+    if (!effectiveUsername || !currentPassword || !newPassword) {
       return res.status(400).json({ ok: false, error: 'Missing password payload.' });
+    }
+
+    if (tokenUsername && username && tokenUsername !== username) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_AUTH_MISMATCH' });
     }
 
     const pool = await getPool();
     const result = await pool
       .request()
-      .input('username', sql.NVarChar(80), username)
+      .input('username', sql.NVarChar(80), effectiveUsername)
       .query(
         `SELECT AdminId, Username, PasswordHash, PasswordSalt, IsActive
          FROM AdminUsers

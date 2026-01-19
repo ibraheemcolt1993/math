@@ -58,11 +58,14 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       setLoading(adminLoading, true, 'جاري التحقق من بيانات الدخول...');
       const result = await loginAdmin(user, pass);
-      if (!result) {
-        showToast('بيانات غير صحيحة', 'تأكد من بيانات الدخول', 'error');
+      if (!result?.ok || !result.token) {
+        showToast('تعذر تسجيل الدخول', 'تأكد من بيانات الدخول واتصال الخادم', 'error');
         return;
       }
-      localStorage.setItem(LS_ADMIN_SESSION, JSON.stringify({ user, at: new Date().toISOString() }));
+      localStorage.setItem(
+        LS_ADMIN_SESSION,
+        JSON.stringify({ user, token: result.token || null, at: new Date().toISOString() })
+      );
       showAdmin();
       showToast('مرحبًا', 'تم تسجيل الدخول بنجاح', 'success');
     } catch (error) {
@@ -299,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function isLoggedIn() {
-  return Boolean(localStorage.getItem(LS_ADMIN_SESSION));
+  return Boolean(getAdminToken());
 }
 
 function loadData() {
@@ -462,6 +465,18 @@ function formatAdminErrorMessage(error, fallback) {
     return 'لم يتم العثور على حساب الإدارة.';
   }
 
+  if (message === 'ADMIN_AUTH_REQUIRED') {
+    return 'يلزم تسجيل الدخول للوصول إلى لوحة الإدارة.';
+  }
+
+  if (message === 'ADMIN_AUTH_INVALID') {
+    return 'جلسة الإدارة غير صالحة. يرجى تسجيل الدخول من جديد.';
+  }
+
+  if (message === 'ADMIN_AUTH_MISMATCH') {
+    return 'لا يمكن تحديث كلمة السر لهذا المستخدم.';
+  }
+
   return message;
 }
 
@@ -514,6 +529,7 @@ async function loadStudentsFromApi() {
       headers: {
         'Cache-Control': 'no-store',
         Pragma: 'no-cache',
+        ...getAdminAuthHeaders(),
       },
     });
 
@@ -569,6 +585,7 @@ async function saveStudentsToApi(studentsArray) {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        ...getAdminAuthHeaders(),
       },
       body: JSON.stringify(payload),
     });
@@ -607,6 +624,7 @@ async function loadCardsFromApi() {
       headers: {
         'Cache-Control': 'no-store',
         Pragma: 'no-cache',
+        ...getAdminAuthHeaders(),
       },
     });
 
@@ -673,6 +691,7 @@ async function saveCardsToApi(cardsArray) {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        ...getAdminAuthHeaders(),
       },
       body: JSON.stringify(payload),
     });
@@ -727,17 +746,17 @@ async function loginAdmin(username, password) {
     });
 
     if (res.status === 404) {
-      return username === 'admin' && password === 'Aa@232323445566';
+      return { ok: false, token: null };
     }
 
     const payload = await res.json().catch(() => null);
     if (!res.ok || payload?.ok === false) {
-      return false;
+      return { ok: false, token: null };
     }
-    return true;
+    return { ok: true, token: payload?.token || null };
   } catch (error) {
     if (isNetworkError(error)) {
-      return username === 'admin' && password === 'Aa@232323445566';
+      return { ok: false, token: null };
     }
     throw error;
   }
@@ -746,7 +765,7 @@ async function loginAdmin(username, password) {
 async function changeAdminPassword(username, currentPassword, newPassword) {
   const res = await fetch(ADMIN_PASSWORD_API, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAdminAuthHeaders() },
     body: JSON.stringify({ username, currentPassword, newPassword }),
   });
 
@@ -781,5 +800,21 @@ function setLoading(overlay, isVisible, message) {
   if (message) {
     const text = overlay.querySelector('span:last-child');
     if (text) text.textContent = message;
+  }
+}
+
+function getAdminAuthHeaders() {
+  const token = getAdminToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function getAdminToken() {
+  try {
+    const raw = localStorage.getItem(LS_ADMIN_SESSION);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.token || null;
+  } catch {
+    return null;
   }
 }
