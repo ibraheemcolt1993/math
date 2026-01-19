@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
           students = cached.map(normalizeStudent);
         }
         renderStudents(studentsTable);
-        await refreshStudents({ silent: Boolean(cached) });
+        await refreshStudents({ silent: Boolean(cached), showStatus: true });
         renderStudents(studentsTable);
       }
 
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
           cards = cachedCards.map(normalizeCard);
         }
         renderCards(cardsList);
-        await refreshCards({ silent: Boolean(cachedCards) });
+        await refreshCards({ silent: Boolean(cachedCards), showStatus: true });
         renderCards(cardsList);
       }
     });
@@ -114,10 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveStudents.disabled = true;
     btnSaveStudents.textContent = 'جارٍ الحفظ...';
     try {
+      showToast('جارٍ الحفظ', 'جاري حفظ بيانات الطلاب', 'info');
       await saveStudents();
       showToast('تم الحفظ', 'تم حفظ بيانات الطلاب في قاعدة البيانات', 'success');
     } catch (error) {
-      showToast('خطأ', error.message || 'تعذر حفظ بيانات الطلاب', 'error');
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر حفظ بيانات الطلاب'), 'error');
     } finally {
       btnSaveStudents.disabled = false;
       btnSaveStudents.textContent = original || 'حفظ الآن';
@@ -146,10 +147,11 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveCards.disabled = true;
     btnSaveCards.textContent = 'جارٍ الحفظ...';
     try {
+      showToast('جارٍ الحفظ', 'جاري حفظ بيانات البطاقات', 'info');
       await saveCards();
       showToast('تم الحفظ', 'تم حفظ بيانات البطاقات في قاعدة البيانات', 'success');
     } catch (error) {
-      showToast('خطأ', error.message || 'تعذر حفظ بيانات البطاقات', 'error');
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر حفظ بيانات البطاقات'), 'error');
     } finally {
       btnSaveCards.disabled = false;
       btnSaveCards.textContent = original || 'حفظ الآن';
@@ -244,10 +246,10 @@ async function showAdmin() {
     renderStudents(studentsTable);
     renderCards(cardsList);
 
-    refreshStudents({ silent: hasCachedStudents })
+    refreshStudents({ silent: hasCachedStudents, showStatus: true })
       .then(() => renderStudents(studentsTable))
       .catch(() => {});
-    refreshCards({ silent: hasCachedCards })
+    refreshCards({ silent: hasCachedCards, showStatus: true })
       .then(() => renderCards(cardsList))
       .catch(() => {});
   }
@@ -287,10 +289,16 @@ function loadData() {
   };
 }
 
-async function refreshStudents({ silent = false } = {}) {
+async function refreshStudents({ silent = false, showStatus = false } = {}) {
+  if (showStatus) {
+    showToast('جاري التحميل', 'جاري تحميل بيانات الطلاب', 'info');
+  }
   try {
     students = await loadStudentsFromApi();
     localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
+    if (showStatus) {
+      showToast('تم التحميل', 'تم تحميل بيانات الطلاب بنجاح', 'success');
+    }
   } catch (error) {
     if (!silent) {
       if (isNetworkError(error)) {
@@ -298,16 +306,22 @@ async function refreshStudents({ silent = false } = {}) {
         return;
       }
 
-      showToast('خطأ', error.message || 'تعذر تحميل بيانات الطلاب', 'error');
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تحميل بيانات الطلاب'), 'error');
     }
     students = [];
   }
 }
 
-async function refreshCards({ silent = false } = {}) {
+async function refreshCards({ silent = false, showStatus = false } = {}) {
+  if (showStatus) {
+    showToast('جاري التحميل', 'جاري تحميل بيانات البطاقات', 'info');
+  }
   try {
     cards = await loadCardsFromApi();
     localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
+    if (showStatus) {
+      showToast('تم التحميل', 'تم تحميل بيانات البطاقات بنجاح', 'success');
+    }
   } catch (error) {
     if (!silent) {
       if (isNetworkError(error)) {
@@ -315,7 +329,7 @@ async function refreshCards({ silent = false } = {}) {
         return;
       }
 
-      showToast('خطأ', error.message || 'تعذر تحميل بيانات البطاقات', 'error');
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تحميل بيانات البطاقات'), 'error');
     }
     cards = [];
   }
@@ -388,6 +402,28 @@ function escapeValue(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function formatAdminErrorMessage(error, fallback) {
+  const message = String(error?.message || fallback);
+
+  if (message === 'DUPLICATE_STUDENT_ID') {
+    return 'يوجد تكرار في رقم الهوية. يرجى التأكد من عدم تكرار رقم الطالب.';
+  }
+
+  if (message === 'BAD_REQUEST') {
+    return 'يرجى تعبئة جميع حقول البيانات قبل الحفظ.';
+  }
+
+  if (message === 'INVALID_PREREQ_WEEK') {
+    return 'رقم المتطلب السابق غير صالح. تأكد من أن الأسبوع موجود.';
+  }
+
+  if (message === 'DB_ERROR') {
+    return 'تعذر الاتصال بقاعدة البيانات. يرجى المحاولة لاحقًا.';
+  }
+
+  return message;
 }
 
 async function saveStudents() {
