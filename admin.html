@@ -73,6 +73,30 @@
           </div>
 
           <div class="card-body">
+            <div class="admin-security">
+              <div>
+                <h3 class="h3">إدارة الحساب</h3>
+                <p class="p">يمكنك تغيير كلمة السر من هنا.</p>
+              </div>
+              <div class="builder-meta">
+                <div class="field">
+                  <label class="label" for="adminOldPass">كلمة السر القديمة</label>
+                  <input id="adminOldPass" type="password" class="input ltr" autocomplete="current-password" />
+                </div>
+                <div class="field">
+                  <label class="label" for="adminNewPass">كلمة السر الجديدة</label>
+                  <input id="adminNewPass" type="password" class="input ltr" autocomplete="new-password" />
+                </div>
+                <div class="field">
+                  <label class="label" for="adminNewPassConfirm">تأكيد كلمة السر الجديدة</label>
+                  <input id="adminNewPassConfirm" type="password" class="input ltr" autocomplete="new-password" />
+                </div>
+              </div>
+              <div class="row">
+                <button id="btnAdminChangePassword" class="btn btn-primary btn-sm" type="button">تحديث كلمة السر</button>
+              </div>
+            </div>
+
             <div class="admin-tabs">
               <button class="btn btn-outline is-active" type="button" data-tab="students">بيانات الطلاب</button>
               <button class="btn btn-outline" type="button" data-tab="cards">بيانات البطاقات</button>
@@ -129,6 +153,13 @@
     <footer class="container section center">
       <p class="small">© math — لوحة الإدارة</p>
     </footer>
+  </div>
+
+  <div id="adminLoading" class="loading-overlay hidden" hidden>
+    <div class="loading-panel" role="status" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <span>جاري تحميل البيانات...</span>
+    </div>
   </div>
 
   <script type="module" src="/assets/js/admin.js"></script>

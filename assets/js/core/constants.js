@@ -29,6 +29,8 @@ export const API_PATHS = {
   PROGRESS_COMPLETED: '/api/progress/completed',
   PROGRESS_COMPLETE: '/api/progress/complete',
   ADMIN_STUDENTS: '/api/astu',
+  ADMIN_LOGIN: '/api/admin/login',
+  ADMIN_PASSWORD: '/api/admin/password',
 };
 
 // Lesson / Engine
