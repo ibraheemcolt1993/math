@@ -9,9 +9,12 @@ const CARDS_PATH = '/api/cards-mng';
 const ITEM_TYPES = [
   { value: 'question', label: 'سؤال' },
   { value: 'example', label: 'مثال' },
+  { value: 'non-example', label: 'لا مثال' },
   { value: 'explain', label: 'شرح' },
   { value: 'note', label: 'ملاحظة' },
   { value: 'goal', label: 'هدف' },
+  { value: 'image', label: 'صورة' },
+  { value: 'video', label: 'فيديو يوتيوب' },
 ];
 
 const QUESTION_TYPES = [
@@ -30,15 +33,23 @@ let dragState = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const sectionsList = document.getElementById('sectionsList');
-  const btnAddSection = document.getElementById('btnAddSection');
-  const btnSaveBuilder = document.getElementById('btnSaveBuilder');
   const inputWeek = document.getElementById('cardWeek');
   const inputTitle = document.getElementById('cardTitle');
   const inputPrereq = document.getElementById('cardPrereq');
-  const inputGoals = document.getElementById('cardGoals');
-  const inputPrerequisites = document.getElementById('cardPrerequisites');
   const inputAssessmentTitle = document.getElementById('assessmentTitle');
   const inputAssessmentDescription = document.getElementById('assessmentDescription');
+  const goalsList = document.getElementById('goalsList');
+  const prereqsList = document.getElementById('prereqsList');
+  const floatingSave = document.getElementById('floatingSave');
+  const floatingAdd = document.getElementById('floatingAdd');
+  const floatingMenu = document.getElementById('floatingMenu');
+
+  let saveState = 'saved';
+  let saveTimer = null;
+  let activeContext = 'card';
+  let activeSectionIndex = null;
+  let activeItemIndex = null;
+  let isInitializing = true;
 
   if (!localStorage.getItem(LS_ADMIN_SESSION)) {
     showToast('تنبيه', 'يجب تسجيل الدخول للإدارة أولًا', 'warning');
@@ -91,38 +102,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   inputWeek.value = String(activeCard.week ?? '');
   inputTitle.value = String(activeCard.title ?? '');
   inputPrereq.value = activeCard.prereq == null ? '' : String(activeCard.prereq);
-  inputGoals.value = (activeCard.form.goals || []).join('\n');
-  inputPrerequisites.value = (activeCard.form.prerequisites || []).join('\n');
   inputAssessmentTitle.value = activeCard.form.assessment?.title || '';
   inputAssessmentDescription.value = activeCard.form.assessment?.description || '';
 
   document.body.classList.remove('is-loading');
 
+  renderGoals();
+  renderPrereqs();
   renderSections(sectionsList);
-
-  btnAddSection?.addEventListener('click', () => {
-    activeCard.form.sections.push(createSection());
-    renderSections(sectionsList);
-    persistCards();
-  });
-
-  btnSaveBuilder?.addEventListener('click', async () => {
-    if (!btnSaveBuilder) return;
-    const original = btnSaveBuilder.textContent;
-    btnSaveBuilder.disabled = true;
-    btnSaveBuilder.textContent = 'جارٍ الحفظ...';
-    try {
-      persistCards();
-      await saveWeekToApi(activeCard);
-      updateCardsCache(activeCard);
-      showToast('تم الحفظ', 'تم حفظ نموذج البطاقة بنجاح', 'success');
-    } catch (error) {
-      showToast('خطأ', error.message || 'تعذر حفظ نموذج البطاقة', 'error');
-    } finally {
-      btnSaveBuilder.disabled = false;
-      btnSaveBuilder.textContent = original || 'حفظ النموذج';
-    }
-  });
+  setSaveState('saved');
+  isInitializing = false;
 
   inputWeek?.addEventListener('input', () => {
     if (!activeCard) return;
@@ -146,18 +135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     persistCards();
   });
 
-  inputGoals?.addEventListener('input', () => {
-    if (!activeCard) return;
-    activeCard.form.goals = splitLines(inputGoals.value);
-    persistCards();
-  });
-
-  inputPrerequisites?.addEventListener('input', () => {
-    if (!activeCard) return;
-    activeCard.form.prerequisites = splitLines(inputPrerequisites.value);
-    persistCards();
-  });
-
   inputAssessmentTitle?.addEventListener('input', () => {
     if (!activeCard) return;
     activeCard.form.assessment.title = inputAssessmentTitle.value.trim();
@@ -168,6 +145,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!activeCard) return;
     activeCard.form.assessment.description = inputAssessmentDescription.value.trim();
     persistCards();
+  });
+
+  goalsList?.addEventListener('input', (event) => handleGoalInput(event));
+  goalsList?.addEventListener('click', (event) => handleGoalActions(event));
+  prereqsList?.addEventListener('input', (event) => handlePrereqInput(event));
+  prereqsList?.addEventListener('click', (event) => handlePrereqActions(event));
+
+  floatingSave?.addEventListener('click', async () => {
+    await manualSave();
+  });
+
+  floatingAdd?.addEventListener('click', () => {
+    toggleFloatingMenu();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!floatingMenu || floatingMenu.classList.contains('hidden')) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.closest('#floatingMenu') || target.closest('#floatingAdd')) return;
+    hideFloatingMenu();
+  });
+
+  document.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const contextEl = target.closest('[data-context]');
+    if (contextEl) {
+      activeContext = contextEl.getAttribute('data-context') || 'card';
+    }
+    const sectionIndex = target.closest('[data-section-index]')?.getAttribute('data-section-index');
+    const itemIndex = target.closest('[data-item-index]')?.getAttribute('data-item-index');
+    activeSectionIndex = sectionIndex != null ? Number(sectionIndex) : null;
+    activeItemIndex = itemIndex != null ? Number(itemIndex) : null;
   });
 
   sectionsList?.addEventListener('input', (event) => handleInput(event, sectionsList));
@@ -206,6 +217,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (item.type !== 'question') {
       if (field === 'text') {
         item.text = target.value.trim();
+      } else if (field === 'url') {
+        item.url = target.value.trim();
       } else if (field === 'details') {
         item.details = splitLines(target.value);
       }
@@ -306,10 +319,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (action === 'add-item') {
-      const typeSelect = target.previousElementSibling;
-      const itemType = typeSelect instanceof HTMLSelectElement ? typeSelect.value : 'question';
-      section.items.push(createItem(itemType));
+    if (action === 'duplicate-section') {
+      const cloned = cloneData(section);
+      cloned.id = generateId('section');
+      activeCard.form.sections.splice(sectionIndex + 1, 0, cloned);
       renderSections(container);
       persistCards();
       return;
@@ -322,6 +335,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (action === 'delete-item') {
       section.items.splice(itemIndex, 1);
+      renderSections(container);
+      persistCards();
+      return;
+    }
+
+    if (action === 'duplicate-item') {
+      const cloned = cloneData(item);
+      cloned.id = generateId(item.type === 'question' ? 'question' : 'item');
+      section.items.splice(itemIndex + 1, 0, cloned);
+      renderSections(container);
+      persistCards();
+      return;
+    }
+
+    if (action === 'toggle-item') {
+      item.isCollapsed = !item.isCollapsed;
       renderSections(container);
       persistCards();
       return;
@@ -413,6 +442,118 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+function renderGoals() {
+  const list = document.getElementById('goalsList');
+  if (!list || !activeCard) return;
+  list.innerHTML = '';
+
+  (activeCard.form.goals || []).forEach((goal, index) => {
+    const el = document.createElement('div');
+    el.className = 'builder-question';
+    el.innerHTML = `
+      <div class="builder-question-header">
+        <div class="builder-question-meta">
+          <div class="field">
+            <label class="label">هدف تعليمي</label>
+            <input class="input" data-scope="goal" data-index="${index}" value="${escapeValue(goal)}" placeholder="اكتب الهدف هنا" />
+          </div>
+        </div>
+        <div class="builder-card-actions">
+          <button class="btn btn-ghost btn-sm" type="button" data-action="duplicate-goal" data-index="${index}">تكرار</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-goal" data-index="${index}">حذف</button>
+        </div>
+      </div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function renderPrereqs() {
+  const list = document.getElementById('prereqsList');
+  if (!list || !activeCard) return;
+  list.innerHTML = '';
+
+  (activeCard.form.prerequisites || []).forEach((prereq, index) => {
+    const el = document.createElement('div');
+    el.className = 'builder-question';
+    el.innerHTML = `
+      <div class="builder-question-header">
+        <div class="builder-question-meta">
+          <div class="field">
+            <label class="label">متطلب سابق</label>
+            <input class="input" data-scope="prereq" data-index="${index}" value="${escapeValue(prereq)}" placeholder="اكتب المتطلب هنا" />
+          </div>
+        </div>
+        <div class="builder-card-actions">
+          <button class="btn btn-ghost btn-sm" type="button" data-action="duplicate-prereq" data-index="${index}">تكرار</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-prereq" data-index="${index}">حذف</button>
+        </div>
+      </div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function handleGoalInput(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const index = Number(target.dataset.index);
+  if (!Number.isFinite(index) || !activeCard) return;
+  activeCard.form.goals[index] = target.value.trim();
+  persistCards();
+}
+
+function handleGoalActions(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) return;
+  const action = target.dataset.action;
+  const index = Number(target.dataset.index);
+  if (!Number.isFinite(index) || !activeCard) return;
+
+  if (action === 'delete-goal') {
+    activeCard.form.goals.splice(index, 1);
+    renderGoals();
+    persistCards();
+  }
+
+  if (action === 'duplicate-goal') {
+    const value = activeCard.form.goals[index] || '';
+    activeCard.form.goals.splice(index + 1, 0, value);
+    renderGoals();
+    persistCards();
+  }
+}
+
+function handlePrereqInput(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const index = Number(target.dataset.index);
+  if (!Number.isFinite(index) || !activeCard) return;
+  activeCard.form.prerequisites[index] = target.value.trim();
+  persistCards();
+}
+
+function handlePrereqActions(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) return;
+  const action = target.dataset.action;
+  const index = Number(target.dataset.index);
+  if (!Number.isFinite(index) || !activeCard) return;
+
+  if (action === 'delete-prereq') {
+    activeCard.form.prerequisites.splice(index, 1);
+    renderPrereqs();
+    persistCards();
+  }
+
+  if (action === 'duplicate-prereq') {
+    const value = activeCard.form.prerequisites[index] || '';
+    activeCard.form.prerequisites.splice(index + 1, 0, value);
+    renderPrereqs();
+    persistCards();
+  }
+}
+
 async function loadCards() {
   const stored = readLocalJson(LS_ADMIN_CARDS);
   if (stored && Array.isArray(stored)) {
@@ -452,12 +593,9 @@ function renderSections(container) {
             <input class="input" data-scope="section" data-field="description" data-section-index="${sectionIndex}" value="${escapeValue(section.description)}" placeholder="نص إرشادي للقسم" />
           </div>
         </div>
-        <div class="builder-section-actions">
-          <select class="input" aria-label="نوع السؤال">
-            ${ITEM_TYPES.map((type) => `<option value="${type.value}">${type.label}</option>`).join('')}
-          </select>
-          <button class="btn btn-primary btn-sm" type="button" data-action="add-item" data-section-index="${sectionIndex}">إضافة عنصر</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-section" data-section-index="${sectionIndex}">حذف القسم</button>
+        <div class="builder-card-actions">
+          <button class="btn btn-ghost btn-sm" type="button" data-action="duplicate-section" data-section-index="${sectionIndex}">تكرار</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-section" data-section-index="${sectionIndex}">حذف</button>
         </div>
       </div>
     `;
@@ -467,7 +605,7 @@ function renderSections(container) {
 
     section.items.forEach((item, itemIndex) => {
       const itemEl = document.createElement('div');
-      itemEl.className = 'builder-question';
+      itemEl.className = `builder-question ${item.isCollapsed ? 'builder-collapsed' : ''}`;
       itemEl.innerHTML = `
         <div class="builder-question-header">
           <div class="builder-question-meta">
@@ -497,16 +635,35 @@ function renderSections(container) {
             `
               : `
             <div class="field">
+              <label class="label">نوع العنصر</label>
+              <input class="input" value="${escapeValue(getItemLabel(item.type))}" disabled />
+            </div>
+            ${item.type === 'image' || item.type === 'video'
+              ? `
+            <div class="field">
+              <label class="label">${item.type === 'image' ? 'رابط الصورة' : 'رابط يوتيوب'}</label>
+              <input class="input ltr" data-field="url" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" value="${escapeValue(item.url ?? '')}" placeholder="${item.type === 'image' ? 'https://...' : 'https://youtube.com/...'}" />
+            </div>
+            `
+              : `
+            <div class="field">
               <label class="label">نص العنصر</label>
               <textarea class="input" data-field="text" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="اكتب النص هنا">${escapeValue(item.text ?? '')}</textarea>
             </div>
+            `}
             <div class="field">
               <label class="label">تفاصيل إضافية</label>
               <textarea class="input" rows="2" data-field="details" data-section-index="${sectionIndex}" data-item-index="${itemIndex}" placeholder="كل تفصيل في سطر">${escapeValue((item.details || []).join('\n'))}</textarea>
             </div>
             `}
           </div>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">حذف العنصر</button>
+          <div class="builder-card-actions">
+            <button class="btn btn-ghost btn-sm" type="button" data-action="toggle-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">
+              ${item.isCollapsed ? 'فتح' : 'طي'}
+            </button>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="duplicate-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">تكرار</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="delete-item" data-section-index="${sectionIndex}" data-item-index="${itemIndex}">حذف</button>
+          </div>
         </div>
         ${item.type === 'question' ? renderQuestionBody(item, sectionIndex, itemIndex) : ''}
       `;
@@ -774,6 +931,7 @@ function createItem(type) {
     id: generateId('item'),
     type,
     text: '',
+    url: type === 'image' || type === 'video' ? '' : undefined,
     details: [],
   };
 }
@@ -857,6 +1015,9 @@ function applyItemDefaults(item) {
   item.id = item.id || generateId('item');
   item.type = item.type || 'note';
   item.text = item.text ?? '';
+  if (item.type === 'image' || item.type === 'video') {
+    item.url = item.url ?? '';
+  }
   item.details = Array.isArray(item.details) ? item.details : [];
 }
 
@@ -866,6 +1027,396 @@ function persistCards() {
   } catch {
     showToast('خطأ', 'تعذر حفظ بيانات البطاقات في المتصفح', 'error');
   }
+  if (!isInitializing) {
+    markDirty();
+  }
+}
+
+function markDirty() {
+  if (!activeCard) return;
+  setSaveState('dirty');
+  scheduleAutoSave();
+}
+
+function scheduleAutoSave() {
+  if (saveTimer) window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(async () => {
+    await autoSave();
+  }, 1500);
+}
+
+async function autoSave() {
+  if (saveState === 'saving') return;
+  if (!activeCard?.week || !String(activeCard.title || '').trim()) {
+    return;
+  }
+  try {
+    setSaveState('saving');
+    await saveWeekToApi(activeCard);
+    updateCardsCache(activeCard);
+    setSaveState('saved');
+  } catch (error) {
+    setSaveState('dirty');
+  }
+}
+
+async function manualSave() {
+  if (!activeCard) return;
+  if (!activeCard.week || !String(activeCard.title || '').trim()) {
+    showToast('تنبيه', 'يرجى إدخال رقم الأسبوع وعنوان البطاقة قبل الحفظ', 'warning');
+    return;
+  }
+  try {
+    setSaveState('saving');
+    await saveWeekToApi(activeCard);
+    updateCardsCache(activeCard);
+    setSaveState('saved');
+    showToast('تم الحفظ', 'تم حفظ نموذج البطاقة بنجاح', 'success');
+  } catch (error) {
+    setSaveState('dirty');
+    showToast('خطأ', error.message || 'تعذر حفظ نموذج البطاقة', 'error');
+  }
+}
+
+function setSaveState(state) {
+  saveState = state;
+  const floatingSave = document.getElementById('floatingSave');
+  if (!floatingSave) return;
+  floatingSave.classList.remove('is-dirty', 'is-saving');
+
+  if (state === 'saving') {
+    floatingSave.classList.add('is-saving');
+    floatingSave.textContent = 'جارٍ الحفظ... ⏳';
+    return;
+  }
+
+  if (state === 'dirty') {
+    floatingSave.classList.add('is-dirty');
+    floatingSave.textContent = 'يوجد تغييرات غير محفوظة ●';
+    return;
+  }
+
+  floatingSave.textContent = 'تم الحفظ ✓';
+}
+
+function toggleFloatingMenu() {
+  const menu = document.getElementById('floatingMenu');
+  if (!menu) return;
+  if (!menu.classList.contains('hidden')) {
+    hideFloatingMenu();
+    return;
+  }
+  renderFloatingMenu();
+  menu.classList.remove('hidden');
+  menu.removeAttribute('hidden');
+}
+
+function hideFloatingMenu() {
+  const menu = document.getElementById('floatingMenu');
+  if (!menu) return;
+  menu.classList.add('hidden');
+  menu.setAttribute('hidden', 'hidden');
+}
+
+function renderFloatingMenu() {
+  const menu = document.getElementById('floatingMenu');
+  if (!menu) return;
+  const context = activeContext || 'card';
+
+  const items = [];
+  if (context === 'card') {
+    items.push(
+      { label: 'إضافة قسم جديد', action: () => addSection() },
+      { label: 'إضافة هدف تعليمي', action: () => addGoal() },
+      { label: 'إضافة متطلب سابق', action: () => addPrereq() },
+    );
+  }
+
+  if (context === 'goals') {
+    items.push({ label: 'إضافة هدف تعليمي', action: () => addGoal() });
+  }
+
+  if (context === 'prereqs') {
+    items.push({ label: 'إضافة متطلب سابق', action: () => addPrereq() });
+  }
+
+  if (context === 'concepts') {
+    items.push(
+      { label: 'إضافة مفهوم', action: () => addItemToSection('note') },
+      { label: 'إضافة مثال', action: () => addItemToSection('example') },
+      { label: 'إضافة لا مثال', action: () => addItemToSection('non-example') },
+      { label: 'إضافة توضيح', action: () => addItemToSection('explain') },
+      { label: 'إضافة سؤال (اختيار من متعدد)', action: () => addQuestionToSection('mcq') },
+      { label: 'إضافة سؤال (صح/خطأ)', action: () => addQuestionToSection('true-false') },
+      { label: 'إضافة سؤال (إدخال نص)', action: () => addQuestionToSection('short-text') },
+      { label: 'إضافة سؤال (توصيل)', action: () => addQuestionToSection('matching') },
+      { label: 'إضافة سؤال (ترتيب)', action: () => addQuestionToSection('ordering') },
+      { label: 'إضافة صورة', action: () => addItemToSection('image') },
+      { label: 'إضافة فيديو يوتيوب', action: () => addItemToSection('video') },
+    );
+  }
+
+  menu.innerHTML = items
+    .map((item, index) => `<button type="button" data-menu-index="${index}">${item.label}</button>`)
+    .join('');
+
+  menu.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const index = Number(btn.dataset.menuIndex);
+      const action = items[index]?.action;
+      if (action) action();
+      hideFloatingMenu();
+    });
+  });
+}
+
+function addSection() {
+  if (!activeCard) return;
+  activeCard.form.sections.push(createSection());
+  renderSections(document.getElementById('sectionsList'));
+  persistCards();
+  focusLastSectionTitle();
+}
+
+function addGoal() {
+  if (!activeCard) return;
+  activeCard.form.goals.push('');
+  renderGoals();
+  persistCards();
+  focusLastGoal();
+}
+
+function addPrereq() {
+  if (!activeCard) return;
+  activeCard.form.prerequisites.push('');
+  renderPrereqs();
+  persistCards();
+  focusLastPrereq();
+}
+
+function addItemToSection(type) {
+  if (!activeCard) return;
+  const index = Number.isFinite(activeSectionIndex) ? activeSectionIndex : 0;
+  if (!activeCard.form.sections[index]) {
+    activeCard.form.sections.push(createSection());
+  }
+  activeCard.form.sections[index].items.push(createItem(type));
+  renderSections(document.getElementById('sectionsList'));
+  persistCards();
+  focusLastItem(index);
+}
+
+function addQuestionToSection(questionType) {
+  if (!activeCard) return;
+  const index = Number.isFinite(activeSectionIndex) ? activeSectionIndex : 0;
+  if (!activeCard.form.sections[index]) {
+    activeCard.form.sections.push(createSection());
+  }
+  activeCard.form.sections[index].items.push(createQuestionItem(questionType));
+  renderSections(document.getElementById('sectionsList'));
+  persistCards();
+  focusLastItem(index);
+}
+
+function focusLastSectionTitle() {
+  const inputs = document.querySelectorAll('[data-scope="section"][data-field="title"]');
+  const input = inputs[inputs.length - 1];
+  if (input instanceof HTMLInputElement) input.focus();
+}
+
+function focusLastItem(sectionIndex) {
+  const items = document.querySelectorAll(`[data-section-index="${sectionIndex}"][data-item-index]`);
+  const input = items[items.length - 1];
+  if (input instanceof HTMLElement) input.focus();
+}
+
+function focusLastGoal() {
+  const inputs = document.querySelectorAll('[data-scope="goal"]');
+  const input = inputs[inputs.length - 1];
+  if (input instanceof HTMLInputElement) input.focus();
+}
+
+function focusLastPrereq() {
+  const inputs = document.querySelectorAll('[data-scope="prereq"]');
+  const input = inputs[inputs.length - 1];
+  if (input instanceof HTMLInputElement) input.focus();
+}
+
+function cloneData(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
+}
+
+async function saveWeekToApi(card) {
+  if (!card?.week) {
+    throw new Error('رقم الأسبوع مطلوب قبل الحفظ');
+  }
+
+  const payload = buildWeekPayload(card);
+  await fetchJson(`/api/weeks/${encodeURIComponent(card.week)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+function buildWeekPayload(card) {
+  const goals = Array.isArray(card.form.goals) ? card.form.goals : [];
+  const prerequisites = Array.isArray(card.form.prerequisites)
+    ? card.form.prerequisites
+    : [];
+
+  const concepts = card.form.sections.map((section) => ({
+    title: section.title || 'قسم',
+    flow: section.items.map((item) => mapItemToFlow(item)),
+  }));
+
+  const assessmentQuestions = card.form.sections.flatMap((section) =>
+    section.items
+      .filter((item) => item.type === 'question')
+      .map((item) => mapQuestionToAssessment(item)),
+  );
+
+  return {
+    week: Number(card.week),
+    title: String(card.title || '').trim(),
+    prereq: card.prereq == null ? null : Number(card.prereq),
+    goals,
+    prerequisites,
+    concepts,
+    assessment: {
+      title: card.form.assessment?.title || `تقييم الأسبوع ${card.week}`,
+      description: card.form.assessment?.description || '',
+      questions: assessmentQuestions,
+    },
+  };
+}
+
+function mapItemToFlow(item) {
+  if (item.type !== 'question') {
+    const mapped = {
+      type: item.type || 'note',
+      text: item.text || '',
+    };
+    if (item.url) {
+      mapped.url = item.url;
+    }
+    if (Array.isArray(item.details) && item.details.length) {
+      mapped.details = item.details;
+    }
+    return mapped;
+  }
+
+  return mapQuestionToFlow(item);
+}
+
+function mapQuestionToFlow(question) {
+  const base = {
+    type: 'question',
+    text: question.prompt || 'سؤال',
+    title: question.description || '',
+  };
+
+  if (question.questionType === 'mcq') {
+    return {
+      ...base,
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  if (question.questionType === 'true-false') {
+    return {
+      ...base,
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  if (question.questionType === 'number') {
+    return {
+      ...base,
+      answer: question.answer == null ? '' : String(question.answer),
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  return {
+    ...base,
+    answer: question.answer ?? '',
+    ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+    ...(question.solution ? { solution: question.solution } : {}),
+  };
+}
+
+function mapQuestionToAssessment(question) {
+  if (question.questionType === 'mcq') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      points: 1,
+    };
+  }
+
+  if (question.questionType === 'true-false') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+      points: 1,
+    };
+  }
+
+  return {
+    type: 'input',
+    text: question.prompt || 'سؤال',
+    answer: question.answer == null ? '' : String(question.answer),
+    points: 1,
+  };
+}
+
+function getItemLabel(type) {
+  const found = ITEM_TYPES.find((item) => item.value === type);
+  return found?.label || 'عنصر';
+}
+
+function splitLines(value) {
+  return String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function updateCardsCache(card) {
+  const stored = readLocalJson(LS_ADMIN_CARDS);
+  const list = Array.isArray(stored) ? stored : [];
+  const index = list.findIndex((item) => String(item.id) === String(card.id));
+  const normalized = {
+    ...card,
+    week: card.week,
+    title: card.title,
+    prereq: card.prereq,
+  };
+
+  if (index === -1) {
+    list.unshift(normalized);
+  } else {
+    list[index] = normalized;
+  }
+
+  try {
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(list));
+  } catch {}
 }
 
 async function saveWeekToApi(card) {

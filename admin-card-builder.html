@@ -44,7 +44,7 @@
           </div>
 
           <div class="card-body">
-            <div class="builder-meta">
+            <div class="builder-meta" data-context="card">
               <div class="field">
                 <label class="label">رقم الأسبوع</label>
                 <input id="cardWeek" class="input ltr" />
@@ -58,14 +58,6 @@
                 <input id="cardPrereq" class="input ltr" placeholder="مثال: 999" />
               </div>
               <div class="field">
-                <label class="label">أهداف البطاقة</label>
-                <textarea id="cardGoals" class="input" rows="3" placeholder="كل هدف في سطر"></textarea>
-              </div>
-              <div class="field">
-                <label class="label">المتطلبات السابقة</label>
-                <textarea id="cardPrerequisites" class="input" rows="3" placeholder="كل متطلب في سطر"></textarea>
-              </div>
-              <div class="field">
                 <label class="label">عنوان التقييم</label>
                 <input id="assessmentTitle" class="input" placeholder="مثال: تقييم الأسبوع" />
               </div>
@@ -74,21 +66,41 @@
                 <textarea id="assessmentDescription" class="input" rows="2" placeholder="وصف مختصر للتقييم"></textarea>
               </div>
             </div>
-
-            <div class="builder-actions">
-              <button id="btnSaveBuilder" class="btn btn-primary btn-sm" type="button">حفظ النموذج</button>
-              <button id="btnAddSection" class="btn btn-ghost btn-sm" type="button">إضافة قسم جديد</button>
-            </div>
           </div>
         </div>
 
-        <div id="sectionsList" class="builder-sections"></div>
+        <div class="builder-block" data-context="goals">
+          <div class="builder-block-header">
+            <h3 class="h3">الأهداف التعليمية</h3>
+          </div>
+          <div id="goalsList" class="builder-sections"></div>
+        </div>
+
+        <div class="builder-block" data-context="prereqs">
+          <div class="builder-block-header">
+            <h3 class="h3">المتطلبات السابقة</h3>
+          </div>
+          <div id="prereqsList" class="builder-sections"></div>
+        </div>
+
+        <div class="builder-block" data-context="concepts">
+          <div class="builder-block-header">
+            <h3 class="h3">المفاهيم والأنشطة</h3>
+          </div>
+          <div id="sectionsList" class="builder-sections"></div>
+        </div>
       </section>
     </main>
 
     <footer class="container section center">
       <p class="small">© math — مصمم بطاقات الأسئلة</p>
     </footer>
+  </div>
+
+  <div class="floating-actions">
+    <button id="floatingSave" class="floating-save" type="button" aria-live="polite">تم الحفظ ✓</button>
+    <button id="floatingAdd" class="floating-add" type="button" aria-label="إضافة">+</button>
+    <div id="floatingMenu" class="floating-menu hidden" hidden></div>
   </div>
 
   <script type="module" src="/assets/js/card-builder.js"></script>

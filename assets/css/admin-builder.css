@@ -15,6 +15,18 @@
   margin-top: 16px;
 }
 
+.builder-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.builder-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .builder-sections {
   display: flex;
   flex-direction: column;
@@ -51,6 +63,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
 }
 
 .builder-question-header {
@@ -59,6 +72,25 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.builder-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.builder-question:hover .builder-card-actions,
+.builder-question:focus-within .builder-card-actions,
+.builder-section:hover .builder-card-actions,
+.builder-section:focus-within .builder-card-actions {
+  opacity: 1;
+}
+
+.builder-card-handle {
+  cursor: grab;
 }
 
 .builder-question-meta {
@@ -130,4 +162,83 @@
 .builder-helper {
   font-size: 12px;
   color: var(--muted);
+}
+
+.floating-actions {
+  position: fixed;
+  inset: auto 16px 16px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.floating-save,
+.floating-add {
+  pointer-events: auto;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+.floating-save {
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 18px;
+  border: none;
+  font-size: 13px;
+}
+
+.floating-save.is-dirty {
+  background: #f59e0b;
+}
+
+.floating-save.is-saving {
+  background: #64748b;
+}
+
+.floating-add {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  font-size: 22px;
+}
+
+.floating-menu {
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  min-width: 220px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.floating-menu button {
+  border: none;
+  background: transparent;
+  text-align: right;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.floating-menu button:hover {
+  background: var(--surface-2);
+}
+
+.builder-collapsed .builder-question-meta,
+.builder-collapsed .builder-question-options,
+.builder-collapsed .builder-pairs,
+.builder-collapsed .builder-order,
+.builder-collapsed .field,
+.builder-collapsed .builder-helper {
+  display: none;
 }
