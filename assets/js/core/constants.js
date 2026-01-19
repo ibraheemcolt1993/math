@@ -9,6 +9,9 @@ export const APP_NAME = 'math';
 export const STORAGE_KEYS = {
   LAST_STUDENT_ID: 'math:lastStudentId',
   STUDENTS: 'math:students', // root object for all students progress
+  STUDENT_SESSION: 'math:studentSession',
+  CACHED_CARDS: 'math:cardsCache',
+  STUDENT_COMPLETIONS: 'math:studentCompletions',
 };
 
 // Data paths
@@ -22,6 +25,10 @@ export const DATA_PATHS = {
 export const API_PATHS = {
   CARDS: '/api/cards',
   ADMIN_CARDS: '/api/cards-mng',
+  STUDENT_LOGIN: '/api/students/login',
+  PROGRESS_COMPLETED: '/api/progress/completed',
+  PROGRESS_COMPLETE: '/api/progress/complete',
+  ADMIN_STUDENTS: '/api/astu',
 };
 
 // Lesson / Engine
@@ -44,5 +51,5 @@ export const PROGRESS = {
 
 // Helpers
 export function weekJsonPath(week) {
-  return `${DATA_PATHS.WEEKS_DIR}/${week}`;
+  return `/api/weeks/${week}`;
 }

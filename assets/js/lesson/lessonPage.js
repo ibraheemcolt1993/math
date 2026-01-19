@@ -9,11 +9,10 @@
 import { getWeekParam, goHome } from '../core/router.js';
 import { fetchJson } from '../core/api.js';
 import { weekJsonPath } from '../core/constants.js';
-import { getLastStudentId } from '../core/storage.js';
+import { getLastStudentId, getStudentSession } from '../core/storage.js';
 import { showToast } from '../ui/toast.js';
 import { initEngine } from './engine.js';
 
-const LS_CURRENT_STUDENT = 'math:currentStudent';
 
 export async function initLessonPage() {
   const week = getWeekParam();
@@ -30,7 +29,7 @@ export async function initLessonPage() {
     return;
   }
 
-  const student = readCurrentStudent();
+  const student = getStudentSession();
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
@@ -67,14 +66,5 @@ export async function initLessonPage() {
     console.error(e);
     titleEl.textContent = 'خطأ في تحميل البطاقة';
     showToast('خطأ', 'تعذر تحميل بيانات الدرس', 'error');
-  }
-}
-
-function readCurrentStudent() {
-  try {
-    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
   }
 }

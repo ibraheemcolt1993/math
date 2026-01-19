@@ -1,5 +1,35 @@
 const { getPool, sql } = require('../_shared/db');
 
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+
+  return String(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
 function parseBody(req) {
   if (req.body && typeof req.body === 'object') {
     return req.body;
@@ -28,7 +58,10 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const studentId = typeof payload.studentId === 'string' ? payload.studentId.trim() : '';
+    const studentId =
+      typeof payload.studentId === 'string'
+        ? normalizeDigits(payload.studentId).trim()
+        : '';
     const week = Number(payload.week);
     const finalScore = Number(payload.finalScore);
 
@@ -64,7 +97,7 @@ module.exports = async function (context, req) {
     const studentResult = await dbPool
       .request()
       .input('studentId', sql.NVarChar(20), studentId)
-      .query('SELECT StudentId FROM Students WHERE StudentId = @studentId');
+      .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
 
     if (!studentResult.recordset.length) {
       context.res = {
@@ -78,7 +111,7 @@ module.exports = async function (context, req) {
     const weekResult = await dbPool
       .request()
       .input('week', sql.Int, week)
-      .query('SELECT Week FROM Weeks WHERE Week = @week');
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
 
     if (!weekResult.recordset.length) {
       context.res = {
@@ -95,21 +128,21 @@ module.exports = async function (context, req) {
       .input('week', sql.Int, week)
       .input('finalScore', sql.Int, finalScore)
       .query(
-        `IF EXISTS (SELECT 1 FROM CardCompletions WHERE StudentId = @studentId AND Week = @week)
+        `IF EXISTS (SELECT 1 FROM dbo.CardCompletions WHERE StudentId = @studentId AND Week = @week)
          BEGIN
-           UPDATE CardCompletions
+           UPDATE dbo.CardCompletions
            SET FinalScore = @finalScore,
                CompletedAt = GETDATE()
            WHERE StudentId = @studentId AND Week = @week;
          END
          ELSE
          BEGIN
-           INSERT INTO CardCompletions (StudentId, Week, FinalScore)
+           INSERT INTO dbo.CardCompletions (StudentId, Week, FinalScore)
            VALUES (@studentId, @week, @finalScore);
          END
 
          SELECT StudentId, Week, FinalScore, CompletedAt
-         FROM CardCompletions
+         FROM dbo.CardCompletions
          WHERE StudentId = @studentId AND Week = @week;`
       );
 
