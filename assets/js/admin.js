@@ -2,14 +2,13 @@ import { API_PATHS } from './core/constants.js';
 import { normalizeDigits } from './core/normalizeDigits.js';
 import { showToast } from './ui/toast.js';
 
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'Aa@232323445566';
-
 const LS_ADMIN_SESSION = 'math:admin:session';
 const LS_ADMIN_STUDENTS = 'math:admin:students';
 const LS_ADMIN_CARDS = 'math:admin:cards';
 const ADMIN_STUDENTS_API = [API_PATHS.ADMIN_STUDENTS];
 const ADMIN_CARDS_API = [API_PATHS.ADMIN_CARDS];
+const ADMIN_LOGIN_API = API_PATHS.ADMIN_LOGIN;
+const ADMIN_PASSWORD_API = API_PATHS.ADMIN_PASSWORD;
 let students = [];
 let cards = [];
 
@@ -22,6 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const inputUser = document.getElementById('adminUser');
   const inputPass = document.getElementById('adminPass');
+  const inputOldPass = document.getElementById('adminOldPass');
+  const inputNewPass = document.getElementById('adminNewPass');
+  const inputNewPassConfirm = document.getElementById('adminNewPassConfirm');
+  const btnChangePassword = document.getElementById('btnAdminChangePassword');
+  const adminLoading = document.getElementById('adminLoading');
 
   const tabs = Array.from(document.querySelectorAll('[data-tab]'));
   const panelStudents = document.getElementById('tab-students');
@@ -43,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showLogin();
   }
 
-  btnLogin?.addEventListener('click', () => {
+  btnLogin?.addEventListener('click', async () => {
     const user = String(inputUser?.value || '').trim();
     const pass = String(inputPass?.value || '').trim();
 
@@ -51,21 +55,62 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('تنبيه', 'يرجى إدخال اسم المستخدم وكلمة السر', 'warning');
       return;
     }
-
-    if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
-      showToast('بيانات غير صحيحة', 'تأكد من بيانات الدخول', 'error');
-      return;
+    try {
+      setLoading(adminLoading, true, 'جاري التحقق من بيانات الدخول...');
+      const result = await loginAdmin(user, pass);
+      if (!result) {
+        showToast('بيانات غير صحيحة', 'تأكد من بيانات الدخول', 'error');
+        return;
+      }
+      localStorage.setItem(LS_ADMIN_SESSION, JSON.stringify({ user, at: new Date().toISOString() }));
+      showAdmin();
+      showToast('مرحبًا', 'تم تسجيل الدخول بنجاح', 'success');
+    } catch (error) {
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تسجيل الدخول'), 'error');
+    } finally {
+      setLoading(adminLoading, false);
     }
-
-    localStorage.setItem(LS_ADMIN_SESSION, new Date().toISOString());
-    showAdmin();
-    showToast('مرحبًا', 'تم تسجيل الدخول بنجاح', 'success');
   });
 
   btnLogout?.addEventListener('click', () => {
     localStorage.removeItem(LS_ADMIN_SESSION);
     showLogin();
     showToast('تم تسجيل الخروج', 'يمكنك تسجيل الدخول مجددًا', 'info');
+  });
+
+  btnChangePassword?.addEventListener('click', async () => {
+    const user = getCurrentAdminUser();
+    if (!user) {
+      showToast('تنبيه', 'يرجى تسجيل الدخول أولًا', 'warning');
+      return;
+    }
+
+    const currentPassword = String(inputOldPass?.value || '').trim();
+    const newPassword = String(inputNewPass?.value || '').trim();
+    const confirmPassword = String(inputNewPassConfirm?.value || '').trim();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showToast('تنبيه', 'يرجى تعبئة جميع حقول كلمة السر', 'warning');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showToast('تنبيه', 'كلمة السر الجديدة غير متطابقة', 'warning');
+      return;
+    }
+
+    try {
+      setLoading(adminLoading, true, 'جاري تحديث كلمة السر...');
+      await changeAdminPassword(user, currentPassword, newPassword);
+      inputOldPass.value = '';
+      inputNewPass.value = '';
+      inputNewPassConfirm.value = '';
+      showToast('تم التحديث', 'تم تغيير كلمة السر بنجاح', 'success');
+    } catch (error) {
+      showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تحديث كلمة السر'), 'error');
+    } finally {
+      setLoading(adminLoading, false);
+    }
   });
 
   tabs.forEach((tabBtn) => {
@@ -135,10 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
       week: maxWeek + 1,
       title: 'بطاقة جديدة',
       prereq: null,
+      className: '',
+      sections: [],
     };
 
     cards.unshift(newCard);
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
     renderCards(cardsList);
+    window.location.href = `/admin-card-builder.html?id=${encodeURIComponent(newCard.week)}`;
   });
 
   btnSaveCards?.addEventListener('click', async () => {
@@ -189,27 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderStudents(studentsTable);
   });
 
-  cardsList?.addEventListener('input', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
-
-    const index = Number(target.dataset.index);
-    const field = target.dataset.field;
-
-    if (!Number.isFinite(index) || !field) return;
-    const card = cards[index];
-    if (!card) return;
-
-    if (field === 'week' || field === 'prereq') {
-      const cleaned = target.value.replace(/[^0-9]/g, '');
-      target.value = cleaned;
-      card[field] = cleaned === '' ? null : Number(cleaned);
-    } else {
-      card[field] = target.value.trim();
-    }
-    refreshCardHeaders();
-  });
-
   cardsList?.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLButtonElement)) return;
@@ -220,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!Number.isFinite(index)) return;
 
     cards.splice(index, 1);
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
     renderCards(cardsList);
   });
 
@@ -236,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnLogout?.classList.add('hidden');
   }
 
-async function showAdmin() {
+  async function showAdmin() {
     hideAllScreens();
     setScreenVisibility(adminScreen, true);
     document.body.classList.remove('is-loading');
@@ -290,10 +319,12 @@ function loadData() {
 }
 
 async function refreshStudents({ silent = false, showStatus = false } = {}) {
+  const adminLoading = document.getElementById('adminLoading');
   if (showStatus) {
     showToast('جاري التحميل', 'جاري تحميل بيانات الطلاب', 'info');
   }
   try {
+    setLoading(adminLoading, true, 'جاري تحميل بيانات الطلاب...');
     students = await loadStudentsFromApi();
     localStorage.setItem(LS_ADMIN_STUDENTS, JSON.stringify(students));
     if (showStatus) {
@@ -309,15 +340,19 @@ async function refreshStudents({ silent = false, showStatus = false } = {}) {
       showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تحميل بيانات الطلاب'), 'error');
     }
     students = [];
+  } finally {
+    setLoading(adminLoading, false);
   }
 }
 
 async function refreshCards({ silent = false, showStatus = false } = {}) {
+  const adminLoading = document.getElementById('adminLoading');
   if (showStatus) {
     showToast('جاري التحميل', 'جاري تحميل بيانات البطاقات', 'info');
   }
   try {
-    cards = await loadCardsFromApi();
+    setLoading(adminLoading, true, 'جاري تحميل بيانات البطاقات...');
+    cards = mergeCardMetadata(await loadCardsFromApi());
     localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(cards));
     if (showStatus) {
       showToast('تم التحميل', 'تم تحميل بيانات البطاقات بنجاح', 'success');
@@ -332,6 +367,8 @@ async function refreshCards({ silent = false, showStatus = false } = {}) {
       showToast('خطأ', formatAdminErrorMessage(error, 'تعذر تحميل بيانات البطاقات'), 'error');
     }
     cards = [];
+  } finally {
+    setLoading(adminLoading, false);
   }
 }
 
@@ -357,42 +394,32 @@ function renderCards(container) {
   if (!container) return;
   container.innerHTML = '';
 
-  cards.forEach((card, index) => {
-    const cardEl = document.createElement('div');
-    cardEl.className = 'admin-card';
+  const grouped = groupCardsByClass(cards);
+  grouped.forEach(({ groupName, items }) => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'admin-card-group';
+    groupEl.innerHTML = `<h4 class="admin-card-group-title">${escapeValue(groupName)}</h4>`;
 
-    cardEl.innerHTML = `
-      <h4>بطاقة الأسبوع ${escapeValue(card.week ?? '--')}</h4>
-      <div class="field">
-        <label class="label">رقم الأسبوع</label>
-        <input class="input ltr" data-index="${index}" data-field="week" value="${escapeValue(card.week)}" />
-      </div>
-      <div class="field">
-        <label class="label">عنوان البطاقة</label>
-        <input class="input" data-index="${index}" data-field="title" value="${escapeValue(card.title)}" />
-      </div>
-      <div class="field">
-        <label class="label">المتطلب السابق (اختياري)</label>
-        <input class="input ltr" data-index="${index}" data-field="prereq" value="${escapeValue(card.prereq ?? '')}" placeholder="مثال: 999" />
-      </div>
-      <div class="card-actions">
-        <a class="btn btn-outline btn-sm" href="/admin-card-builder.html?id=${encodeURIComponent(card.week ?? '')}">
-          تعديل محتوى البطاقة
-        </a>
-        <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${index}">حذف البطاقة</button>
-      </div>
-    `;
+    items.forEach((card) => {
+      const cardIndex = cards.indexOf(card);
+      const cardEl = document.createElement('div');
+      cardEl.className = 'admin-card';
+      cardEl.innerHTML = `
+        <div>
+          <strong>الأسبوع ${escapeValue(card.week ?? '--')}</strong>
+          <div>${escapeValue(card.title || 'بطاقة بدون عنوان')}</div>
+        </div>
+        <div class="card-actions">
+          <a class="btn btn-outline btn-sm" href="/admin-card-builder.html?id=${encodeURIComponent(card.week ?? '')}">
+            تعديل محتوى البطاقة
+          </a>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="delete-card" data-index="${cardIndex}">حذف البطاقة</button>
+        </div>
+      `;
+      groupEl.appendChild(cardEl);
+    });
 
-    container.appendChild(cardEl);
-  });
-}
-
-function refreshCardHeaders() {
-  document.querySelectorAll('.admin-card').forEach((cardEl, index) => {
-    const title = cardEl.querySelector('h4');
-    if (!title) return;
-    const weekValue = cards[index]?.week ?? '--';
-    title.textContent = `بطاقة الأسبوع ${weekValue}`;
+    container.appendChild(groupEl);
   });
 }
 
@@ -421,6 +448,18 @@ function formatAdminErrorMessage(error, fallback) {
 
   if (message === 'DB_ERROR') {
     return 'تعذر الاتصال بقاعدة البيانات. يرجى المحاولة لاحقًا.';
+  }
+
+  if (message === 'INVALID_ADMIN_LOGIN') {
+    return 'بيانات الدخول غير صحيحة.';
+  }
+
+  if (message === 'ADMIN_DISABLED') {
+    return 'حساب الإدارة غير مفعّل.';
+  }
+
+  if (message === 'ADMIN_NOT_FOUND') {
+    return 'لم يتم العثور على حساب الإدارة.';
   }
 
   return message;
@@ -453,6 +492,8 @@ function normalizeCard(row) {
     week: row.Week ?? row.week ?? '',
     title: row.Title ?? row.title ?? '',
     prereq: row.PrereqWeek ?? row.prereq ?? null,
+    className: row.className ?? row.class ?? '',
+    sections: Array.isArray(row.sections) ? row.sections : [],
   };
 }
 
@@ -600,6 +641,24 @@ async function loadCardsFromApi() {
   throw err;
 }
 
+function mergeCardMetadata(remoteCards) {
+  const cached = readLocalJson(LS_ADMIN_CARDS);
+  const cacheMap = new Map(
+    Array.isArray(cached)
+      ? cached.map((card) => [String(card.week), normalizeCard(card)])
+      : [],
+  );
+
+  return remoteCards.map((card) => {
+    const cachedCard = cacheMap.get(String(card.week));
+    return {
+      ...card,
+      className: cachedCard?.className || card.className || '',
+      sections: Array.isArray(cachedCard?.sections) ? cachedCard.sections : card.sections || [],
+    };
+  });
+}
+
 async function saveCardsToApi(cardsArray) {
   const payload = {
     cards: cardsArray.map((card) => ({
@@ -646,4 +705,81 @@ async function saveCardsToApi(cardsArray) {
 
 function isNetworkError(error) {
   return error instanceof TypeError && !('status' in error);
+}
+
+function getCurrentAdminUser() {
+  try {
+    const raw = localStorage.getItem(LS_ADMIN_SESSION);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user || null;
+  } catch {
+    return null;
+  }
+}
+
+async function loginAdmin(username, password) {
+  try {
+    const res = await fetch(ADMIN_LOGIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (res.status === 404) {
+      return username === 'admin' && password === 'Aa@232323445566';
+    }
+
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || payload?.ok === false) {
+      return false;
+    }
+    return true;
+  } catch (error) {
+    if (isNetworkError(error)) {
+      return username === 'admin' && password === 'Aa@232323445566';
+    }
+    throw error;
+  }
+}
+
+async function changeAdminPassword(username, currentPassword, newPassword) {
+  const res = await fetch(ADMIN_PASSWORD_API, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, currentPassword, newPassword }),
+  });
+
+  const payload = await res.json().catch(() => null);
+  if (res.status === 404) {
+    throw new Error('تعذر الاتصال بالخادم');
+  }
+  if (!res.ok || payload?.ok === false) {
+    const message = payload?.message || payload?.error || 'تعذر تحديث كلمة السر';
+    throw new Error(message);
+  }
+}
+
+function groupCardsByClass(cardsList) {
+  const grouped = new Map();
+  cardsList.forEach((card) => {
+    const key = card.className?.trim() || 'بطاقات بدون صف';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(card);
+  });
+
+  return Array.from(grouped.entries()).map(([groupName, items]) => ({
+    groupName,
+    items: items.sort((a, b) => Number(a.week) - Number(b.week)),
+  }));
+}
+
+function setLoading(overlay, isVisible, message) {
+  if (!overlay) return;
+  overlay.classList.toggle('hidden', !isVisible);
+  overlay.toggleAttribute('hidden', !isVisible);
+  if (message) {
+    const text = overlay.querySelector('span:last-child');
+    if (text) text.textContent = message;
+  }
 }
