@@ -30,6 +30,9 @@ const QUESTION_TYPES = [
 let cards = [];
 let activeCard = null;
 let dragState = null;
+let lastAutoSaveAttempt = 0;
+let lastAutoSaveResult = 0;
+const AUTO_SAVE_TOAST_WINDOW = 8000;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const sectionsList = document.getElementById('sectionsList');
@@ -50,6 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let activeSectionIndex = null;
   let activeItemIndex = null;
   let isInitializing = true;
+  let isNewCard = false;
 
   if (!localStorage.getItem(LS_ADMIN_SESSION)) {
     showToast('تنبيه', 'يجب تسجيل الدخول للإدارة أولًا', 'warning');
@@ -85,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             assessment: { title: '', description: '' },
           },
         };
+        isNewCard = true;
         cards.unshift(activeCard);
         persistCards();
       }
@@ -110,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderGoals();
   renderPrereqs();
   renderSections(sectionsList);
-  setSaveState('saved');
+  setSaveState(isNewCard ? 'dirty' : 'saved');
   isInitializing = false;
 
   inputWeek?.addEventListener('input', () => {
@@ -562,6 +567,7 @@ async function loadCards() {
   }
 
   try {
+    showToast('جاري التحميل', 'جاري تحميل بيانات البطاقات', 'info');
     const data = await fetchJson(CARDS_PATH, { noStore: true });
     const list = Array.isArray(data) ? data : data?.cards;
     if (Array.isArray(list)) {
@@ -569,6 +575,7 @@ async function loadCards() {
       ensureCardsShape(cards);
       persistCards();
     }
+    showToast('تم التحميل', 'تم تحميل بيانات البطاقات بنجاح', 'success');
   } catch (error) {
     showToast('تنبيه', 'تعذر تحميل بيانات البطاقات من الخادم', 'warning');
   }
@@ -1051,12 +1058,21 @@ async function autoSave() {
     return;
   }
   try {
+    if (Date.now() - lastAutoSaveAttempt > AUTO_SAVE_TOAST_WINDOW) {
+      showToast('جارٍ الحفظ', 'يتم حفظ البطاقة تلقائيًا', 'info');
+      lastAutoSaveAttempt = Date.now();
+    }
     setSaveState('saving');
     await saveWeekToApi(activeCard);
     updateCardsCache(activeCard);
     setSaveState('saved');
+    if (Date.now() - lastAutoSaveResult > AUTO_SAVE_TOAST_WINDOW) {
+      showToast('تم الحفظ', 'تم حفظ البطاقة تلقائيًا', 'success');
+      lastAutoSaveResult = Date.now();
+    }
   } catch (error) {
     setSaveState('dirty');
+    showToast('خطأ', error.message || 'تعذر حفظ البطاقة تلقائيًا', 'error');
   }
 }
 
@@ -1067,6 +1083,7 @@ async function manualSave() {
     return;
   }
   try {
+    showToast('جارٍ الحفظ', 'جاري حفظ نموذج البطاقة', 'info');
     setSaveState('saving');
     await saveWeekToApi(activeCard);
     updateCardsCache(activeCard);
