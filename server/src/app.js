@@ -8,6 +8,9 @@ const { getPool, sql } = require('./db');
 
 const app = express();
 
+const environment = process.env.NODE_ENV || '';
+const isDevelopment = environment === 'development';
+
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -19,7 +22,17 @@ app.use(
       if (!origin) {
         return callback(null, true);
       }
-      if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
+      if (!allowedOrigins.length && !isDevelopment) {
+        return callback(
+          new Error(
+            'CORS misconfiguration: ALLOWED_ORIGINS must be set in non-development environments.'
+          )
+        );
+      }
+      if (isDevelopment && !allowedOrigins.length) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error('Not allowed by CORS'));
