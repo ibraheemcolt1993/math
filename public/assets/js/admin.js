@@ -445,6 +445,10 @@ function formatAdminErrorMessage(error, fallback) {
     return 'يرجى تعبئة جميع حقول البيانات قبل الحفظ.';
   }
 
+  if (message === 'EMPTY_STUDENT_LIST') {
+    return 'لا يمكن حذف جميع الطلاب دون تأكيد الحذف الشامل.';
+  }
+
   if (message === 'INVALID_PREREQ_WEEK') {
     return 'رقم المتطلب السابق غير صالح. تأكد من أن الأسبوع موجود.';
   }
@@ -578,6 +582,7 @@ async function saveStudentsToApi(studentsArray) {
       FullName: student.fullName,
       Class: student.class,
     })),
+    replaceAll: studentsArray.length === 0,
   };
 
   for (const endpoint of ADMIN_STUDENTS_API) {

@@ -410,6 +410,7 @@ app.get('/api/astu', async (req, res, next) => {
 app.put('/api/astu', async (req, res, next) => {
   try {
     const students = Array.isArray(req.body?.students) ? req.body.students : [];
+    const replaceAll = req.body?.replaceAll === true;
     const normalized = students
       .map((student) => ({
         studentId: String(student.studentId || student.id || '').trim(),
@@ -419,6 +420,10 @@ app.put('/api/astu', async (req, res, next) => {
         class: String(student.class || '').trim()
       }))
       .filter((student) => student.studentId && student.birthYear);
+
+    if (normalized.length === 0 && !replaceAll) {
+      return res.status(400).json({ ok: false, error: 'EMPTY_STUDENT_LIST' });
+    }
 
     const pool = await getPool();
     const transaction = new sql.Transaction(pool);
