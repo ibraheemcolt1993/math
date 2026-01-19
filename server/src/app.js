@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getPool, sql } = require('./db');
 
@@ -32,15 +33,58 @@ app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));
 const adminJwtSecret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'dev-admin-secret';
 const adminJwtOptions = { expiresIn: '8h' };
 
-function createPasswordHash(password, salt) {
+const BCRYPT_ROUNDS = Number.parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+
+function createLegacyPasswordHash(password, salt) {
   return crypto
     .createHash('sha256')
     .update(`${salt}:${password}`)
     .digest('hex');
 }
 
-function createSalt() {
+function createLegacySalt() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+function safeEqualHex(left, right) {
+  const leftBuf = Buffer.from(String(left || ''), 'hex');
+  const rightBuf = Buffer.from(String(right || ''), 'hex');
+  if (leftBuf.length !== rightBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(leftBuf, rightBuf);
+}
+
+async function verifyAdminPassword(password, admin) {
+  const hashType = String(admin.PasswordHashType || '').toLowerCase();
+  if (hashType === 'bcrypt' && admin.PasswordHash) {
+    return bcrypt.compare(password, admin.PasswordHash);
+  }
+
+  if (!admin.PasswordSalt || !admin.PasswordHash) {
+    return false;
+  }
+
+  const legacyHash = createLegacyPasswordHash(password, admin.PasswordSalt);
+  return safeEqualHex(legacyHash, admin.PasswordHash);
+}
+
+async function upgradeAdminPassword(pool, adminId, password) {
+  const bcryptHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  await pool
+    .request()
+    .input('adminId', sql.Int, adminId)
+    .input('passwordHash', sql.NVarChar(255), bcryptHash)
+    .input('passwordSalt', sql.NVarChar(64), null)
+    .input('passwordHashType', sql.NVarChar(20), 'bcrypt')
+    .query(
+      `UPDATE AdminUsers
+       SET PasswordHash = @passwordHash,
+           PasswordSalt = @passwordSalt,
+           PasswordHashType = @passwordHashType,
+           UpdatedAt = SYSUTCDATETIME()
+       WHERE AdminId = @adminId`
+    );
 }
 
 function getBearerToken(req) {
@@ -114,7 +158,7 @@ app.post('/api/admin/login', async (req, res, next) => {
       .request()
       .input('username', sql.NVarChar(80), username)
       .query(
-        `SELECT AdminId, Username, PasswordHash, PasswordSalt, IsActive
+        `SELECT AdminId, Username, PasswordHash, PasswordSalt, PasswordHashType, IsActive
          FROM AdminUsers
          WHERE Username = @username`
       );
@@ -128,9 +172,13 @@ app.post('/api/admin/login', async (req, res, next) => {
       return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
     }
 
-    const expected = createPasswordHash(password, admin.PasswordSalt);
-    if (expected !== admin.PasswordHash) {
+    const passwordOk = await verifyAdminPassword(password, admin);
+    if (!passwordOk) {
       return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
+    }
+    const hashType = String(admin.PasswordHashType || '').toLowerCase();
+    if (hashType !== 'bcrypt') {
+      await upgradeAdminPassword(pool, admin.AdminId, password);
     }
 
     const token = jwt.sign(
@@ -170,7 +218,7 @@ app.put('/api/admin/password', async (req, res, next) => {
       .request()
       .input('username', sql.NVarChar(80), effectiveUsername)
       .query(
-        `SELECT AdminId, Username, PasswordHash, PasswordSalt, IsActive
+        `SELECT AdminId, Username, PasswordHash, PasswordSalt, PasswordHashType, IsActive
          FROM AdminUsers
          WHERE Username = @username`
       );
@@ -184,23 +232,24 @@ app.put('/api/admin/password', async (req, res, next) => {
       return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
     }
 
-    const expected = createPasswordHash(currentPassword, admin.PasswordSalt);
-    if (expected !== admin.PasswordHash) {
+    const passwordOk = await verifyAdminPassword(currentPassword, admin);
+    if (!passwordOk) {
       return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
     }
 
-    const nextSalt = createSalt();
-    const nextHash = createPasswordHash(newPassword, nextSalt);
+    const nextHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
     await pool
       .request()
       .input('adminId', sql.Int, admin.AdminId)
-      .input('passwordHash', sql.NVarChar(128), nextHash)
-      .input('passwordSalt', sql.NVarChar(64), nextSalt)
+      .input('passwordHash', sql.NVarChar(255), nextHash)
+      .input('passwordSalt', sql.NVarChar(64), null)
+      .input('passwordHashType', sql.NVarChar(20), 'bcrypt')
       .query(
         `UPDATE AdminUsers
          SET PasswordHash = @passwordHash,
              PasswordSalt = @passwordSalt,
+             PasswordHashType = @passwordHashType,
              UpdatedAt = SYSUTCDATETIME()
          WHERE AdminId = @adminId`
       );
