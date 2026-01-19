@@ -26,7 +26,7 @@ app.use(
 );
 
 app.use(express.json());
-app.use(express.static(path.resolve(__dirname, '..', '..')));
+app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));
 
 function createPasswordHash(password, salt) {
   return crypto
