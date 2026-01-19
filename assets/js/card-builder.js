@@ -1280,9 +1280,11 @@ function updateSaveControls() {
 
   const canSave = Boolean(isApplied && hasPendingChanges);
   const disableSave = saveState === 'saving' || !canSave;
+  const disableApply = !hasPendingChanges || saveState === 'saving';
 
   if (floatingSave) {
-    floatingSave.disabled = disableSave;
+    floatingSave.toggleAttribute('aria-disabled', disableSave);
+    floatingSave.classList.toggle('is-disabled', disableSave);
     if (saveState === 'saving') {
       floatingSave.textContent = 'جارٍ الحفظ... ⏳';
     } else if (!hasPendingChanges) {
@@ -1295,11 +1297,13 @@ function updateSaveControls() {
   }
 
   if (floatingApply) {
-    floatingApply.disabled = !hasPendingChanges || saveState === 'saving';
+    floatingApply.toggleAttribute('aria-disabled', disableApply);
+    floatingApply.classList.toggle('is-disabled', disableApply);
   }
 
   if (toolbarSave) {
-    toolbarSave.disabled = disableSave;
+    toolbarSave.toggleAttribute('aria-disabled', disableSave);
+    toolbarSave.classList.toggle('is-disabled', disableSave);
   }
 }
 

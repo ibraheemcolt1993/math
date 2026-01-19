@@ -204,7 +204,8 @@
   background: #64748b;
 }
 
-.floating-save:disabled {
+.floating-save:disabled,
+.floating-save.is-disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -217,7 +218,14 @@
   font-size: 13px;
 }
 
-.floating-apply:disabled {
+.floating-apply:disabled,
+.floating-apply.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.floating-preview.is-disabled,
+.floating-add.is-disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -228,6 +236,11 @@
   padding: 10px 16px;
   border: none;
   font-size: 13px;
+}
+
+.topbar .btn.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .floating-add {
