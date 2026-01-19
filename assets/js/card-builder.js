@@ -1419,6 +1419,167 @@ function updateCardsCache(card) {
   } catch {}
 }
 
+async function saveWeekToApi(card) {
+  if (!card?.week) {
+    throw new Error('رقم الأسبوع مطلوب قبل الحفظ');
+  }
+
+  const payload = buildWeekPayload(card);
+  await fetchJson(`/api/weeks/${encodeURIComponent(card.week)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+function buildWeekPayload(card) {
+  const goals = Array.isArray(card.form.goals) ? card.form.goals : [];
+  const prerequisites = Array.isArray(card.form.prerequisites)
+    ? card.form.prerequisites
+    : [];
+
+  const concepts = card.form.sections.map((section) => ({
+    title: section.title || 'قسم',
+    flow: section.items.map((item) => mapItemToFlow(item)),
+  }));
+
+  const assessmentQuestions = card.form.sections.flatMap((section) =>
+    section.items
+      .filter((item) => item.type === 'question')
+      .map((item) => mapQuestionToAssessment(item)),
+  );
+
+  return {
+    week: Number(card.week),
+    title: String(card.title || '').trim(),
+    prereq: card.prereq == null ? null : Number(card.prereq),
+    goals,
+    prerequisites,
+    concepts,
+    assessment: {
+      title: card.form.assessment?.title || `تقييم الأسبوع ${card.week}`,
+      description: card.form.assessment?.description || '',
+      questions: assessmentQuestions,
+    },
+  };
+}
+
+function mapItemToFlow(item) {
+  if (item.type !== 'question') {
+    const mapped = {
+      type: item.type || 'note',
+      text: item.text || '',
+    };
+    if (Array.isArray(item.details) && item.details.length) {
+      mapped.details = item.details;
+    }
+    return mapped;
+  }
+
+  return mapQuestionToFlow(item);
+}
+
+function mapQuestionToFlow(question) {
+  const base = {
+    type: 'question',
+    text: question.prompt || 'سؤال',
+    title: question.description || '',
+  };
+
+  if (question.questionType === 'mcq') {
+    return {
+      ...base,
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  if (question.questionType === 'true-false') {
+    return {
+      ...base,
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  if (question.questionType === 'number') {
+    return {
+      ...base,
+      answer: question.answer == null ? '' : String(question.answer),
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  return {
+    ...base,
+    answer: question.answer ?? '',
+    ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+    ...(question.solution ? { solution: question.solution } : {}),
+  };
+}
+
+function mapQuestionToAssessment(question) {
+  if (question.questionType === 'mcq') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: Array.isArray(question.options) ? question.options : [],
+      correctIndex: Number.isFinite(question.correctIndex) ? question.correctIndex : 0,
+      points: 1,
+    };
+  }
+
+  if (question.questionType === 'true-false') {
+    return {
+      type: 'mcq',
+      text: question.prompt || 'سؤال',
+      choices: ['صواب', 'خطأ'],
+      correctIndex: question.answer === 'false' ? 1 : 0,
+      points: 1,
+    };
+  }
+
+  return {
+    type: 'input',
+    text: question.prompt || 'سؤال',
+    answer: question.answer == null ? '' : String(question.answer),
+    points: 1,
+  };
+}
+
+function splitLines(value) {
+  return String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function updateCardsCache(card) {
+  const stored = readLocalJson(LS_ADMIN_CARDS);
+  const list = Array.isArray(stored) ? stored : [];
+  const index = list.findIndex((item) => String(item.id) === String(card.id));
+  const normalized = {
+    ...card,
+    week: card.week,
+    title: card.title,
+    prereq: card.prereq,
+  };
+
+  if (index === -1) {
+    list.unshift(normalized);
+  } else {
+    list[index] = normalized;
+  }
+
+  try {
+    localStorage.setItem(LS_ADMIN_CARDS, JSON.stringify(list));
+  } catch {}
+}
+
 function readLocalJson(key) {
   try {
     const raw = localStorage.getItem(key);
