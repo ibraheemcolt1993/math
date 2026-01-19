@@ -193,12 +193,13 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const concepts = data.concepts || [];
     let total = 0;
     for (const c of concepts) total += getConceptFlow(c).length;
-    return Math.max(1, total);
+    return total;
   }
 
   function totalStages() {
     const base = 2 + totalFlowItems();
-    return assessment ? base + 1 : base;
+    const total = assessment ? base + 1 : base;
+    return Math.max(1, total);
   }
 
   function currentFlowPosition() {
@@ -219,7 +220,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
   function updateProgress() {
     const total = totalStages();
     const pos = currentStagePosition();
-    const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)));
+    const pct = Math.max(0, Math.min(100, Math.round(((pos + 1) / total) * 100)));
     setProgressUI(pct);
   }
 
