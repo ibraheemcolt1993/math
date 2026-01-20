@@ -1551,6 +1551,16 @@ function mapQuestionToFlow(question) {
     };
   }
 
+  if (question.questionType === 'ordering') {
+    return {
+      ...base,
+      type: 'ordering',
+      choices: Array.isArray(question.items) ? question.items : [],
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
   return {
     ...base,
     answer: question.answer ?? '',
@@ -1733,6 +1743,16 @@ function mapQuestionToFlow(question) {
     return {
       ...base,
       answer: question.answer == null ? '' : String(question.answer),
+      ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
+      ...(question.solution ? { solution: question.solution } : {}),
+    };
+  }
+
+  if (question.questionType === 'ordering') {
+    return {
+      ...base,
+      type: 'ordering',
+      choices: Array.isArray(question.items) ? question.items : [],
       ...(Array.isArray(question.hints) && question.hints.length ? { hints: question.hints } : {}),
       ...(question.solution ? { solution: question.solution } : {}),
     };

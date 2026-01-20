@@ -6,11 +6,13 @@
 import { renderInputQuestion } from './input.js';
 import { renderMcqQuestion } from './mcq.js';
 import { renderMatchQuestion } from './match.js';
+import { renderOrderingQuestion } from './ordering.js';
 
 const REGISTRY = {
   input: renderInputQuestion,
   mcq: renderMcqQuestion,
   match: renderMatchQuestion, // structure only for now
+  ordering: renderOrderingQuestion,
 };
 
 export function renderQuestion({ mountEl, question }) {

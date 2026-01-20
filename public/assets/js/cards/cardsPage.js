@@ -27,6 +27,7 @@ export async function initCardsPage() {
 
   const listEl = document.getElementById('cardsList');
   const studentNameEl = document.getElementById('cardsStudentName');
+  let readyWeeks = null;
 
   const student = getStudentSession();
   const displayName =
@@ -39,16 +40,20 @@ export async function initCardsPage() {
   try {
     const cached = getCachedCards();
     if (cached?.length) {
-      renderCards(listEl, filterCardsForStudent(cached, student), studentId);
+      renderCards(listEl, filterCardsForStudent(cached, student), studentId, readyWeeks);
     }
 
     const progress = getStudentCompletions(studentId);
     syncCardCompletions(studentId, progress);
 
-    const cards = await fetchJson(API_PATHS.CARDS, { noStore: true });
+    const [cards, weeks] = await Promise.all([
+      fetchJson(API_PATHS.CARDS, { noStore: true }),
+      fetchJson(API_PATHS.WEEKS, { noStore: true }),
+    ]);
     const normalized = Array.isArray(cards) ? cards : [];
+    readyWeeks = normalizeReadyWeeks(weeks);
     setCachedCards(normalized);
-    renderCards(listEl, filterCardsForStudent(normalized, student), studentId);
+    renderCards(listEl, filterCardsForStudent(normalized, student), studentId, readyWeeks);
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
     console.error(e);
@@ -62,7 +67,15 @@ function filterCardsForStudent(cards, student) {
   return cards.filter((card) => allowed.has(Number(card.week)));
 }
 
-function renderCards(container, cards, studentId) {
+function normalizeReadyWeeks(weeks) {
+  if (!Array.isArray(weeks)) return null;
+  const list = weeks
+    .map((week) => Number(week?.Week ?? week?.week))
+    .filter((week) => Number.isFinite(week));
+  return list.length ? new Set(list) : null;
+}
+
+function renderCards(container, cards, studentId, readyWeeks) {
   if (!container) return;
   container.innerHTML = '';
 
@@ -70,9 +83,11 @@ function renderCards(container, cards, studentId) {
     const done = isCardDone(studentId, card.week);
     const prereqDone = !card.prereq || isCardDone(studentId, card.prereq);
     const locked = !prereqDone;
+    const isReady = !readyWeeks || readyWeeks.has(Number(card.week));
+    const disabled = !isReady;
 
     const cardEl = document.createElement('div');
-    cardEl.className = `card ${locked ? 'is-locked' : ''} ${done ? 'is-done' : ''}`;
+    cardEl.className = `card ${locked ? 'is-locked' : ''} ${done ? 'is-done' : ''} ${disabled ? 'is-disabled' : ''}`;
 
     cardEl.innerHTML = `
       <div class="card-header">
@@ -84,25 +99,25 @@ function renderCards(container, cards, studentId) {
       </div>
 
       <div class="card-body">
-        <span class="badge ${done ? 'done' : locked ? 'locked' : 'primary'}">
-          ${done ? 'منجزة' : locked ? 'مقفلة' : 'مفتوحة'}
+        <span class="badge ${done ? 'done' : disabled ? 'disabled' : locked ? 'locked' : 'primary'}">
+          ${done ? 'منجزة' : disabled ? 'غير جاهزة' : locked ? 'مقفلة' : 'مفتوحة'}
         </span>
       </div>
 
       <div class="card-footer">
-        <button class="btn ${locked ? 'btn-outline' : 'btn-primary'} w-100"
-                ${locked ? 'disabled' : ''}>
-          ${done ? 'إعادة فتح' : 'ابدأ'}
+        <button class="btn ${locked || disabled ? 'btn-outline' : 'btn-primary'} w-100"
+                ${locked || disabled ? 'disabled' : ''}>
+          ${disabled ? 'غير متاحة' : done ? 'إعادة فتح' : 'ابدأ'}
         </button>
       </div>
     `;
 
     const btn = cardEl.querySelector('button');
-    if (!locked) {
+    if (!locked && !disabled) {
       btn.addEventListener('click', () => {
         goToLesson(card.week);
       });
-    } else {
+    } else if (locked) {
       btn.addEventListener('click', () => {
         showToast('مقفلة 🔒', 'لازم تنهي البطاقة السابقة أولًا', 'warning');
       });
