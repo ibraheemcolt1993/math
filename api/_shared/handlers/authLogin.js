@@ -82,13 +82,13 @@ async function verifyPassword(password, user) {
     return false;
   }
 
+  if (user.PasswordHash.startsWith('$2')) {
+    return bcrypt.compare(password, user.PasswordHash);
+  }
+
   if (user.PasswordSalt) {
     const legacyHash = sha256Hex(`${user.PasswordSalt}:${password}`);
     return safeEqualHex(legacyHash, user.PasswordHash);
-  }
-
-  if (user.PasswordHash.startsWith('$2')) {
-    return bcrypt.compare(password, user.PasswordHash);
   }
 
   if (user.PasswordHash.length === 64) {
