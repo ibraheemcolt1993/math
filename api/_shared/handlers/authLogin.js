@@ -5,6 +5,7 @@ const { readJson } = require('../parse');
 const { ok, badRequest, unauthorized, response } = require('../http');
 
 const BCRYPT_ROUNDS = Number.parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+const AUTH_DEBUG = process.env.AUTH_DEBUG === 'true';
 let columnsCache = null;
 
 function sha256Hex(value) {
@@ -23,6 +24,24 @@ function safeEqualHex(left, right) {
 function generateToken(username) {
   const seed = `${username}:${Date.now()}:${crypto.randomBytes(16).toString('hex')}`;
   return crypto.createHash('sha256').update(seed).digest('hex');
+}
+
+function buildAuthDebug({ username, password, storedHash, salt, hashType }) {
+  if (!AUTH_DEBUG) return null;
+  const rawUsername = String(username ?? '');
+  const rawPassword = String(password ?? '');
+  const rawHash = String(storedHash ?? '');
+  const rawSalt = String(salt ?? '');
+  return {
+    usernameLength: rawUsername.length,
+    passwordLength: rawPassword.length,
+    passwordHasLeadingSpace: rawPassword.startsWith(' '),
+    passwordHasTrailingSpace: rawPassword.endsWith(' '),
+    storedHashLength: rawHash.length,
+    storedHashStartsWithBcrypt: rawHash.startsWith('$2'),
+    hasSalt: Boolean(rawSalt),
+    hashType
+  };
 }
 
 async function loadColumns(dbPool) {
@@ -160,7 +179,16 @@ module.exports = async function authLoginHandler(context, req) {
 
     const passwordOk = await verifyPassword(password, user);
     if (!passwordOk) {
-      context.res = unauthorized('INVALID_CREDENTIALS');
+      const debug = buildAuthDebug({
+        username,
+        password,
+        storedHash: user.PasswordHash,
+        salt: user.PasswordSalt,
+        hashType: user.PasswordHashType
+      });
+      context.res = debug
+        ? response(401, { ok: false, error: 'INVALID_CREDENTIALS', debug })
+        : unauthorized('INVALID_CREDENTIALS');
       return;
     }
 
