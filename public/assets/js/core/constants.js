@@ -24,6 +24,7 @@ export const DATA_PATHS = {
 // API paths
 export const API_PATHS = {
   CARDS: '/api/cards',
+  WEEKS: '/api/weeks',
   ADMIN_CARDS: '/api/cards-mng',
   STUDENT_LOGIN: '/api/students/login',
   PROGRESS_COMPLETED: '/api/progress/completed',

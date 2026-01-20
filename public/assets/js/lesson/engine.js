@@ -101,6 +101,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
         q.type =
           item?.qtype ||
           item?.questionType ||
+          (item?.type && item.type !== 'question' ? item.type : null) ||
           (Array.isArray(q?.choices) ? 'mcq' : 'input');
       }
 
@@ -108,6 +109,15 @@ export function initEngine({ week, studentId, data, mountEl }) {
       if (q.text == null) q.text = item?.text || 'سؤال';
       if (!Array.isArray(q.hints)) q.hints = q.hints ? [q.hints] : [];
       if (q.solution == null) q.solution = '';
+      if (q.type === 'ordering' && !Array.isArray(q.items)) {
+        q.items = Array.isArray(item?.items)
+          ? item.items
+          : Array.isArray(item?.choices)
+            ? item.choices
+            : Array.isArray(q?.choices)
+              ? q.choices
+              : [];
+      }
 
       return q;
     }
@@ -116,6 +126,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
     const inferredType =
       item?.qtype ||
       item?.questionType ||
+      (item?.type && item.type !== 'question' ? item.type : null) ||
       (Array.isArray(item?.choices) ? 'mcq' : 'input');
 
     const q = {
@@ -128,6 +139,12 @@ export function initEngine({ week, studentId, data, mountEl }) {
     if (inferredType === 'mcq') {
       q.choices = item?.choices || [];
       q.correctIndex = typeof item?.correctIndex === 'number' ? item.correctIndex : 0;
+    } else if (inferredType === 'ordering') {
+      q.items = Array.isArray(item?.items)
+        ? item.items
+        : Array.isArray(item?.choices)
+          ? item.choices
+          : [];
     } else {
       q.answer = item?.answer ?? '';
       q.placeholder = item?.placeholder;
@@ -494,7 +511,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
       const item = flow[i];
       if (!item || !item.type) continue;
 
-      if (item.type === 'question') {
+      if (isQuestionItem(item)) {
         body.appendChild(renderQuestionItem(item, i));
       } else if (item.type === 'video') {
         body.appendChild(renderVideoItem(item, i));
@@ -516,7 +533,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
 
     // decide behavior for current item
     const currentItem = flow[itemIndex];
-    if (currentItem?.type === 'question' && activeQuestion) {
+    if (isQuestionItem(currentItem) && activeQuestion) {
       activeQuestion.btn = btn;
       btn.addEventListener('click', () => onVerifyOrAdvanceQuestion());
     } else {
@@ -724,6 +741,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
     return `
       <video class="video-embed" controls preload="metadata" src="${escapeHtml(url)}"></video>
     `;
+  }
+
+  function isQuestionItem(item) {
+    return item?.type === 'question' || item?.type === 'ordering';
   }
 
   function renderQuestionItem(item, idx) {
