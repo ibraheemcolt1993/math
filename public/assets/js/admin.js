@@ -59,7 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
       setLoading(adminLoading, true, 'جاري التحقق من بيانات الدخول...');
       const result = await loginAdmin(user, pass);
       if (!result?.ok || !result.token) {
-        showToast('تعذر تسجيل الدخول', 'تأكد من بيانات الدخول واتصال الخادم', 'error');
+        const fallback = 'تأكد من بيانات الدخول واتصال الخادم';
+        const message = result?.error
+          ? formatAdminErrorMessage({ message: result.error }, fallback)
+          : fallback;
+        showToast('تعذر تسجيل الدخول', message, 'error');
         return;
       }
       localStorage.setItem(
@@ -461,6 +465,22 @@ function formatAdminErrorMessage(error, fallback) {
     return 'بيانات الدخول غير صحيحة.';
   }
 
+  if (message === 'INVALID_CREDENTIALS') {
+    return 'بيانات الدخول غير صحيحة.';
+  }
+
+  if (message === 'ACCOUNT_DISABLED') {
+    return 'حساب الإدارة غير مفعّل.';
+  }
+
+  if (message === 'MISSING_CREDENTIALS') {
+    return 'يرجى إدخال اسم المستخدم وكلمة السر.';
+  }
+
+  if (message === 'INVALID_JSON') {
+    return 'تعذر قراءة بيانات الدخول المرسلة.';
+  }
+
   if (message === 'ADMIN_DISABLED') {
     return 'حساب الإدارة غير مفعّل.';
   }
@@ -751,17 +771,17 @@ async function loginAdmin(username, password) {
     });
 
     if (res.status === 404) {
-      return { ok: false, token: null };
+      return { ok: false, token: null, error: 'تعذر الاتصال بالخادم' };
     }
 
     const payload = await res.json().catch(() => null);
     if (!res.ok || payload?.ok === false) {
-      return { ok: false, token: null };
+      return { ok: false, token: null, error: payload?.error || payload?.message };
     }
     return { ok: true, token: payload?.token || null };
   } catch (error) {
     if (isNetworkError(error)) {
-      return { ok: false, token: null };
+      return { ok: false, token: null, error: 'تعذر الاتصال بالخادم' };
     }
     throw error;
   }
