@@ -47,12 +47,17 @@ const adminJwtSecret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET ||
 const adminJwtOptions = { expiresIn: '8h' };
 
 const BCRYPT_ROUNDS = Number.parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+let adminColumnsCache = null;
 
 function createLegacyPasswordHash(password, salt) {
   return crypto
     .createHash('sha256')
     .update(`${salt}:${password}`)
     .digest('hex');
+}
+
+function createUnsaltedPasswordHash(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
 }
 
 function createLegacySalt() {
@@ -74,30 +79,96 @@ async function verifyAdminPassword(password, admin) {
     return bcrypt.compare(password, admin.PasswordHash);
   }
 
-  if (!admin.PasswordSalt || !admin.PasswordHash) {
+  if (!admin.PasswordHash) {
     return false;
   }
 
-  const legacyHash = createLegacyPasswordHash(password, admin.PasswordSalt);
-  return safeEqualHex(legacyHash, admin.PasswordHash);
+  if (admin.PasswordSalt) {
+    const legacyHash = createLegacyPasswordHash(password, admin.PasswordSalt);
+    return safeEqualHex(legacyHash, admin.PasswordHash);
+  }
+
+  if (admin.PasswordHash.startsWith('$2')) {
+    return bcrypt.compare(password, admin.PasswordHash);
+  }
+
+  if (admin.PasswordHash.length === 64) {
+    const unsaltedHash = createUnsaltedPasswordHash(password);
+    return safeEqualHex(unsaltedHash, admin.PasswordHash);
+  }
+
+  return admin.PasswordHash === password;
 }
 
-async function upgradeAdminPassword(pool, adminId, password) {
+async function loadAdminColumns(pool) {
+  if (adminColumnsCache) return adminColumnsCache;
+  const result = await pool
+    .request()
+    .query(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_NAME = 'AdminUsers'`
+    );
+  const columns = new Set(result.recordset.map((row) => row.COLUMN_NAME));
+  const adminIdColumn = columns.has('AdminId')
+    ? 'AdminId'
+    : columns.has('AdminUserId')
+    ? 'AdminUserId'
+    : 'AdminId';
+  adminColumnsCache = {
+    adminIdColumn,
+    hasSalt: columns.has('PasswordSalt'),
+    hasHashType: columns.has('PasswordHashType')
+  };
+  return adminColumnsCache;
+}
+
+async function fetchAdminByUsername(pool, username) {
+  const columns = await loadAdminColumns(pool);
+  const selectSalt = columns.hasSalt
+    ? 'PasswordSalt'
+    : 'CAST(NULL AS NVARCHAR(64)) AS PasswordSalt';
+  const selectHashType = columns.hasHashType
+    ? 'PasswordHashType'
+    : 'CAST(NULL AS NVARCHAR(20)) AS PasswordHashType';
+  const result = await pool
+    .request()
+    .input('username', sql.NVarChar(80), username)
+    .query(
+      `SELECT ${columns.adminIdColumn} AS AdminId,
+              Username,
+              PasswordHash,
+              ${selectSalt},
+              ${selectHashType},
+              IsActive
+       FROM AdminUsers
+       WHERE Username = @username`
+    );
+  return { columns, admin: result.recordset[0] };
+}
+
+async function upgradeAdminPassword(pool, adminId, password, columns) {
   const bcryptHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  await pool
+  const request = pool
     .request()
     .input('adminId', sql.Int, adminId)
-    .input('passwordHash', sql.NVarChar(255), bcryptHash)
-    .input('passwordSalt', sql.NVarChar(64), null)
-    .input('passwordHashType', sql.NVarChar(20), 'bcrypt')
-    .query(
-      `UPDATE AdminUsers
-       SET PasswordHash = @passwordHash,
-           PasswordSalt = @passwordSalt,
-           PasswordHashType = @passwordHashType,
-           UpdatedAt = SYSUTCDATETIME()
-       WHERE AdminId = @adminId`
-    );
+    .input('passwordHash', sql.NVarChar(255), bcryptHash);
+  const setClauses = ['PasswordHash = @passwordHash', 'UpdatedAt = SYSUTCDATETIME()'];
+
+  if (columns.hasSalt) {
+    request.input('passwordSalt', sql.NVarChar(64), null);
+    setClauses.push('PasswordSalt = @passwordSalt');
+  }
+  if (columns.hasHashType) {
+    request.input('passwordHashType', sql.NVarChar(20), 'bcrypt');
+    setClauses.push('PasswordHashType = @passwordHashType');
+  }
+
+  await request.query(
+    `UPDATE AdminUsers
+     SET ${setClauses.join(', ')}
+     WHERE ${columns.adminIdColumn} = @adminId`
+  );
 }
 
 function getBearerToken(req) {
@@ -167,20 +238,12 @@ app.post('/api/admin/login', async (req, res, next) => {
     }
 
     const pool = await getPool();
-    const result = await pool
-      .request()
-      .input('username', sql.NVarChar(80), username)
-      .query(
-        `SELECT AdminId, Username, PasswordHash, PasswordSalt, PasswordHashType, IsActive
-         FROM AdminUsers
-         WHERE Username = @username`
-      );
+    const { columns, admin } = await fetchAdminByUsername(pool, username);
 
-    if (!result.recordset.length) {
+    if (!admin) {
       return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_LOGIN' });
     }
 
-    const admin = result.recordset[0];
     if (admin.IsActive === false || admin.IsActive === 0) {
       return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
     }
@@ -191,7 +254,7 @@ app.post('/api/admin/login', async (req, res, next) => {
     }
     const hashType = String(admin.PasswordHashType || '').toLowerCase();
     if (hashType !== 'bcrypt') {
-      await upgradeAdminPassword(pool, admin.AdminId, password);
+      await upgradeAdminPassword(pool, admin.AdminId, password, columns);
     }
 
     const token = jwt.sign(
@@ -227,20 +290,12 @@ app.put('/api/admin/password', async (req, res, next) => {
     }
 
     const pool = await getPool();
-    const result = await pool
-      .request()
-      .input('username', sql.NVarChar(80), effectiveUsername)
-      .query(
-        `SELECT AdminId, Username, PasswordHash, PasswordSalt, PasswordHashType, IsActive
-         FROM AdminUsers
-         WHERE Username = @username`
-      );
+    const { columns, admin } = await fetchAdminByUsername(pool, effectiveUsername);
 
-    if (!result.recordset.length) {
+    if (!admin) {
       return res.status(404).json({ ok: false, error: 'ADMIN_NOT_FOUND' });
     }
 
-    const admin = result.recordset[0];
     if (admin.IsActive === false || admin.IsActive === 0) {
       return res.status(403).json({ ok: false, error: 'ADMIN_DISABLED' });
     }
@@ -251,21 +306,26 @@ app.put('/api/admin/password', async (req, res, next) => {
     }
 
     const nextHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-
-    await pool
+    const request = pool
       .request()
       .input('adminId', sql.Int, admin.AdminId)
-      .input('passwordHash', sql.NVarChar(255), nextHash)
-      .input('passwordSalt', sql.NVarChar(64), null)
-      .input('passwordHashType', sql.NVarChar(20), 'bcrypt')
-      .query(
-        `UPDATE AdminUsers
-         SET PasswordHash = @passwordHash,
-             PasswordSalt = @passwordSalt,
-             PasswordHashType = @passwordHashType,
-             UpdatedAt = SYSUTCDATETIME()
-         WHERE AdminId = @adminId`
-      );
+      .input('passwordHash', sql.NVarChar(255), nextHash);
+    const setClauses = ['PasswordHash = @passwordHash', 'UpdatedAt = SYSUTCDATETIME()'];
+
+    if (columns.hasSalt) {
+      request.input('passwordSalt', sql.NVarChar(64), null);
+      setClauses.push('PasswordSalt = @passwordSalt');
+    }
+    if (columns.hasHashType) {
+      request.input('passwordHashType', sql.NVarChar(20), 'bcrypt');
+      setClauses.push('PasswordHashType = @passwordHashType');
+    }
+
+    await request.query(
+      `UPDATE AdminUsers
+       SET ${setClauses.join(', ')}
+       WHERE ${columns.adminIdColumn} = @adminId`
+    );
 
     res.json({ ok: true });
   } catch (error) {
