@@ -68,6 +68,89 @@
   background: rgba(220,38,38,.10);
 }
 
+/* ---------- Ordering ---------- */
+.q-ordering{
+  display:flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ordering-pool{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px dashed rgba(37,99,235,.28);
+  background: rgba(239,246,255,.7);
+}
+.ordering-choice{
+  border: 1px solid rgba(37,99,235,.28);
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: transform .08s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.ordering-choice:active{
+  transform: translateY(1px);
+}
+.ordering-choice:hover{
+  box-shadow: var(--shadow-sm);
+}
+.ordering-slots{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ordering-slot{
+  min-height: 54px;
+  border-radius: 14px;
+  border: 1px dashed rgba(148,163,184,.6);
+  background: rgba(248,250,252,.7);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 10px;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.ordering-slot.is-active{
+  border-color: rgba(37,99,235,.55);
+  background: rgba(219,234,254,.6);
+  box-shadow: var(--shadow-xs);
+}
+.ordering-slot.is-dragover{
+  border-color: rgba(37,99,235,.8);
+  background: rgba(191,219,254,.6);
+}
+.ordering-placeholder{
+  color: var(--muted);
+  font-size: 13px;
+}
+.ordering-slot-item{
+  width: 100%;
+  text-align:center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(37,99,235,.28);
+  font-weight: 700;
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+}
+.ordering-empty{
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(15,23,42,.18);
+  background: rgba(241,245,249,.6);
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
 /* ---------- Match (Structure only / future) ---------- */
 .q-match{
   display:grid;

@@ -409,6 +409,11 @@ button, input, select, textarea{
   background: rgba(17,24,39,.06);
   color: var(--muted);
 }
+.badge.disabled{
+  border-color: rgba(148,163,184,.45);
+  background: rgba(226,232,240,.6);
+  color: rgba(100,116,139,.95);
+}
 .badge.done{
   border-color: rgba(212,175,55,.40);
   background: var(--gold-surface);
@@ -421,6 +426,19 @@ button, input, select, textarea{
   filter: grayscale(.05);
 }
 .card.is-locked .card-title{ color: rgba(17,24,39,.80); }
+.card.is-disabled{
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: rgba(148,163,184,.35);
+  opacity: .72;
+  box-shadow: var(--shadow-xs);
+}
+.card.is-disabled::after{
+  opacity: .35;
+}
+.card.is-disabled:hover{
+  transform: none;
+  box-shadow: var(--shadow-xs);
+}
 .card.is-done{
   border-color: rgba(212,175,55,.65);
   background:
