@@ -69,28 +69,34 @@ async function fetchUserByUsername(dbPool, username) {
 
 async function verifyPassword(password, user) {
   const hashType = String(user.PasswordHashType || '').toLowerCase();
-  if (hashType === 'bcrypt' && user.PasswordHash) {
-    return bcrypt.compare(password, user.PasswordHash);
+  const storedHash = String(user.PasswordHash || '').trim();
+  if (hashType === 'bcrypt' && storedHash) {
+    return bcrypt.compare(password, storedHash);
   }
 
-  if (!user.PasswordHash) {
+  if (!storedHash) {
     return false;
   }
 
-  if (user.PasswordSalt) {
-    const legacyHash = sha256Hex(`${user.PasswordSalt}:${password}`);
-    return safeEqualHex(legacyHash, user.PasswordHash);
+  if (storedHash.startsWith('$2')) {
+    return bcrypt.compare(password, storedHash);
   }
 
-  if (user.PasswordHash.startsWith('$2')) {
-    return bcrypt.compare(password, user.PasswordHash);
+  const salt = String(user.PasswordSalt || '').trim();
+  if (salt) {
+    const legacyHash = sha256Hex(`${salt}:${password}`);
+    if (safeEqualHex(legacyHash, storedHash)) {
+      return true;
+    }
+    const alternateHash = sha256Hex(`${salt}${password}`);
+    return safeEqualHex(alternateHash, storedHash);
   }
 
-  if (user.PasswordHash.length === 64) {
-    return safeEqualHex(sha256Hex(password), user.PasswordHash);
+  if (storedHash.length === 64) {
+    return safeEqualHex(sha256Hex(password), storedHash);
   }
 
-  return user.PasswordHash === password;
+  return storedHash === password;
 }
 
 async function updatePassword(dbPool, columns, userId, newPassword) {
