@@ -25,20 +25,9 @@ export const DATA_PATHS = {
 export const API_PATHS = {
   CARDS: '/api/cards',
   WEEKS: '/api/weeks',
-  ADMIN_CARDS: '/api/cards-mng',
   STUDENT_LOGIN: '/api/students/login',
   PROGRESS_COMPLETED: '/api/progress/completed',
   PROGRESS_COMPLETE: '/api/progress/complete',
-  ADMIN_STUDENTS: '/api/admin/students',
-  AUTH_LOGIN: '/api/auth/login',
-  AUTH_PASSWORD: '/api/auth/password',
-};
-
-// Legacy aliases (document only; avoid using in code)
-export const LEGACY_API_PATHS = {
-  ADMIN_LOGIN: '/api/admin/login',
-  ADMIN_PASSWORD: '/api/admin/password',
-  ADMIN_STUDENTS: '/api/astu',
 };
 
 // Lesson / Engine

@@ -2,8 +2,6 @@ import { fetchJson } from './api.js';
 import { DATA_PATHS } from './constants.js';
 import { normalizeDigits } from './normalizeDigits.js';
 
-const LS_ADMIN_STUDENTS = 'math:admin:students';
-
 let studentsCache = null;
 
 /**
@@ -11,12 +9,6 @@ let studentsCache = null;
  */
 export async function loadStudents() {
   if (studentsCache) {
-    return studentsCache;
-  }
-
-  const stored = readLocalJson(LS_ADMIN_STUDENTS);
-  if (stored && Array.isArray(stored)) {
-    studentsCache = stored.map(normalizeStudent);
     return studentsCache;
   }
 
@@ -59,13 +51,4 @@ function normalizeStudent(student) {
     fullName: student.FullName ?? student.fullName ?? '',
     class: student.Class ?? student.class ?? '',
   };
-}
-
-function readLocalJson(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
 }
