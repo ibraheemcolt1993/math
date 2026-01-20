@@ -1,4 +1,5 @@
 const { getPool } = require('../_shared/db');
+const { ok, response } = require('../_shared/http');
 
 module.exports = async function (context) {
   try {
@@ -11,16 +12,8 @@ module.exports = async function (context) {
       title: card.Title,
       prereq: card.PrereqWeek
     }));
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: normalized
-    };
+    context.res = ok(normalized);
   } catch (error) {
-    context.res = {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
-    };
+    context.res = response(500, { ok: false, error: error.message });
   }
 };

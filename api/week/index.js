@@ -1,20 +1,6 @@
 const { getPool, sql } = require('../_shared/db');
-
-function parseBody(req) {
-  if (req.body && typeof req.body === 'object') {
-    return req.body;
-  }
-
-  if (req.rawBody) {
-    try {
-      return JSON.parse(req.rawBody);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  return null;
-}
+const { readJson } = require('../_shared/parse');
+const { DEFAULT_HEADERS } = require('../_shared/http');
 
 module.exports = async function (context, req) {
   try {
@@ -22,7 +8,7 @@ module.exports = async function (context, req) {
     if (!Number.isInteger(weekParam)) {
       context.res = {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: DEFAULT_HEADERS,
         body: { ok: false, error: 'Invalid week parameter.' }
       };
       return;
@@ -31,11 +17,11 @@ module.exports = async function (context, req) {
     const dbPool = await getPool();
 
     if (req.method === 'PUT') {
-      const payload = parseBody(req);
+      const payload = readJson(req);
       if (!payload) {
         context.res = {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: DEFAULT_HEADERS,
           body: { ok: false, error: 'Invalid JSON body.' }
         };
         return;
@@ -48,7 +34,7 @@ module.exports = async function (context, req) {
       if (!title) {
         context.res = {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: DEFAULT_HEADERS,
           body: { ok: false, error: 'title is required.' }
         };
         return;
@@ -57,7 +43,7 @@ module.exports = async function (context, req) {
       if (prereq != null && !Number.isInteger(prereq)) {
         context.res = {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: DEFAULT_HEADERS,
           body: { ok: false, error: 'prereq must be an integer.' }
         };
         return;
@@ -329,7 +315,7 @@ module.exports = async function (context, req) {
 
       context.res = {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: DEFAULT_HEADERS,
         body: { ok: true }
       };
       return;
@@ -338,7 +324,7 @@ module.exports = async function (context, req) {
     if (req.method !== 'GET') {
       context.res = {
         status: 405,
-        headers: { 'Content-Type': 'application/json' },
+        headers: DEFAULT_HEADERS,
         body: { ok: false, error: 'Method not allowed.' }
       };
       return;
@@ -352,7 +338,7 @@ module.exports = async function (context, req) {
     if (!weekResult.recordset.length) {
       context.res = {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: DEFAULT_HEADERS,
         body: { ok: false, error: 'Week not found.' }
       };
       return;
@@ -614,7 +600,7 @@ module.exports = async function (context, req) {
 
     context.res = {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: DEFAULT_HEADERS,
       body: {
         week: weekData.Week,
         title: weekData.Title,
@@ -627,7 +613,7 @@ module.exports = async function (context, req) {
   } catch (error) {
     context.res = {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: DEFAULT_HEADERS,
       body: { ok: false, error: error.message }
     };
   }

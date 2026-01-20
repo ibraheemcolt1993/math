@@ -1,20 +1,6 @@
 const { getPool, sql } = require('../_shared/db');
-
-function parseBody(req) {
-  if (req.body && typeof req.body === 'object') {
-    return req.body;
-  }
-
-  if (req.rawBody) {
-    try {
-      return JSON.parse(req.rawBody);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  return null;
-}
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, response } = require('../_shared/http');
 
 function toLatinDigits(value) {
   const map = {
@@ -29,13 +15,9 @@ function toLatinDigits(value) {
 
 module.exports = async function (context, req) {
   try {
-    const payload = parseBody(req);
+    const payload = readJson(req);
     if (!payload) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Invalid JSON body.' }
-      };
+      context.res = badRequest('Invalid JSON body.');
       return;
     }
 
@@ -45,11 +27,7 @@ module.exports = async function (context, req) {
       typeof payload.birthYear === 'string' ? toLatinDigits(payload.birthYear).trim() : '';
 
     if (!studentId || !birthYear) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'studentId and birthYear are required.' }
-      };
+      context.res = badRequest('studentId and birthYear are required.');
       return;
     }
 
@@ -65,35 +43,23 @@ module.exports = async function (context, req) {
       );
 
     if (!result.recordset.length) {
-      context.res = {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, message: 'INVALID_CREDENTIALS' }
-      };
+      context.res = unauthorized('INVALID_CREDENTIALS');
       return;
     }
 
     const student = result.recordset[0];
 
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: {
-        ok: true,
-        student: {
-          StudentId: student.StudentId,
-          BirthYear: student.BirthYear,
-          FirstName: student.FirstName,
-          FullName: student.FullName,
-          Class: student.Class
-        }
+    context.res = ok({
+      ok: true,
+      student: {
+        StudentId: student.StudentId,
+        BirthYear: student.BirthYear,
+        FirstName: student.FirstName,
+        FullName: student.FullName,
+        Class: student.Class
       }
-    };
+    });
   } catch (error) {
-    context.res = {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, message: 'DB_ERROR' }
-    };
+    context.res = response(500, { ok: false, message: 'DB_ERROR' });
   }
 };
