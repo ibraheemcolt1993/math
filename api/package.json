@@ -5,6 +5,7 @@
   "description": "Azure Functions API for Math app",
   "main": "index.js",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "mssql": "^10.0.2"
   }
 }
