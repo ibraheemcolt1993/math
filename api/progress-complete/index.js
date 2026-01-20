@@ -1,4 +1,6 @@
 const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, notFound, response } = require('../_shared/http');
 
 function normalizeDigits(value) {
   const map = {
@@ -30,31 +32,11 @@ function normalizeDigits(value) {
     .join('');
 }
 
-function parseBody(req) {
-  if (req.body && typeof req.body === 'object') {
-    return req.body;
-  }
-
-  if (req.rawBody) {
-    try {
-      return JSON.parse(req.rawBody);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  return null;
-}
-
 module.exports = async function (context, req) {
   try {
-    const payload = parseBody(req);
+    const payload = readJson(req);
     if (!payload) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Invalid JSON body.' }
-      };
+      context.res = badRequest('Invalid JSON body.');
       return;
     }
 
@@ -66,29 +48,17 @@ module.exports = async function (context, req) {
     const finalScore = Number(payload.finalScore);
 
     if (!studentId) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'studentId is required.' }
-      };
+      context.res = badRequest('studentId is required.');
       return;
     }
 
     if (!Number.isInteger(week)) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'week must be an integer.' }
-      };
+      context.res = badRequest('week must be an integer.');
       return;
     }
 
     if (!Number.isInteger(finalScore) || finalScore < 0 || finalScore > 100) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'finalScore must be an integer between 0 and 100.' }
-      };
+      context.res = badRequest('finalScore must be an integer between 0 and 100.');
       return;
     }
 
@@ -100,11 +70,7 @@ module.exports = async function (context, req) {
       .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
 
     if (!studentResult.recordset.length) {
-      context.res = {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Student not found.' }
-      };
+      context.res = notFound('Student not found.');
       return;
     }
 
@@ -114,11 +80,7 @@ module.exports = async function (context, req) {
       .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
 
     if (!weekResult.recordset.length) {
-      context.res = {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Week not found.' }
-      };
+      context.res = notFound('Week not found.');
       return;
     }
 
@@ -148,22 +110,14 @@ module.exports = async function (context, req) {
 
     const record = completionResult.recordset[0];
 
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: {
-        ok: true,
-        studentId: record.StudentId,
-        week: record.Week,
-        finalScore: record.FinalScore,
-        completedAt: record.CompletedAt
-      }
-    };
+    context.res = ok({
+      ok: true,
+      studentId: record.StudentId,
+      week: record.Week,
+      finalScore: record.FinalScore,
+      completedAt: record.CompletedAt
+    });
   } catch (error) {
-    context.res = {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
-    };
+    context.res = response(500, { ok: false, error: error.message });
   }
 };

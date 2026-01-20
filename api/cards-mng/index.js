@@ -1,20 +1,6 @@
 const { getPool, sql } = require('../_shared/db');
-
-function parseBody(req) {
-  if (req.body && typeof req.body === 'object') {
-    return req.body;
-  }
-
-  if (req.rawBody) {
-    try {
-      return JSON.parse(req.rawBody);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  return null;
-}
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, methodNotAllowed, response } = require('../_shared/http');
 
 module.exports = async function (context, req) {
   try {
@@ -25,30 +11,18 @@ module.exports = async function (context, req) {
         .request()
         .query('SELECT Week, Title, PrereqWeek FROM dbo.Cards ORDER BY Week');
 
-      context.res = {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: result.recordset
-      };
+      context.res = ok(result.recordset);
       return;
     }
 
     if (req.method !== 'PUT') {
-      context.res = {
-        status: 405,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Method not allowed.' }
-      };
+      context.res = methodNotAllowed();
       return;
     }
 
-    const payload = parseBody(req);
+    const payload = readJson(req);
     if (!payload || !Array.isArray(payload.cards)) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'cards array is required.' }
-      };
+      context.res = badRequest('cards array is required.');
       return;
     }
 
@@ -74,11 +48,7 @@ module.exports = async function (context, req) {
       );
 
       if (invalidPrereq) {
-        context.res = {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: { ok: false, error: 'INVALID_PREREQ_WEEK' }
-        };
+        context.res = badRequest('INVALID_PREREQ_WEEK');
         await transaction.rollback();
         return;
       }
@@ -116,16 +86,8 @@ module.exports = async function (context, req) {
       throw error;
     }
 
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: true }
-    };
+    context.res = ok({ ok: true });
   } catch (error) {
-    context.res = {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
-    };
+    context.res = response(500, { ok: false, error: error.message });
   }
 };

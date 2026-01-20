@@ -1,4 +1,6 @@
 const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, response } = require('../_shared/http');
 
 function normalizeDigits(value) {
   const map = {
@@ -32,15 +34,12 @@ function normalizeDigits(value) {
 
 module.exports = async function (context, req) {
   try {
+    const query = getQuery(req);
     const studentId =
-      typeof req.query.studentId === 'string' ? normalizeDigits(req.query.studentId).trim() : '';
+      typeof query.studentId === 'string' ? normalizeDigits(query.studentId).trim() : '';
 
     if (!studentId) {
-      context.res = {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'studentId is required.' }
-      };
+      context.res = badRequest('studentId is required.');
       return;
     }
 
@@ -52,16 +51,8 @@ module.exports = async function (context, req) {
         'SELECT Week, FinalScore, CompletedAt FROM dbo.CardCompletions WHERE StudentId = @studentId ORDER BY CompletedAt DESC'
       );
 
-    context.res = {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: result.recordset
-    };
+    context.res = ok(result.recordset);
   } catch (error) {
-    context.res = {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: error.message }
-    };
+    context.res = response(500, { ok: false, error: error.message });
   }
 };
