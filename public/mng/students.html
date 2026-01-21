@@ -49,6 +49,7 @@
           <div class="manager-toolbar">
           <div class="row">
             <button id="btnAddStudent" class="btn btn-primary">إضافة طالب</button>
+            <button id="btnImportStudents" class="btn btn-outline">استيراد من Excel</button>
             <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
             <button class="btn btn-outline" disabled>تصدير Excel (قريباً)</button>
           </div>
@@ -178,6 +179,102 @@
     </div>
   </div>
 
+  <div id="importModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-lg" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+      <div class="modal-header">
+        <h2 id="importTitle" class="h2">استيراد الطلاب من Excel</h2>
+        <button id="btnCloseImport" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-grid">
+          <div class="field">
+            <label class="label" for="importFile">ملف Excel أو CSV</label>
+            <input id="importFile" class="input" type="file" accept=".xlsx,.csv" />
+          </div>
+          <div class="field field-inline">
+            <label class="label" for="importHasHeader">
+              <input id="importHasHeader" type="checkbox" checked />
+              الصف الأول يحتوي عناوين
+            </label>
+          </div>
+        </div>
+
+        <div class="import-preview">
+          <h3 class="h3">معاينة البيانات (أول 10 صفوف)</h3>
+          <div class="preview-table">
+            <table class="table table-compact" aria-live="polite">
+              <thead id="importPreviewHead"></thead>
+              <tbody id="importPreviewBody">
+                <tr>
+                  <td class="muted center">اختر ملفًا لعرض المعاينة.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="import-mapping">
+          <h3 class="h3">تعيين الأعمدة</h3>
+          <div class="mapping-grid">
+            <div class="field">
+              <label class="label" for="mapStudentId">رقم الهوية (إلزامي)</label>
+              <select id="mapStudentId" class="input"></select>
+            </div>
+            <div class="field">
+              <label class="label" for="mapName">الاسم (إلزامي)</label>
+              <select id="mapName" class="input"></select>
+            </div>
+            <div class="field">
+              <label class="label" for="mapBirthDate">تاريخ الميلاد (إلزامي)</label>
+              <select id="mapBirthDate" class="input"></select>
+            </div>
+            <div class="field">
+              <label class="label" for="mapGrade">الصف (اختياري)</label>
+              <select id="mapGrade" class="input"></select>
+            </div>
+            <div class="field">
+              <label class="label" for="mapClass">الشعبة (اختياري)</label>
+              <select id="mapClass" class="input"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="import-actions">
+          <button id="btnImportValidate" class="btn btn-outline" type="button">تحقق</button>
+          <button id="btnImportExecute" class="btn btn-primary" type="button" disabled>تنفيذ الاستيراد</button>
+        </div>
+
+        <div class="import-progress">
+          <div class="progress-header">
+            <span class="muted">تقدّم التنفيذ</span>
+            <span id="importProgressLabel" class="muted">0%</span>
+          </div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="importProgressBar" class="progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="import-results">
+          <h3 class="h3">النتائج</h3>
+          <div id="importSummary" class="result-summary muted">لم يتم تنفيذ أي عملية بعد.</div>
+          <div class="result-actions">
+            <button id="btnDownloadSkipped" class="btn btn-outline btn-sm" type="button" disabled>تنزيل تقرير المتخطّين</button>
+            <button id="btnDownloadErrors" class="btn btn-outline btn-sm" type="button" disabled>تنزيل تقرير الأخطاء</button>
+          </div>
+          <div class="field">
+            <label class="label" for="importTeacherNote">نص موجّه للمعلم (قابل للنسخ)</label>
+            <textarea id="importTeacherNote" class="input" rows="4" readonly></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnCancelImport" class="btn btn-outline" type="button">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="module" src="/assets/js/mng/studentsManager.js"></script>
 </body>
 </html>

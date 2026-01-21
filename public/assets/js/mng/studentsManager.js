@@ -31,7 +31,29 @@ const elements = {
   confirmMessage: document.getElementById('confirmMessage'),
   confirmClose: document.getElementById('btnCloseConfirm'),
   confirmCancel: document.getElementById('btnCancelDelete'),
-  confirmSubmit: document.getElementById('btnConfirmDelete')
+  confirmSubmit: document.getElementById('btnConfirmDelete'),
+  importButton: document.getElementById('btnImportStudents'),
+  importModal: document.getElementById('importModal'),
+  importClose: document.getElementById('btnCloseImport'),
+  importCancel: document.getElementById('btnCancelImport'),
+  importFile: document.getElementById('importFile'),
+  importHasHeader: document.getElementById('importHasHeader'),
+  importPreviewHead: document.getElementById('importPreviewHead'),
+  importPreviewBody: document.getElementById('importPreviewBody'),
+  mapStudentId: document.getElementById('mapStudentId'),
+  mapName: document.getElementById('mapName'),
+  mapBirthDate: document.getElementById('mapBirthDate'),
+  mapGrade: document.getElementById('mapGrade'),
+  mapClass: document.getElementById('mapClass'),
+  importValidate: document.getElementById('btnImportValidate'),
+  importExecute: document.getElementById('btnImportExecute'),
+  importProgressBar: document.getElementById('importProgressBar'),
+  importProgressLabel: document.getElementById('importProgressLabel'),
+  importProgressTrack: document.querySelector('.progress-track'),
+  importSummary: document.getElementById('importSummary'),
+  downloadSkipped: document.getElementById('btnDownloadSkipped'),
+  downloadErrors: document.getElementById('btnDownloadErrors'),
+  importTeacherNote: document.getElementById('importTeacherNote')
 };
 
 const state = {
@@ -45,6 +67,21 @@ let searchTimeout = null;
 let firstNameTouched = false;
 let confirmAction = null;
 let confirmBusy = false;
+let importBusy = false;
+
+const importState = {
+  rows: [],
+  hasHeader: true,
+  headers: [],
+  columnLabels: [],
+  validated: false,
+  existingSet: null,
+  results: {
+    toAdd: [],
+    skipped: [],
+    invalid: []
+  }
+};
 
 const gradeLabels = {
   '1': 'الأول',
@@ -79,6 +116,35 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+  return normalizeValue(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
 function toNumber(value) {
   return Number.parseInt(value, 10);
 }
@@ -94,6 +160,139 @@ function deriveFirstNameFromName(name) {
 
 function padTwo(value) {
   return String(value).padStart(2, '0');
+}
+
+function formatIsoDate(year, month, day) {
+  if (!year || !month || !day) return '';
+  return `${year}-${padTwo(month)}-${padTwo(day)}`;
+}
+
+function excelSerialToDate(serial) {
+  const excelEpoch = Date.UTC(1899, 11, 30);
+  const utc = excelEpoch + Number(serial) * 86400000;
+  return new Date(utc);
+}
+
+function parseBirthDate(value) {
+  if (value == null || value === '') {
+    return { iso: '', error: 'تاريخ الميلاد مطلوب.' };
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getUTCFullYear();
+    const month = value.getUTCMonth() + 1;
+    const day = value.getUTCDate();
+    return { iso: formatIsoDate(year, month, day), error: '' };
+  }
+
+  const normalized = normalizeDigits(value);
+  const numeric = Number(normalized);
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric) && String(normalized).trim() !== '') {
+    const date = excelSerialToDate(numeric);
+    if (!Number.isNaN(date.getTime())) {
+      return {
+        iso: formatIsoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()),
+        error: ''
+      };
+    }
+  }
+
+  const text = normalizeDigits(value).replace(/\s+/g, '');
+  let match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (
+      date.getFullYear() === Number(year) &&
+      date.getMonth() === Number(month) - 1 &&
+      date.getDate() === Number(day)
+    ) {
+      return { iso: formatIsoDate(year, month, day), error: '' };
+    }
+  }
+
+  match = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (
+      date.getFullYear() === Number(year) &&
+      date.getMonth() === Number(month) - 1 &&
+      date.getDate() === Number(day)
+    ) {
+      return { iso: formatIsoDate(year, month, day), error: '' };
+    }
+  }
+
+  return { iso: '', error: 'تاريخ الميلاد غير صالح.' };
+}
+
+function toColumnLabel(index) {
+  let label = '';
+  let current = index;
+  while (current >= 0) {
+    label = String.fromCharCode((current % 26) + 65) + label;
+    current = Math.floor(current / 26) - 1;
+  }
+  return label;
+}
+
+function getImportColumns() {
+  return [elements.mapStudentId, elements.mapName, elements.mapBirthDate, elements.mapGrade, elements.mapClass];
+}
+
+function resetImportState() {
+  importState.rows = [];
+  importState.headers = [];
+  importState.columnLabels = [];
+  importState.validated = false;
+  importState.results = { toAdd: [], skipped: [], invalid: [] };
+  elements.importFile.value = '';
+  elements.importHasHeader.checked = true;
+  elements.importPreviewHead.innerHTML = '';
+  elements.importPreviewBody.innerHTML = `
+    <tr>
+      <td class="muted center">اختر ملفًا لعرض المعاينة.</td>
+    </tr>
+  `;
+  getImportColumns().forEach((select) => {
+    if (select) select.innerHTML = '';
+  });
+  updateImportResultsSummary('لم يتم تنفيذ أي عملية بعد.');
+  updateImportProgress(0);
+  elements.importExecute.disabled = true;
+  elements.downloadSkipped.disabled = true;
+  elements.downloadErrors.disabled = true;
+  elements.importTeacherNote.value = '';
+  importState.hasHeader = true;
+}
+
+function updateImportProgress(percent) {
+  const safePercent = Math.max(0, Math.min(100, percent));
+  elements.importProgressBar.style.width = `${safePercent}%`;
+  elements.importProgressLabel.textContent = `${safePercent}%`;
+  if (elements.importProgressTrack) {
+    elements.importProgressTrack.setAttribute('aria-valuenow', String(safePercent));
+  }
+}
+
+function updateImportResultsSummary(text) {
+  elements.importSummary.textContent = text;
+}
+
+function openImportModal() {
+  resetImportState();
+  elements.importModal.classList.remove('hidden');
+  elements.importModal.setAttribute('aria-hidden', 'false');
+  window.setTimeout(() => {
+    elements.importFile?.focus();
+  }, 0);
+}
+
+function closeImportModal() {
+  if (importBusy) return;
+  elements.importModal.classList.add('hidden');
+  elements.importModal.setAttribute('aria-hidden', 'true');
 }
 
 function buildWheelItems(wheel, items) {
@@ -276,6 +475,419 @@ async function loadStudents() {
     setLoading('تعذر تحميل البيانات.');
     showToast('خطأ', error.message, 'error');
   }
+}
+
+function buildImportHeaders(rows, hasHeader) {
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  const headerRow = hasHeader ? rows[0] || [] : [];
+  const headers = Array.from({ length: maxColumns }, (_, index) => {
+    const value = normalizeValue(headerRow[index]);
+    return value || toColumnLabel(index);
+  });
+  return {
+    headers,
+    dataRows: hasHeader ? rows.slice(1) : rows
+  };
+}
+
+function renderImportPreview(headers, rows) {
+  if (!headers.length) {
+    elements.importPreviewHead.innerHTML = '';
+  } else {
+    const headerCells = headers
+      .map((label) => `<th>${escapeHtml(label)}</th>`)
+      .join('');
+    elements.importPreviewHead.innerHTML = `<tr>${headerCells}</tr>`;
+  }
+
+  if (!rows.length) {
+    elements.importPreviewBody.innerHTML = `
+      <tr>
+        <td class="muted center">لا توجد بيانات للعرض.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  const previewRows = rows.slice(0, 10).map((row) => {
+    const cells = headers.map((_, index) => `<td>${escapeHtml(normalizeValue(row[index]))}</td>`);
+    return `<tr>${cells.join('')}</tr>`;
+  });
+  elements.importPreviewBody.innerHTML = previewRows.join('');
+}
+
+function buildMappingOptions(headers) {
+  const options = ['<option value="">— اختر العمود —</option>'];
+  headers.forEach((label, index) => {
+    options.push(`<option value="${index}">${escapeHtml(label)}</option>`);
+  });
+  return options.join('');
+}
+
+function normalizeHeaderLabel(label) {
+  return normalizeValue(label).toLowerCase().replace(/\s+/g, '');
+}
+
+function guessColumn(headers, keywords) {
+  const normalizedHeaders = headers.map((label) => normalizeHeaderLabel(label));
+  for (const keyword of keywords) {
+    const index = normalizedHeaders.findIndex((label) => label.includes(keyword));
+    if (index !== -1) return index;
+  }
+  return '';
+}
+
+function applyMappingDefaults(headers) {
+  const studentIdIndex = guessColumn(headers, ['رقمالهوية', 'الهوية', 'studentid', 'id']);
+  const nameIndex = guessColumn(headers, ['الاسم', 'name', 'studentname']);
+  const birthIndex = guessColumn(headers, ['تاريخالميلاد', 'تاريخ', 'birthdate', 'dob']);
+  const gradeIndex = guessColumn(headers, ['الصف', 'grade']);
+  const classIndex = guessColumn(headers, ['الشعبة', 'class', 'section']);
+
+  elements.mapStudentId.value = studentIdIndex !== '' ? String(studentIdIndex) : '';
+  elements.mapName.value = nameIndex !== '' ? String(nameIndex) : '';
+  elements.mapBirthDate.value = birthIndex !== '' ? String(birthIndex) : '';
+  elements.mapGrade.value = gradeIndex !== '' ? String(gradeIndex) : '';
+  elements.mapClass.value = classIndex !== '' ? String(classIndex) : '';
+}
+
+function refreshImportMapping() {
+  const options = buildMappingOptions(importState.headers);
+  getImportColumns().forEach((select) => {
+    if (select) select.innerHTML = options;
+  });
+  applyMappingDefaults(importState.headers);
+}
+
+async function handleImportFileChange() {
+  const file = elements.importFile.files?.[0];
+  if (!file) return;
+  if (!window.XLSX) {
+    showToast('خطأ', 'تعذر تحميل مكتبة قراءة Excel.', 'error');
+    return;
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = window.XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      showToast('تنبيه', 'تعذر قراءة الملف المحدد.', 'warning');
+      return;
+    }
+
+    const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+    importState.rows = rows;
+    importState.hasHeader = elements.importHasHeader.checked;
+    const { headers, dataRows } = buildImportHeaders(rows, importState.hasHeader);
+    importState.headers = headers;
+    importState.columnLabels = headers;
+    renderImportPreview(headers, dataRows);
+    refreshImportMapping();
+    importState.validated = false;
+    elements.importExecute.disabled = true;
+    updateImportResultsSummary('تم تحميل الملف. يرجى تعيين الأعمدة ثم الضغط على "تحقق".');
+  } catch (error) {
+    showToast('خطأ', 'تعذر قراءة الملف. يرجى التأكد من صحة الملف.', 'error');
+  }
+}
+
+function handleImportHeaderToggle() {
+  if (!importState.rows.length) return;
+  importState.hasHeader = elements.importHasHeader.checked;
+  const { headers, dataRows } = buildImportHeaders(importState.rows, importState.hasHeader);
+  importState.headers = headers;
+  renderImportPreview(headers, dataRows);
+  refreshImportMapping();
+  importState.validated = false;
+  elements.importExecute.disabled = true;
+  updateImportResultsSummary('تم تحديث المعاينة. يرجى الضغط على "تحقق" مرة أخرى.');
+}
+
+function buildCsvContent(headers, rows) {
+  const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const lines = [headers.map(escapeCsv).join(',')];
+  rows.forEach((row) => {
+    lines.push(headers.map((header) => escapeCsv(row[header])).join(','));
+  });
+  return `\ufeff${lines.join('\n')}`;
+}
+
+function downloadCsv(filename, headers, rows) {
+  const content = buildCsvContent(headers, rows);
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildImportRows() {
+  const mapping = {
+    studentId: elements.mapStudentId.value,
+    name: elements.mapName.value,
+    birthDate: elements.mapBirthDate.value,
+    grade: elements.mapGrade.value,
+    className: elements.mapClass.value
+  };
+
+  if (!mapping.studentId || !mapping.name || !mapping.birthDate) {
+    showToast('تنبيه', 'يرجى تعيين الأعمدة الإلزامية قبل التحقق.', 'warning');
+    return null;
+  }
+
+  const dataRows = importState.hasHeader ? importState.rows.slice(1) : importState.rows;
+  const rows = [];
+
+  dataRows.forEach((row, index) => {
+    const values = Array.isArray(row) ? row : [];
+    const rowNumber = importState.hasHeader ? index + 2 : index + 1;
+    const allValues = values.map((cell) => normalizeValue(cell)).filter(Boolean);
+    if (!allValues.length) return;
+
+    const studentIdRaw = values[Number(mapping.studentId)];
+    const nameRaw = values[Number(mapping.name)];
+    const birthRaw = values[Number(mapping.birthDate)];
+    const gradeRaw = mapping.grade ? values[Number(mapping.grade)] : '';
+    const classRaw = mapping.className ? values[Number(mapping.className)] : '';
+
+    const studentId = normalizeDigits(studentIdRaw);
+    const name = normalizeValue(nameRaw);
+    const { iso: birthDate, error: birthError } = parseBirthDate(birthRaw);
+    const grade = normalizeDigits(gradeRaw);
+    const className = normalizeDigits(classRaw);
+
+    rows.push({
+      rowNumber,
+      studentId,
+      name,
+      birthDate,
+      grade,
+      className,
+      birthError
+    });
+  });
+
+  return rows;
+}
+
+async function handleImportValidate() {
+  if (!importState.rows.length) {
+    showToast('تنبيه', 'يرجى اختيار ملف أولًا.', 'warning');
+    return;
+  }
+
+  const rows = buildImportRows();
+  if (!rows) return;
+
+  if (!importState.existingSet) {
+    try {
+      const data = await fetchJson(API_BASE);
+      const list = Array.isArray(data) ? data : data.students || [];
+      importState.existingSet = new Set(
+        list.map((student) => normalizeDigits(student.StudentId || student.studentId))
+      );
+    } catch (error) {
+      showToast('خطأ', 'تعذر التحقق من قائمة الطلاب الحالية.', 'error');
+      return;
+    }
+  }
+
+  const results = { toAdd: [], skipped: [], invalid: [] };
+  rows.forEach((row) => {
+    const errors = [];
+    if (!row.studentId) {
+      errors.push('رقم الهوية مفقود.');
+    }
+    if (!row.name) {
+      errors.push('الاسم مفقود.');
+    }
+    if (!row.birthDate) {
+      errors.push(row.birthError || 'تاريخ الميلاد مفقود.');
+    }
+
+    if (errors.length) {
+      results.invalid.push({
+        ...row,
+        error: errors.join(' ')
+      });
+      return;
+    }
+
+    if (importState.existingSet?.has(row.studentId)) {
+      results.skipped.push({
+        ...row,
+        reason: 'لم تتم إضافة هذا الطالب لأنه موجود مسبقًا في النظام.'
+      });
+      return;
+    }
+
+    const [birthYear, birthMonth, birthDay] = row.birthDate.split('-');
+    results.toAdd.push({
+      studentId: row.studentId,
+      name: row.name,
+      birthDate: row.birthDate,
+      birthYear,
+      birthMonth,
+      birthDay,
+      grade: row.grade,
+      class: row.className,
+      firstName: deriveFirstNameFromName(row.name),
+      rowNumber: row.rowNumber
+    });
+  });
+
+  importState.results = results;
+  importState.validated = true;
+  elements.importExecute.disabled = results.toAdd.length === 0;
+  updateImportResultsSummary(
+    `تم التحقق من الملف.\nالمرشّح للإضافة: ${results.toAdd.length} طالبًا.\n` +
+      `المتخطّون (موجودون مسبقًا): ${results.skipped.length} طالبًا.\n` +
+      `الصفوف ذات الأخطاء: ${results.invalid.length} صفًا.`
+  );
+}
+
+async function handleImportExecute() {
+  if (!importState.validated) {
+    showToast('تنبيه', 'يرجى تنفيذ التحقق أولًا.', 'warning');
+    return;
+  }
+
+  if (!importState.results.toAdd.length) {
+    showToast('تنبيه', 'لا توجد بيانات جديدة للإضافة.', 'warning');
+    return;
+  }
+
+  importBusy = true;
+  elements.importExecute.disabled = true;
+  elements.importValidate.disabled = true;
+
+  const batchSize = 30;
+  const total = importState.results.toAdd.length;
+  let completed = 0;
+  let added = 0;
+  const skipped = [...importState.results.skipped];
+  const invalid = [...importState.results.invalid];
+
+  for (let i = 0; i < total; i += batchSize) {
+    const batch = importState.results.toAdd.slice(i, i + batchSize);
+    const results = await Promise.allSettled(
+      batch.map((student) =>
+        fetchJson(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: student.studentId,
+            birthYear: student.birthYear,
+            birthMonth: student.birthMonth,
+            birthDay: student.birthDay,
+            name: student.name,
+            firstName: student.firstName,
+            birthDate: student.birthDate,
+            grade: student.grade,
+            class: student.class
+          })
+        })
+      )
+    );
+
+    results.forEach((result, index) => {
+      const student = batch[index];
+      if (result.status === 'fulfilled') {
+        added += 1;
+        return;
+      }
+
+      const error = result.reason;
+      const message = normalizeValue(error?.message || error?.data?.message || '');
+      const isExisting =
+        error?.status === 409 ||
+        message.includes('موجود') ||
+        message.toLowerCase().includes('exists');
+
+      if (isExisting) {
+        skipped.push({
+          studentId: student.studentId,
+          name: student.name,
+          birthDate: student.birthDate,
+          grade: student.grade,
+          className: student.class,
+          reason: 'لم تتم إضافة هذا الطالب لأنه موجود مسبقًا في النظام.'
+        });
+      } else {
+        invalid.push({
+          rowNumber: student.rowNumber,
+          studentId: student.studentId,
+          name: student.name,
+          birthDate: student.birthDate,
+          grade: student.grade,
+          className: student.class,
+          error: message || 'تعذر إضافة الطالب بسبب خطأ غير معروف.'
+        });
+      }
+    });
+
+    completed += batch.length;
+    const percent = Math.round((completed / total) * 100);
+    updateImportProgress(percent);
+  }
+
+  const summaryText = [
+    `تمّت إضافة (${added}) طالبًا بنجاح.`,
+    `لم تتم إضافة (${skipped.length}) طالبًا لأنهم موجودون مسبقًا في النظام.`,
+    `تعذّرت معالجة (${invalid.length}) صفوف بسبب أخطاء في البيانات.`
+  ].join('\n');
+
+  updateImportResultsSummary(summaryText);
+  elements.importTeacherNote.value = summaryText;
+  elements.downloadSkipped.disabled = skipped.length === 0;
+  elements.downloadErrors.disabled = invalid.length === 0;
+  importState.results = { toAdd: [], skipped, invalid };
+  importBusy = false;
+  elements.importValidate.disabled = false;
+  elements.importExecute.disabled = true;
+  showToast('اكتمل الاستيراد', 'تمت معالجة ملف الاستيراد.', 'success');
+  loadStudents();
+}
+
+function handleDownloadSkipped() {
+  const skipped = importState.results.skipped || [];
+  if (!skipped.length) return;
+  downloadCsv(
+    'report-skipped.csv',
+    ['StudentId', 'Name', 'BirthDate', 'Grade', 'Class', 'Reason'],
+    skipped.map((row) => ({
+      StudentId: row.studentId,
+      Name: row.name,
+      BirthDate: row.birthDate,
+      Grade: row.grade,
+      Class: row.className,
+      Reason: row.reason
+    }))
+  );
+}
+
+function handleDownloadErrors() {
+  const invalid = importState.results.invalid || [];
+  if (!invalid.length) return;
+  downloadCsv(
+    'report-errors.csv',
+    ['RowNumber', 'StudentId', 'Name', 'BirthDate', 'Grade', 'Class', 'Error'],
+    invalid.map((row) => ({
+      RowNumber: row.rowNumber,
+      StudentId: row.studentId,
+      Name: row.name,
+      BirthDate: row.birthDate,
+      Grade: row.grade,
+      Class: row.className,
+      Error: row.error
+    }))
+  );
 }
 
 function renderStudents(list) {
@@ -717,6 +1329,29 @@ function handleBackdropClick(event) {
     if (event.currentTarget === elements.confirmModal) {
       closeConfirmModal();
     }
+    if (event.currentTarget === elements.importModal) {
+      closeImportModal();
+    }
+  }
+}
+
+function handleImportMappingChange() {
+  importState.validated = false;
+  elements.importExecute.disabled = true;
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== 'Escape') return;
+  if (!elements.importModal.classList.contains('hidden')) {
+    closeImportModal();
+    return;
+  }
+  if (!elements.modal.classList.contains('hidden')) {
+    closeModal();
+    return;
+  }
+  if (!elements.confirmModal.classList.contains('hidden')) {
+    closeConfirmModal();
   }
 }
 
@@ -742,6 +1377,20 @@ function init() {
   elements.confirmCancel.addEventListener('click', closeConfirmModal);
   elements.confirmSubmit.addEventListener('click', handleConfirmSubmit);
   elements.confirmModal.addEventListener('click', handleBackdropClick);
+  elements.importButton.addEventListener('click', openImportModal);
+  elements.importClose.addEventListener('click', closeImportModal);
+  elements.importCancel.addEventListener('click', closeImportModal);
+  elements.importModal.addEventListener('click', handleBackdropClick);
+  elements.importFile.addEventListener('change', handleImportFileChange);
+  elements.importHasHeader.addEventListener('change', handleImportHeaderToggle);
+  getImportColumns().forEach((select) => {
+    select.addEventListener('change', handleImportMappingChange);
+  });
+  elements.importValidate.addEventListener('click', handleImportValidate);
+  elements.importExecute.addEventListener('click', handleImportExecute);
+  elements.downloadSkipped.addEventListener('click', handleDownloadSkipped);
+  elements.downloadErrors.addEventListener('click', handleDownloadErrors);
+  document.addEventListener('keydown', handleGlobalKeydown);
 
   loadStudents();
 }
