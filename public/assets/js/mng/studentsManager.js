@@ -10,7 +10,6 @@ const elements = {
   searchButton: document.getElementById('btnSearch'),
   gradeFilter: document.getElementById('gradeFilter'),
   classFilter: document.getElementById('classFilter'),
-  clearFiltersButton: document.getElementById('btnClearFilters'),
   pagination: document.getElementById('studentsPagination'),
   selectAll: document.getElementById('selectAllStudents'),
   modal: document.getElementById('studentModal'),
@@ -692,13 +691,6 @@ function handleClassFilterChange() {
   applyFilters({ resetPage: true });
 }
 
-function handleClearFilters() {
-  elements.searchInput.value = '';
-  elements.gradeFilter.value = '';
-  updateClassFilterOptions('');
-  applyFilters({ resetPage: true });
-}
-
 function handlePaginationClick(event) {
   const button = event.target.closest('[data-page]');
   if (!button || button.disabled) return;
@@ -736,7 +728,6 @@ function init() {
   elements.searchInput.addEventListener('input', handleSearchInput);
   elements.gradeFilter.addEventListener('change', handleGradeFilterChange);
   elements.classFilter.addEventListener('change', handleClassFilterChange);
-  elements.clearFiltersButton.addEventListener('click', handleClearFilters);
   elements.pagination.addEventListener('click', handlePaginationClick);
   elements.body.addEventListener('click', handleTableClick);
   elements.body.addEventListener('change', handleTableChange);
