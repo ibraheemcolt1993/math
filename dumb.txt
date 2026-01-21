@@ -855,6 +855,255 @@ module.exports = async function (context, req) {
     }
 
     const dbPool = await getPool();
+
+    const studentResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
+
+    if (!studentResult.recordset.length) {
+      context.res = notFound('Student not found.');
+      return;
+    }
+
+    const weekResult = await dbPool
+      .request()
+      .input('week', sql.Int, week)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+
+    if (!weekResult.recordset.length) {
+      context.res = notFound('Week not found.');
+      return;
+    }
+
+    const completionResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('week', sql.Int, week)
+      .input('finalScore', sql.Int, finalScore)
+      .query(
+        `IF EXISTS (SELECT 1 FROM dbo.CardCompletions WHERE StudentId = @studentId AND Week = @week)
+         BEGIN
+           UPDATE dbo.CardCompletions
+           SET FinalScore = @finalScore,
+               CompletedAt = GETDATE()
+           WHERE StudentId = @studentId AND Week = @week;
+         END
+         ELSE
+         BEGIN
+           INSERT INTO dbo.CardCompletions (StudentId, Week, FinalScore)
+           VALUES (@studentId, @week, @finalScore);
+         END
+
+         SELECT StudentId, Week, FinalScore, CompletedAt
+         FROM dbo.CardCompletions
+         WHERE StudentId = @studentId AND Week = @week;`
+      );
+
+    const record = completionResult.recordset[0];
+
+    context.res = ok({
+      ok: true,
+      studentId: record.StudentId,
+      week: record.Week,
+      finalScore: record.FinalScore,
+      completedAt: record.CompletedAt
+    });
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+
+math/api/week/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "progress/completed"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+math/api/week/index.js
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, response } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+
+  return String(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
+module.exports = async function (context, req) {
+  try {
+    const query = getQuery(req);
+    const studentId =
+      typeof query.studentId === 'string' ? normalizeDigits(query.studentId).trim() : '';
+
+    if (!studentId) {
+      context.res = badRequest('studentId is required.');
+      return;
+    }
+
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .query(
+        'SELECT Week, FinalScore, CompletedAt FROM dbo.CardCompletions WHERE StudentId = @studentId ORDER BY CompletedAt DESC'
+      );
+
+    context.res = ok(result.recordset);
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+
+math/api/routes/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "routes"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+math/api/routes/index.js
+const { ok } = require('../_shared/http');
+
+const ROUTES = {
+  official: [
+    { methods: ['GET'], path: '/api/health', description: 'Health check.' },
+    { methods: ['POST'], path: '/api/progress/complete', description: 'Record student completion.' },
+    { methods: ['GET'], path: '/api/progress/completed', description: 'Fetch completed progress.' },
+    { methods: ['POST'], path: '/api/students/login', description: 'Student login.' },
+    { methods: ['GET'], path: '/api/mng/students', description: 'List students for management.' },
+    { methods: ['POST'], path: '/api/mng/students', description: 'Create student (management).' },
+    { methods: ['PUT'], path: '/api/mng/students/{studentId}', description: 'Update student (management).' },
+    { methods: ['DELETE'], path: '/api/mng/students/{studentId}', description: 'Delete student (management).' },
+    { methods: ['GET'], path: '/api/weeks/{week:int}', description: 'Week details.' },
+    { methods: ['GET'], path: '/api/weeks', description: 'Weeks list.' },
+    { methods: ['GET'], path: '/api/routes', description: 'Route catalog.' }
+  ],
+  aliases: []
+};
+
+module.exports = async function (context) {
+  context.res = ok({ ok: true, routes: ROUTES });
+};
+
+math/api/student-login/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post"],
+      "route": "students/login"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+math/api/student-login/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, response } = require('../_shared/http');
+
+function toLatinDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function deriveFirstName(firstName, fullName) {
+  const trimmedFirst = typeof firstName === 'string' ? firstName.trim() : '';
+  if (trimmedFirst) {
+    return trimmedFirst;
+  }
+
+  const trimmedFull = typeof fullName === 'string' ? fullName.trim() : '';
+  if (!trimmedFull) {
+    return '';
+  }
+
+  return trimmedFull.split(/\s+/)[0];
+}
+
+module.exports = async function (context, req) {
+  try {
+    const payload = readJson(req);
+    if (!payload) {
+      context.res = badRequest('Invalid JSON body.');
+      return;
+    }
+
+    const studentId =
+      typeof payload.studentId === 'string' ? toLatinDigits(payload.studentId).trim() : '';
+    const birthYear =
+      typeof payload.birthYear === 'string' ? toLatinDigits(payload.birthYear).trim() : '';
+
+    if (!studentId || !birthYear) {
+      context.res = badRequest('studentId and birthYear are required.');
+      return;
+    }
+
+    const dbPool = await getPool();
     const result = await dbPool
       .request()
       .input('studentId', sql.NVarChar(20), studentId)
@@ -6817,7 +7066,7 @@ const gradeLabels = {
 function setLoading(message) {
   elements.body.innerHTML = `
     <tr>
-      <td colspan="7" class="muted center">${message}</td>
+    <td colspan="7" class="muted center">${message}</td>
     </tr>
   `;
 }
@@ -10953,6 +11202,10 @@ math/public/assets/css/toast.css
 @media (prefers-reduced-motion: reduce){
   .toast{ transition: none; }
 }
+.toast[data-type="danger"] .toast-ic svg,
+.toast[data-type="error"] .toast-ic svg{ fill: var(--toast-err); }
+.toast[data-type="danger"] .toast-bar > i,
+.toast[data-type="error"] .toast-bar > i{ background: var(--toast-err); }
 
 /* Mobile spacing tweak */
 @media (max-width: 420px){
@@ -13665,6 +13918,7 @@ async function handleSubmit(event) {
     showToast('تنبيه', 'يرجى اختيار تاريخ الميلاد بالكامل.', 'warning');
     return;
   }
+}
 
   const birthDate = `${payload.birthYear}-${padTwo(payload.birthMonth)}-${padTwo(payload.birthDay)}`;
 
@@ -14706,6 +14960,7 @@ function updateHostToVisualViewport() {
     width = Math.round(vv.width || window.innerWidth);
     height = Math.round(vv.height || window.innerHeight);
   }
+}
 
   // Place host at the top of the VISUAL viewport.
   // We keep position:fixed + inset:0 in CSS, and move the whole host.
