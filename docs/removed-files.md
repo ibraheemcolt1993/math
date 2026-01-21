@@ -10,3 +10,6 @@ The following files were removed as requested:
 - server/src/db.js
 - server/src/server.js
 - server/src/app.js
+- dumb.txt
+- server/ (untracked directory)
+- api/node_modules/ (generated dependencies)
