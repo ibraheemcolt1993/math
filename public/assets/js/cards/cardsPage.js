@@ -7,7 +7,7 @@
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
-import { API_PATHS } from '../core/constants.js';
+import { API_PATHS, DATA_PATHS } from '../core/constants.js';
 import { getWeeksForClass } from '../core/gradeMap.js';
 import {
   getCachedCards,
@@ -47,7 +47,7 @@ export async function initCardsPage() {
     syncCardCompletions(studentId, progress);
 
     const [cards, weeks] = await Promise.all([
-      fetchJson(API_PATHS.CARDS, { noStore: true }),
+      fetchJson(DATA_PATHS.CARDS, { noStore: true }),
       fetchJson(API_PATHS.WEEKS, { noStore: true }),
     ]);
     const normalized = Array.isArray(cards) ? cards : [];
