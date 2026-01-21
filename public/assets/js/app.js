@@ -25,7 +25,7 @@ import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { findStudentByIdentity } from './core/students.js';
 import { fetchJson } from './core/api.js';
-import { API_PATHS } from './core/constants.js';
+import { API_PATHS, DATA_PATHS } from './core/constants.js';
 import { normalizeDigits } from './core/normalizeDigits.js';
 
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // legacy cache
@@ -254,7 +254,7 @@ async function loadStudentData(student, { silent = false } = {}) {
   try {
     const [progress, cards] = await Promise.all([
       fetchJson(`${API_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(student.id)}`, { noStore: true }),
-      fetchJson(API_PATHS.CARDS, { noStore: true }),
+      fetchJson(DATA_PATHS.CARDS, { noStore: true }),
     ]);
 
     setStudentCompletions(student.id, Array.isArray(progress) ? progress : []);

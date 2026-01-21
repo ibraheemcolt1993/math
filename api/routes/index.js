@@ -2,12 +2,11 @@ const { ok } = require('../_shared/http');
 
 const ROUTES = {
   official: [
-    { methods: ['GET'], path: '/api/cards', description: 'Public cards list.' },
     { methods: ['GET'], path: '/api/health', description: 'Health check.' },
     { methods: ['POST'], path: '/api/progress/complete', description: 'Record student completion.' },
     { methods: ['GET'], path: '/api/progress/completed', description: 'Fetch completed progress.' },
     { methods: ['POST'], path: '/api/students/login', description: 'Student login.' },
-    { methods: ['GET', 'PUT'], path: '/api/weeks/{week:int}', description: 'Week details.' },
+    { methods: ['GET'], path: '/api/weeks/{week:int}', description: 'Week details.' },
     { methods: ['GET'], path: '/api/weeks', description: 'Weeks list.' },
     { methods: ['GET'], path: '/api/routes', description: 'Route catalog.' }
   ],
