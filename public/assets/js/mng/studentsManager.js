@@ -8,6 +8,10 @@ const elements = {
   deleteSelectedButton: document.getElementById('btnDeleteSelected'),
   searchInput: document.getElementById('searchInput'),
   searchButton: document.getElementById('btnSearch'),
+  gradeFilter: document.getElementById('gradeFilter'),
+  classFilter: document.getElementById('classFilter'),
+  clearFiltersButton: document.getElementById('btnClearFilters'),
+  pagination: document.getElementById('studentsPagination'),
   selectAll: document.getElementById('selectAllStudents'),
   modal: document.getElementById('studentModal'),
   modalTitle: document.getElementById('modalTitle'),
@@ -33,7 +37,9 @@ const elements = {
 
 const state = {
   students: [],
-  mode: 'add'
+  mode: 'add',
+  currentPage: 1,
+  pageSize: 10
 };
 
 let searchTimeout = null;
@@ -259,15 +265,14 @@ async function fetchJson(url, options) {
   return data;
 }
 
-async function loadStudents(query = '') {
+async function loadStudents() {
   setLoading('جاري تحميل البيانات...');
   try {
-    const url = query ? `${API_BASE}?q=${encodeURIComponent(query)}` : API_BASE;
-    const data = await fetchJson(url);
+    const data = await fetchJson(API_BASE);
     const list = Array.isArray(data) ? data : data.students || [];
     state.students = list;
-    renderStudents(list);
-    updateBulkDeleteState();
+    updateClassFilterOptions(elements.gradeFilter.value);
+    applyFilters({ resetPage: true });
   } catch (error) {
     setLoading('تعذر تحميل البيانات.');
     showToast('خطأ', error.message, 'error');
@@ -426,7 +431,7 @@ async function handleSubmit(event) {
     }
 
     closeModal();
-    loadStudents(elements.searchInput.value.trim());
+    loadStudents();
   } catch (error) {
     showToast('خطأ', error.message, 'error');
   }
@@ -473,8 +478,8 @@ function openConfirmModal({ title, message, onConfirm }) {
   elements.confirmModal.setAttribute('aria-hidden', 'false');
 }
 
-function closeConfirmModal() {
-  if (confirmBusy) return;
+function closeConfirmModal(force = false) {
+  if (confirmBusy && !force) return;
   confirmAction = null;
   elements.confirmModal.classList.add('hidden');
   elements.confirmModal.setAttribute('aria-hidden', 'true');
@@ -486,7 +491,8 @@ async function handleConfirmSubmit() {
   elements.confirmSubmit.disabled = true;
   try {
     await confirmAction();
-    closeConfirmModal();
+    confirmBusy = false;
+    closeConfirmModal(true);
   } catch (error) {
     showToast('خطأ', error.message, 'error');
   } finally {
@@ -504,7 +510,7 @@ async function handleDelete(studentId) {
         method: 'DELETE'
       });
       showToast('تم الحذف', 'تم حذف الطالب بنجاح.', 'success');
-      loadStudents(elements.searchInput.value.trim());
+      loadStudents();
     }
   });
 }
@@ -526,7 +532,7 @@ function handleDeleteSelected() {
         throw new Error('حدثت أخطاء أثناء الحذف الجماعي.');
       }
       showToast('تم الحذف', 'تم حذف الطلاب المحددين بنجاح.', 'success');
-      loadStudents(elements.searchInput.value.trim());
+      loadStudents();
     }
   });
 }
@@ -567,8 +573,7 @@ function handleSelectAllChange() {
 }
 
 function handleSearch() {
-  const query = elements.searchInput.value.trim();
-  loadStudents(query);
+  applyFilters({ resetPage: true });
 }
 
 function handleSearchInput() {
@@ -576,6 +581,140 @@ function handleSearchInput() {
   searchTimeout = window.setTimeout(() => {
     handleSearch();
   }, 350);
+}
+
+function updateClassFilterOptions(gradeValue) {
+  if (!elements.classFilter) return;
+  const grade = normalizeValue(gradeValue);
+  if (!grade) {
+    elements.classFilter.innerHTML = '<option value="">كل الشعب</option>';
+    elements.classFilter.value = '';
+    elements.classFilter.disabled = true;
+    return;
+  }
+
+  const classes = new Set();
+  state.students.forEach((student) => {
+    const studentGrade = normalizeValue(student.Grade || student.grade);
+    if (studentGrade !== grade) return;
+    const className = normalizeValue(student.Class || student.class);
+    if (className) classes.add(className);
+  });
+
+  const options = ['<option value="">كل الشعب</option>'];
+  Array.from(classes)
+    .sort((a, b) => a.localeCompare(b, 'ar'))
+    .forEach((className) => {
+      options.push(`<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`);
+    });
+
+  const currentValue = elements.classFilter.value;
+  elements.classFilter.innerHTML = options.join('');
+  elements.classFilter.disabled = false;
+  elements.classFilter.value = classes.has(currentValue) ? currentValue : '';
+}
+
+function getFilteredStudents() {
+  const query = normalizeValue(elements.searchInput.value).toLowerCase();
+  const gradeFilter = normalizeValue(elements.gradeFilter.value);
+  const classFilter = normalizeValue(elements.classFilter.value);
+
+  return state.students.filter((student) => {
+    const studentId = normalizeValue(student.StudentId || student.studentId);
+    const name = normalizeValue(student.Name || student.name);
+    const grade = normalizeValue(student.Grade || student.grade);
+    const className = normalizeValue(student.Class || student.class);
+
+    if (query) {
+      const matchesId = studentId.toLowerCase().includes(query);
+      const matchesName = name.toLowerCase().includes(query);
+      if (!matchesId && !matchesName) return false;
+    }
+
+    if (gradeFilter && grade !== gradeFilter) return false;
+    if (classFilter && className !== classFilter) return false;
+
+    return true;
+  });
+}
+
+function updatePagination(totalPages) {
+  if (!elements.pagination) return;
+  if (!totalPages || totalPages <= 1) {
+    elements.pagination.innerHTML = '';
+    return;
+  }
+
+  const pageButtons = Array.from({ length: totalPages }, (_, index) => {
+    const page = index + 1;
+    const isActive = page === state.currentPage;
+    return `
+      <button class="btn btn-outline btn-sm${isActive ? ' is-active' : ''}" data-page="${page}">
+        ${page}
+      </button>
+    `;
+  }).join('');
+
+  elements.pagination.innerHTML = `
+    <button class="btn btn-outline btn-sm" data-page="prev" ${state.currentPage === 1 ? 'disabled' : ''}>
+      السابق
+    </button>
+    <div class="pagination-pages">${pageButtons}</div>
+    <button class="btn btn-outline btn-sm" data-page="next" ${state.currentPage === totalPages ? 'disabled' : ''}>
+      التالي
+    </button>
+  `;
+}
+
+function applyFilters({ resetPage = false } = {}) {
+  if (resetPage) {
+    state.currentPage = 1;
+  }
+
+  const filtered = getFilteredStudents();
+  const totalPages = filtered.length ? Math.ceil(filtered.length / state.pageSize) : 0;
+  if (totalPages && state.currentPage > totalPages) {
+    state.currentPage = totalPages;
+  }
+  const start = (state.currentPage - 1) * state.pageSize;
+  const paginated = filtered.slice(start, start + state.pageSize);
+  renderStudents(paginated);
+  updatePagination(totalPages);
+  updateBulkDeleteState();
+}
+
+function handleGradeFilterChange() {
+  updateClassFilterOptions(elements.gradeFilter.value);
+  applyFilters({ resetPage: true });
+}
+
+function handleClassFilterChange() {
+  applyFilters({ resetPage: true });
+}
+
+function handleClearFilters() {
+  elements.searchInput.value = '';
+  elements.gradeFilter.value = '';
+  updateClassFilterOptions('');
+  applyFilters({ resetPage: true });
+}
+
+function handlePaginationClick(event) {
+  const button = event.target.closest('[data-page]');
+  if (!button || button.disabled) return;
+  const pageValue = button.dataset.page;
+  const totalPages = Math.ceil(getFilteredStudents().length / state.pageSize);
+  if (!totalPages) return;
+
+  if (pageValue === 'prev') {
+    state.currentPage = Math.max(1, state.currentPage - 1);
+  } else if (pageValue === 'next') {
+    state.currentPage = Math.min(totalPages, state.currentPage + 1);
+  } else {
+    state.currentPage = Number(pageValue) || 1;
+  }
+
+  applyFilters();
 }
 
 function handleBackdropClick(event) {
@@ -595,6 +734,10 @@ function init() {
   elements.deleteSelectedButton.addEventListener('click', handleDeleteSelected);
   elements.searchButton.addEventListener('click', handleSearch);
   elements.searchInput.addEventListener('input', handleSearchInput);
+  elements.gradeFilter.addEventListener('change', handleGradeFilterChange);
+  elements.classFilter.addEventListener('change', handleClassFilterChange);
+  elements.clearFiltersButton.addEventListener('click', handleClearFilters);
+  elements.pagination.addEventListener('click', handlePaginationClick);
   elements.body.addEventListener('click', handleTableClick);
   elements.body.addEventListener('change', handleTableChange);
   elements.form.addEventListener('submit', handleSubmit);

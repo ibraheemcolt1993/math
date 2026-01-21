@@ -52,6 +52,30 @@
             <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
             <button class="btn btn-outline" disabled>تصدير Excel (قريباً)</button>
           </div>
+            <div class="row filter-row">
+              <div class="field">
+                <label class="label" for="gradeFilter">الصف</label>
+                <select id="gradeFilter" class="input">
+                  <option value="">كل الصفوف</option>
+                  <option value="1">الأول</option>
+                  <option value="2">الثاني</option>
+                  <option value="3">الثالث</option>
+                  <option value="4">الرابع</option>
+                  <option value="5">الخامس</option>
+                  <option value="6">السادس</option>
+                  <option value="7">السابع</option>
+                  <option value="8">الثامن</option>
+                  <option value="9">التاسع</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="classFilter">الشعبة</label>
+                <select id="classFilter" class="input" disabled>
+                  <option value="">كل الشعب</option>
+                </select>
+              </div>
+              <button id="btnClearFilters" class="btn btn-outline">مسح الفلاتر</button>
+            </div>
             <div class="row search-row">
               <div class="field w-100">
                 <label class="label" for="searchInput">بحث سريع</label>
@@ -83,6 +107,7 @@
               </tbody>
             </table>
           </div>
+          <div id="studentsPagination" class="pagination" aria-label="الصفحات"></div>
         </div>
       </section>
     </main>
