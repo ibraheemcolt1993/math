@@ -6,6 +6,7 @@ const elements = {
   body: document.getElementById('studentsBody'),
   addButton: document.getElementById('btnAddStudent'),
   deleteSelectedButton: document.getElementById('btnDeleteSelected'),
+  exportButton: document.getElementById('btnExportStudents'),
   searchInput: document.getElementById('searchInput'),
   searchButton: document.getElementById('btnSearch'),
   gradeFilter: document.getElementById('gradeFilter'),
@@ -143,6 +144,31 @@ function normalizeDigits(value) {
     .split('')
     .map((char) => map[char] ?? char)
     .join('');
+}
+
+function normalizeGrade(value) {
+  const normalized = normalizeDigits(value);
+  const trimmed = normalizeValue(normalized);
+  if (!trimmed) return '';
+  if (/^[1-9]$/.test(trimmed)) return trimmed;
+
+  let text = trimmed.replace(/\s+/g, '');
+  text = text.replace(/^الصف/, '').replace(/^صف/, '').replace(/^ال/, '');
+  text = text.replace(/[أإآ]/g, 'ا');
+
+  const gradeMap = {
+    اول: '1',
+    ثاني: '2',
+    ثالث: '3',
+    رابع: '4',
+    خامس: '5',
+    سادس: '6',
+    سابع: '7',
+    ثامن: '8',
+    تاسع: '9'
+  };
+
+  return gradeMap[text] || trimmed;
 }
 
 function toNumber(value) {
@@ -474,6 +500,7 @@ async function loadStudents() {
   } catch (error) {
     setLoading('تعذر تحميل البيانات.');
     showToast('خطأ', error.message, 'error');
+    updateExportButtonState(0);
   }
 }
 
@@ -659,7 +686,7 @@ function buildImportRows() {
     const studentId = normalizeDigits(studentIdRaw);
     const name = normalizeValue(nameRaw);
     const { iso: birthDate, error: birthError } = parseBirthDate(birthRaw);
-    const grade = normalizeDigits(gradeRaw);
+    const grade = normalizeGrade(gradeRaw);
     const className = normalizeDigits(classRaw);
 
     rows.push({
@@ -898,11 +925,11 @@ function renderStudents(list) {
 
   elements.body.innerHTML = list
     .map((student) => {
-      const studentId = normalizeValue(student.StudentId || student.studentId);
-      const birthYear = normalizeValue(student.BirthYear || student.birthYear);
+      const studentId = normalizeDigits(student.StudentId || student.studentId);
+      const birthYear = normalizeDigits(student.BirthYear || student.birthYear);
       const name = normalizeValue(student.Name || student.name);
-      const grade = normalizeValue(student.Grade || student.grade);
-      const className = normalizeValue(student.Class || student.class);
+      const grade = normalizeGrade(student.Grade || student.grade);
+      const className = normalizeDigits(student.Class || student.class);
       const gradeLabel = gradeLabels[grade] || grade;
 
       return `
@@ -958,7 +985,7 @@ function openModal(mode, student = {}) {
   selectWheelValue(elements.wheelMonth, monthValue);
   buildBirthDayWheel(toNumber(yearValue), toNumber(monthValue), toNumber(dayValue));
 
-  const gradeValue = normalizeValue(student.Grade || student.grade);
+  const gradeValue = normalizeGrade(student.Grade || student.grade);
   selectWheelValue(elements.wheelGrade, gradeValue);
 
   elements.studentIdInput.disabled = isEdit;
@@ -1081,6 +1108,55 @@ function updateBulkDeleteState() {
   }
 }
 
+function updateExportButtonState(total) {
+  if (!elements.exportButton) return;
+  elements.exportButton.disabled = total === 0;
+}
+
+function buildExportFileName() {
+  const rawGrade = normalizeGrade(elements.gradeFilter.value);
+  const rawClass = normalizeDigits(elements.classFilter.value);
+  const toSafePart = (value) => {
+    const text = normalizeValue(value);
+    return text ? text.replace(/\s+/g, '-') : 'all';
+  };
+  const gradePart = toSafePart(rawGrade);
+  const classPart = toSafePart(rawClass);
+  return `students_grade-${gradePart}_class-${classPart}.xlsx`;
+}
+
+function handleExportStudents() {
+  const filtered = getFilteredStudents();
+  if (!filtered.length) {
+    updateExportButtonState(0);
+    showToast('تنبيه', 'لا توجد نتائج للتصدير.', 'warning');
+    return;
+  }
+
+  if (!window.XLSX) {
+    showToast('خطأ', 'تعذر تحميل مكتبة تصدير Excel.', 'error');
+    return;
+  }
+
+  const headers = ['StudentId', 'BirthYear', 'Name', 'FirstName', 'Grade', 'Class', 'BirthDate'];
+  const rows = filtered.map((student) => {
+    const studentId = normalizeDigits(student.StudentId || student.studentId);
+    const birthYear = normalizeDigits(student.BirthYear || student.birthYear);
+    const name = normalizeValue(student.Name || student.name);
+    const firstName = normalizeValue(student.FirstName || student.firstName);
+    const grade = normalizeGrade(student.Grade || student.grade);
+    const className = normalizeDigits(student.Class || student.class);
+    const birthDate = normalizeValue(student.BirthDate || student.birthDate);
+
+    return [studentId, birthYear, name, firstName, grade, className, birthDate];
+  });
+
+  const worksheet = window.XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const workbook = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+  window.XLSX.writeFile(workbook, buildExportFileName());
+}
+
 function openConfirmModal({ title, message, onConfirm }) {
   confirmAction = onConfirm;
   elements.confirmTitle.textContent = title;
@@ -1196,7 +1272,7 @@ function handleSearchInput() {
 
 function updateClassFilterOptions(gradeValue) {
   if (!elements.classFilter) return;
-  const grade = normalizeValue(gradeValue);
+  const grade = normalizeGrade(gradeValue);
   if (!grade) {
     elements.classFilter.innerHTML = '<option value="">كل الشعب</option>';
     elements.classFilter.value = '';
@@ -1206,9 +1282,9 @@ function updateClassFilterOptions(gradeValue) {
 
   const classes = new Set();
   state.students.forEach((student) => {
-    const studentGrade = normalizeValue(student.Grade || student.grade);
+    const studentGrade = normalizeGrade(student.Grade || student.grade);
     if (studentGrade !== grade) return;
-    const className = normalizeValue(student.Class || student.class);
+    const className = normalizeDigits(student.Class || student.class);
     if (className) classes.add(className);
   });
 
@@ -1227,14 +1303,14 @@ function updateClassFilterOptions(gradeValue) {
 
 function getFilteredStudents() {
   const query = normalizeValue(elements.searchInput.value).toLowerCase();
-  const gradeFilter = normalizeValue(elements.gradeFilter.value);
-  const classFilter = normalizeValue(elements.classFilter.value);
+  const gradeFilter = normalizeGrade(elements.gradeFilter.value);
+  const classFilter = normalizeDigits(elements.classFilter.value);
 
   return state.students.filter((student) => {
-    const studentId = normalizeValue(student.StudentId || student.studentId);
+    const studentId = normalizeDigits(student.StudentId || student.studentId);
     const name = normalizeValue(student.Name || student.name);
-    const grade = normalizeValue(student.Grade || student.grade);
-    const className = normalizeValue(student.Class || student.class);
+    const grade = normalizeGrade(student.Grade || student.grade);
+    const className = normalizeDigits(student.Class || student.class);
 
     if (query) {
       const matchesId = studentId.toLowerCase().includes(query);
@@ -1292,6 +1368,7 @@ function applyFilters({ resetPage = false } = {}) {
   renderStudents(paginated);
   updatePagination(totalPages);
   updateBulkDeleteState();
+  updateExportButtonState(filtered.length);
 }
 
 function handleGradeFilterChange() {
@@ -1359,6 +1436,9 @@ function init() {
   initializeWheels();
   elements.addButton.addEventListener('click', () => openModal('add'));
   elements.deleteSelectedButton.addEventListener('click', handleDeleteSelected);
+  if (elements.exportButton) {
+    elements.exportButton.addEventListener('click', handleExportStudents);
+  }
   elements.searchButton.addEventListener('click', handleSearch);
   elements.searchInput.addEventListener('input', handleSearchInput);
   elements.gradeFilter.addEventListener('change', handleGradeFilterChange);
