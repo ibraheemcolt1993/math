@@ -27,7 +27,7 @@ module.exports = async function (context, req) {
     const weekResult = await dbPool
       .request()
       .input('week', sql.Int, weekParam)
-      .query('SELECT Week, Title FROM dbo.Weeks WHERE Week = @week');
+      .query('SELECT Week, Title FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
 
     if (!weekResult.recordset.length) {
       context.res = {

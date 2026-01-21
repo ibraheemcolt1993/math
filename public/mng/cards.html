@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — إدارة البطاقات</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>لوحة إدارة البطاقات</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+            الرئيسية
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <div class="warning-banner" role="alert">
+        ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
+      </div>
+
+      <section class="card manager-card">
+        <div class="card-header">
+          <div>
+            <h1 class="h1">Cards Manager</h1>
+            <p class="p">إدارة بطاقات الأسابيع (عرض، إضافة، تعديل، حذف).</p>
+          </div>
+          <span class="badge primary">بدون تسجيل دخول</span>
+        </div>
+
+        <div class="card-body">
+          <div class="manager-toolbar">
+            <div class="row">
+              <button id="btnAddCard" class="btn btn-primary">إضافة بطاقة</button>
+              <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
+              <button id="btnExportCards" class="btn btn-outline" disabled>تصدير Excel</button>
+            </div>
+            <div class="row filter-row">
+              <div class="field">
+                <label class="label" for="gradeFilter">الصف</label>
+                <select id="gradeFilter" class="input">
+                  <option value="">كل الصفوف</option>
+                  <option value="1">الأول</option>
+                  <option value="2">الثاني</option>
+                  <option value="3">الثالث</option>
+                  <option value="4">الرابع</option>
+                  <option value="5">الخامس</option>
+                  <option value="6">السادس</option>
+                  <option value="7">السابع</option>
+                  <option value="8">الثامن</option>
+                  <option value="9">التاسع</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="classFilter">الشعبة</label>
+                <select id="classFilter" class="input" disabled>
+                  <option value="">كل الشعب</option>
+                </select>
+              </div>
+            </div>
+            <div class="row search-row">
+              <div class="field w-100">
+                <label class="label" for="searchInput">بحث سريع</label>
+                <input id="searchInput" class="input" placeholder="ابحث برقم البطاقة أو العنوان" autocomplete="off" />
+              </div>
+              <button id="btnSearch" class="btn btn-outline">بحث</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" aria-live="polite">
+              <thead>
+                <tr>
+                  <th class="select-cell">
+                    <input id="selectAllCards" type="checkbox" aria-label="تحديد الكل" />
+                  </th>
+                  <th>رقم البطاقة</th>
+                  <th>العنوان</th>
+                  <th>الصف</th>
+                  <th>الشعب المستهدفة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="cardsBody">
+                <tr>
+                  <td colspan="6" class="muted center">تحميل البيانات...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container section center">
+      <p class="small">© math — لوحة إدارة تجريبية</p>
+    </footer>
+  </div>
+
+  <div id="cardModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle" class="h2">إضافة بطاقة</h2>
+        <button id="btnCloseModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <form id="cardForm" class="modal-body">
+        <div class="field">
+          <label class="label" for="weekInput">رقم البطاقة</label>
+          <input id="weekInput" class="input ltr" inputmode="numeric" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label class="label" for="titleInput">العنوان</label>
+          <input id="titleInput" class="input" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label class="label" for="gradeInput">الصف</label>
+          <select id="gradeInput" class="input" required>
+            <option value="">اختر الصف</option>
+            <option value="1">الأول</option>
+            <option value="2">الثاني</option>
+            <option value="3">الثالث</option>
+            <option value="4">الرابع</option>
+            <option value="5">الخامس</option>
+            <option value="6">السادس</option>
+            <option value="7">السابع</option>
+            <option value="8">الثامن</option>
+            <option value="9">التاسع</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label">الشعب المستهدفة</label>
+          <label class="label" for="allClassesToggle">
+            <input id="allClassesToggle" type="checkbox" checked />
+            كل الشعب
+          </label>
+          <div id="classesPicker" class="field">
+            <div class="row" id="classesOptions"></div>
+            <div class="field">
+              <label class="label" for="classesManual">إدخال يدوي (مفصول بفواصل)</label>
+              <input id="classesManual" class="input" placeholder="مثال: 1,2,3" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-actions">
+          <button id="btnSubmit" class="btn btn-primary" type="submit">حفظ</button>
+          <button id="btnCancel" class="btn btn-outline" type="button">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="modal-header">
+        <h2 id="confirmTitle" class="h2">تأكيد الحذف</h2>
+        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage" class="p">هل أنت متأكد من حذف البطاقة؟</p>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnConfirmDelete" class="btn btn-primary" type="button">تأكيد الحذف</button>
+        <button id="btnCancelDelete" class="btn btn-outline" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script type="module" src="/assets/js/mng/cardsManager.js"></script>
+</body>
+</html>
