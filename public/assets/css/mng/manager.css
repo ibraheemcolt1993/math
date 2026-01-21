@@ -41,7 +41,7 @@
 
 .table th,
 .table td {
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: right;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
@@ -62,8 +62,10 @@
 
 .table td.actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
+  width: 132px;
+  min-width: 132px;
 }
 
 .table .select-cell {
@@ -72,12 +74,33 @@
 }
 
 .icon-btn {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--r-sm);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pagination .btn.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
 }
 
 .modal {
