@@ -95,12 +95,13 @@
                   <th>العنوان</th>
                   <th>الصف</th>
                   <th>الشعب المستهدفة</th>
+                  <th>المتطلب السابق</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
               <tbody id="cardsBody">
                 <tr>
-                  <td colspan="6" class="muted center">تحميل البيانات...</td>
+                  <td colspan="7" class="muted center">تحميل البيانات...</td>
                 </tr>
               </tbody>
             </table>
@@ -122,9 +123,9 @@
         <button id="btnCloseModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
       </div>
       <form id="cardForm" class="modal-body">
-        <div class="field">
-          <label class="label" for="weekInput">رقم البطاقة</label>
-          <input id="weekInput" class="input ltr" inputmode="numeric" autocomplete="off" required />
+        <div class="field" id="weekDisplayRow">
+          <label class="label">معرف البطاقة</label>
+          <div id="weekDisplay" class="help">—</div>
         </div>
         <div class="field">
           <label class="label" for="titleInput">العنوان</label>
@@ -144,6 +145,11 @@
             <option value="8">الثامن</option>
             <option value="9">التاسع</option>
           </select>
+        </div>
+        <div class="field">
+          <label class="label" for="prereqSelect">المتطلب السابق</label>
+          <select id="prereqSelect" class="input"></select>
+          <div class="help">اختياري — تظهر بطاقات الصف نفسه فقط.</div>
         </div>
         <div class="field">
           <label class="label">الشعب المستهدفة</label>
@@ -181,6 +187,39 @@
       <div class="modal-footer modal-actions">
         <button id="btnConfirmDelete" class="btn btn-primary" type="button">تأكيد الحذف</button>
         <button id="btnCancelDelete" class="btn btn-outline" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="completionsModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="completionsTitle">
+      <div class="modal-header">
+        <h2 id="completionsTitle" class="h2">من أنهى البطاقة</h2>
+        <button id="btnCloseCompletions" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="row space-between">
+          <p id="completionsSubtitle" class="p muted">جاري التحميل...</p>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>رقم الطالب</th>
+                <th>الاسم</th>
+                <th>الشعبة</th>
+                <th>النتيجة</th>
+                <th>تاريخ الإكمال</th>
+              </tr>
+            </thead>
+            <tbody id="completionsBody">
+              <tr>
+                <td colspan="5" class="muted center">تحميل البيانات...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

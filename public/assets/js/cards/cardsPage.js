@@ -7,8 +7,8 @@
    ========================================================= */
 
 import { fetchJson } from '../core/api.js';
-import { API_PATHS, DATA_PATHS } from '../core/constants.js';
-import { getWeeksForClass } from '../core/gradeMap.js';
+import { API_PATHS } from '../core/constants.js';
+import { normalizeDigits } from '../core/normalizeDigits.js';
 import {
   getCachedCards,
   getLastStudentId,
@@ -30,6 +30,7 @@ export async function initCardsPage() {
   let readyWeeks = null;
 
   const student = getStudentSession();
+  const classInfo = parseStudentClass(student?.class);
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
@@ -40,31 +41,42 @@ export async function initCardsPage() {
   try {
     const cached = getCachedCards();
     if (cached?.length) {
-      renderCards(listEl, filterCardsForStudent(cached, student), studentId, readyWeeks);
+      renderCards(listEl, cached, studentId, readyWeeks);
     }
 
     const progress = getStudentCompletions(studentId);
     syncCardCompletions(studentId, progress);
 
+    const cardsUrl = buildCardsUrl(classInfo);
     const [cards, weeks] = await Promise.all([
-      fetchJson(DATA_PATHS.CARDS, { noStore: true }),
+      fetchJson(cardsUrl, { noStore: true }),
       fetchJson(API_PATHS.WEEKS, { noStore: true }),
     ]);
     const normalized = Array.isArray(cards) ? cards : [];
     readyWeeks = normalizeReadyWeeks(weeks);
     setCachedCards(normalized);
-    renderCards(listEl, filterCardsForStudent(normalized, student), studentId, readyWeeks);
+    renderCards(listEl, normalized, studentId, readyWeeks);
   } catch (e) {
     showToast('خطأ', 'فشل تحميل البطاقات', 'error');
     console.error(e);
   }
 }
 
-function filterCardsForStudent(cards, student) {
-  const weeks = getWeeksForClass(student?.class);
-  if (!weeks?.length) return cards;
-  const allowed = new Set(weeks.map((week) => Number(week)));
-  return cards.filter((card) => allowed.has(Number(card.week)));
+function parseStudentClass(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  if (!raw) return { grade: '', className: '' };
+  const match = raw.match(/^(\d+)\s*[/\\-]\s*(\d+)$/);
+  if (match) {
+    return { grade: match[1], className: match[2] };
+  }
+  return { grade: raw, className: raw };
+}
+
+function buildCardsUrl({ grade, className }) {
+  const params = new URLSearchParams();
+  if (grade) params.set('grade', grade);
+  if (className) params.set('class', className);
+  return `${API_PATHS.CARDS}?${params.toString()}`;
 }
 
 function normalizeReadyWeeks(weeks) {
@@ -80,10 +92,12 @@ function renderCards(container, cards, studentId, readyWeeks) {
   container.innerHTML = '';
 
   cards.forEach((card) => {
-    const done = isCardDone(studentId, card.week);
-    const prereqDone = !card.prereq || isCardDone(studentId, card.prereq);
+    const weekValue = card.week ?? card.Week;
+    const prereqWeek = card.prereqWeek ?? card.PrereqWeek ?? card.prereq;
+    const done = isCardDone(studentId, weekValue);
+    const prereqDone = !prereqWeek || isCardDone(studentId, prereqWeek);
     const locked = !prereqDone;
-    const isReady = !readyWeeks || readyWeeks.has(Number(card.week));
+    const isReady = !readyWeeks || readyWeeks.has(Number(weekValue));
     const disabled = !isReady;
 
     const cardEl = document.createElement('div');
@@ -92,8 +106,8 @@ function renderCards(container, cards, studentId, readyWeeks) {
     cardEl.innerHTML = `
       <div class="card-header">
         <div>
-          <h3 class="card-title">${escapeHtml(card.title)}</h3>
-          <p class="card-subtitle">الأسبوع ${card.week}</p>
+          <h3 class="card-title">${escapeHtml(card.title ?? card.Title)}</h3>
+          <p class="card-subtitle">الأسبوع ${escapeHtml(weekValue)}</p>
         </div>
         ${done ? starHtml() : ''}
       </div>
@@ -115,7 +129,7 @@ function renderCards(container, cards, studentId, readyWeeks) {
     const btn = cardEl.querySelector('button');
     if (!locked && !disabled) {
       btn.addEventListener('click', () => {
-        goToLesson(card.week);
+        goToLesson(weekValue);
       });
     } else if (locked) {
       btn.addEventListener('click', () => {

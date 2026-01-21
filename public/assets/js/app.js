@@ -25,7 +25,7 @@ import { showToast } from './ui/toast.js';
 import { initLessonPage } from './lesson/lessonPage.js';
 import { findStudentByIdentity } from './core/students.js';
 import { fetchJson } from './core/api.js';
-import { API_PATHS, DATA_PATHS } from './core/constants.js';
+import { API_PATHS } from './core/constants.js';
 import { normalizeDigits } from './core/normalizeDigits.js';
 
 const LS_CURRENT_STUDENT = 'math:currentStudent'; // legacy cache
@@ -252,9 +252,10 @@ async function loadStudentData(student, { silent = false } = {}) {
   }
 
   try {
+    const cardsUrl = buildCardsUrl(student);
     const [progress, cards] = await Promise.all([
       fetchJson(`${API_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(student.id)}`, { noStore: true }),
-      fetchJson(DATA_PATHS.CARDS, { noStore: true }),
+      fetchJson(cardsUrl, { noStore: true }),
     ]);
 
     setStudentCompletions(student.id, Array.isArray(progress) ? progress : []);
@@ -291,6 +292,24 @@ function normalizeStoredStudent(student) {
     fullName: resolvedFullName,
     class: String(student.class ?? student.Class ?? '')
   };
+}
+
+function parseStudentClass(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  if (!raw) return { grade: '', className: '' };
+  const match = raw.match(/^(\\d+)\\s*[/\\-]\\s*(\\d+)$/);
+  if (match) {
+    return { grade: match[1], className: match[2] };
+  }
+  return { grade: raw, className: raw };
+}
+
+function buildCardsUrl(student) {
+  const { grade, className } = parseStudentClass(student?.class);
+  const params = new URLSearchParams();
+  if (grade) params.set('grade', grade);
+  if (className) params.set('class', className);
+  return `${API_PATHS.CARDS}?${params.toString()}`;
 }
 
 /* ---------- UI: Birth Year input injection ---------- */
