@@ -13,6 +13,30 @@ function normalizeDigits(value) {
   return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
 }
 
+function normalizeGrade(value) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  if (!cleaned) return '';
+  if (/^[1-9]$/.test(cleaned)) return cleaned;
+
+  let text = cleaned.replace(/\s+/g, '');
+  text = text.replace(/^الصف/, '').replace(/^صف/, '').replace(/^ال/, '');
+  text = text.replace(/[أإآ]/g, 'ا');
+
+  const gradeMap = {
+    اول: '1',
+    ثاني: '2',
+    ثالث: '3',
+    رابع: '4',
+    خامس: '5',
+    سادس: '6',
+    سابع: '7',
+    ثامن: '8',
+    تاسع: '9'
+  };
+
+  return gradeMap[text] || cleaned;
+}
+
 function toCleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -72,8 +96,8 @@ async function handlePost(context, req) {
   const birthDateValue = toCleanString(payload.birthDate);
   const birthDateInput = normalizeDateString(birthDateValue);
   let firstName = toCleanString(payload.firstName);
-  const grade = payload.grade != null ? String(payload.grade).trim() : '';
-  const className = payload.class != null ? String(payload.class).trim() : '';
+  const grade = payload.grade != null ? normalizeGrade(payload.grade) : '';
+  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : '';
 
   if (!studentId) {
     context.res = badRequest('studentId is required.');
@@ -166,8 +190,8 @@ async function handlePut(context, req) {
   if (payload.name != null && !incomingFirstName) {
     firstName = deriveFirstName(name);
   }
-  const grade = payload.grade != null ? String(payload.grade).trim() : existing.Grade;
-  const className = payload.class != null ? String(payload.class).trim() : existing.Class;
+  const grade = payload.grade != null ? normalizeGrade(payload.grade) : existing.Grade;
+  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : existing.Class;
   const birthDateValue = payload.birthDate != null ? toCleanString(payload.birthDate) : '';
   let birthDate = existing.BirthDate;
 
