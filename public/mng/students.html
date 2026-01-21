@@ -47,10 +47,11 @@
 
         <div class="card-body">
           <div class="manager-toolbar">
-            <div class="row">
-              <button id="btnAddStudent" class="btn btn-primary">إضافة طالب</button>
-              <button class="btn btn-outline" disabled>تصدير Excel (قريباً)</button>
-            </div>
+          <div class="row">
+            <button id="btnAddStudent" class="btn btn-primary">إضافة طالب</button>
+            <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
+            <button class="btn btn-outline" disabled>تصدير Excel (قريباً)</button>
+          </div>
             <div class="row search-row">
               <div class="field w-100">
                 <label class="label" for="searchInput">بحث سريع</label>
@@ -64,6 +65,9 @@
             <table class="table" aria-live="polite">
               <thead>
                 <tr>
+                  <th class="select-cell">
+                    <input id="selectAllStudents" type="checkbox" aria-label="تحديد الكل" />
+                  </th>
                   <th>رقم الهوية</th>
                   <th>سنة الميلاد</th>
                   <th>الاسم الرباعي</th>
@@ -74,7 +78,7 @@
               </thead>
               <tbody id="studentsBody">
                 <tr>
-                  <td colspan="6" class="muted center">تحميل البيانات...</td>
+                  <td colspan="7" class="muted center">تحميل البيانات...</td>
                 </tr>
               </tbody>
             </table>
@@ -101,27 +105,52 @@
           <input id="studentIdInput" class="input ltr" inputmode="numeric" autocomplete="off" required />
         </div>
         <div class="field">
-          <label class="label" for="birthYearInput">سنة الميلاد</label>
-          <input id="birthYearInput" class="input ltr" inputmode="numeric" maxlength="4" autocomplete="off" required />
+          <label class="label">تاريخ الميلاد</label>
+          <div class="wheel-row">
+            <div id="wheelYear" class="wheel" aria-label="السنة"></div>
+            <div id="wheelMonth" class="wheel" aria-label="الشهر"></div>
+            <div id="wheelDay" class="wheel" aria-label="اليوم"></div>
+          </div>
         </div>
         <div class="field">
           <label class="label" for="nameInput">الاسم الرباعي</label>
           <input id="nameInput" class="input" autocomplete="off" required />
         </div>
         <div class="field">
-          <label class="label" for="gradeInput">الصف</label>
-          <input id="gradeInput" class="input" autocomplete="off" />
+          <label class="label" for="firstNameInput">الاسم الأول</label>
+          <input id="firstNameInput" class="input" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="label">الصف</label>
+          <div id="wheelGrade" class="wheel" aria-label="الصف"></div>
         </div>
         <div class="field">
           <label class="label" for="classInput">الشعبة</label>
           <input id="classInput" class="input" autocomplete="off" />
         </div>
 
-        <div class="modal-actions">
+        <div class="modal-footer modal-actions">
           <button id="btnSubmit" class="btn btn-primary" type="submit">حفظ</button>
           <button id="btnCancel" class="btn btn-outline" type="button">إلغاء</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="modal-header">
+        <h2 id="confirmTitle" class="h2">تأكيد الحذف</h2>
+        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage" class="p">هل أنت متأكد من حذف الطالب؟</p>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnConfirmDelete" class="btn btn-primary" type="button">تأكيد الحذف</button>
+        <button id="btnCancelDelete" class="btn btn-outline" type="button">إلغاء</button>
+      </div>
     </div>
   </div>
 
