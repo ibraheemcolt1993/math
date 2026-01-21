@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — محرر محتوى البطاقة</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
+</head>
+
+<body>
+  <div class="page-shell">
+    <header class="editor-header">
+      <div class="container header-inner">
+        <div>
+          <a id="btnBack" class="btn btn-ghost btn-sm" href="/mng/cards.html">رجوع للبطاقات</a>
+          <h1 class="editor-title" id="cardTitle">بطاقة رقم —</h1>
+          <p class="editor-subtitle" id="cardSubtitle">تحميل البيانات...</p>
+        </div>
+        <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
+      </div>
+    </header>
+
+    <main class="container editor-layout">
+      <aside class="editor-sidebar">
+        <div class="sidebar-title">الأقسام</div>
+        <ul id="sectionsList" class="sidebar-list"></ul>
+      </aside>
+
+      <section class="editor-panel">
+        <div id="editorContent">تحميل المحتوى...</div>
+      </section>
+    </main>
+
+    <div class="floating-actions">
+      <button id="btnAddConcept" class="btn btn-outline">إضافة قسم/مفهوم</button>
+      <button id="btnAddItem" class="btn btn-outline">إضافة عنصر</button>
+      <button id="btnAddQuestion" class="btn btn-outline">إضافة سؤال</button>
+    </div>
+  </div>
+
+  <div id="confirmLeave" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmLeaveTitle">
+      <div class="modal-header">
+        <h2 id="confirmLeaveTitle" class="h2">تغييرات غير محفوظة</h2>
+        <button id="btnCloseLeave" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <p class="p">لديك تغييرات غير محفوظة. هل تريد المتابعة بدون حفظ؟</p>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnConfirmLeave" class="btn btn-primary" type="button">متابعة بدون حفظ</button>
+        <button id="btnCancelLeave" class="btn btn-outline" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/assets/js/mng/cardEditor.js"></script>
+</body>
+</html>

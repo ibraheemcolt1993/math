@@ -14,6 +14,10 @@ const ROUTES = {
     { methods: ['POST'], path: '/api/mng/cards', description: 'Create card (management).' },
     { methods: ['PUT'], path: '/api/mng/cards/{week}', description: 'Update card (management).' },
     { methods: ['DELETE'], path: '/api/mng/cards/{week}', description: 'Delete card (management).' },
+    { methods: ['GET'], path: '/api/mng/cards/{week}/completions', description: 'List card completions (management).' },
+    { methods: ['GET'], path: '/api/mng/weeks/{week}/content', description: 'Fetch week content (management).' },
+    { methods: ['PUT'], path: '/api/mng/weeks/{week}/content', description: 'Update week content (management).' },
+    { methods: ['GET'], path: '/api/cards', description: 'Cards list.' },
     { methods: ['GET'], path: '/api/weeks/{week:int}', description: 'Week details.' },
     { methods: ['GET'], path: '/api/weeks', description: 'Weeks list.' },
     { methods: ['GET'], path: '/api/routes', description: 'Route catalog.' }

@@ -18,9 +18,11 @@ const elements = {
   modalCancel: document.getElementById('btnCancel'),
   form: document.getElementById('cardForm'),
   submitButton: document.getElementById('btnSubmit'),
-  weekInput: document.getElementById('weekInput'),
+  weekDisplayRow: document.getElementById('weekDisplayRow'),
+  weekDisplay: document.getElementById('weekDisplay'),
   titleInput: document.getElementById('titleInput'),
   gradeInput: document.getElementById('gradeInput'),
+  prereqSelect: document.getElementById('prereqSelect'),
   allClassesToggle: document.getElementById('allClassesToggle'),
   classesOptions: document.getElementById('classesOptions'),
   classesManual: document.getElementById('classesManual'),
@@ -29,13 +31,19 @@ const elements = {
   confirmMessage: document.getElementById('confirmMessage'),
   confirmClose: document.getElementById('btnCloseConfirm'),
   confirmCancel: document.getElementById('btnCancelDelete'),
-  confirmSubmit: document.getElementById('btnConfirmDelete')
+  confirmSubmit: document.getElementById('btnConfirmDelete'),
+  completionsModal: document.getElementById('completionsModal'),
+  completionsTitle: document.getElementById('completionsTitle'),
+  completionsSubtitle: document.getElementById('completionsSubtitle'),
+  completionsBody: document.getElementById('completionsBody'),
+  completionsClose: document.getElementById('btnCloseCompletions')
 };
 
 const state = {
   cards: [],
   mode: 'add',
-  activeWeek: null
+  activeWeek: null,
+  prereqOptions: []
 };
 
 const gradeLabels = {
@@ -59,7 +67,15 @@ let confirmBusy = false;
 function setLoading(message) {
   elements.body.innerHTML = `
     <tr>
-      <td colspan="6" class="muted center">${message}</td>
+      <td colspan="7" class="muted center">${message}</td>
+    </tr>
+  `;
+}
+
+function setCompletionsLoading(message) {
+  elements.completionsBody.innerHTML = `
+    <tr>
+      <td colspan="5" class="muted center">${message}</td>
     </tr>
   `;
 }
@@ -109,6 +125,13 @@ function normalizeDigits(value) {
 function formatGrade(value) {
   const normalized = normalizeDigits(value);
   return gradeLabels[normalized] || normalized || '-';
+}
+
+function formatPrereqLabel(card) {
+  const prereqSeq = normalizeDigits(card.prereqSeq);
+  const prereqTitle = normalizeValue(card.prereqTitle);
+  if (!prereqSeq && !prereqTitle) return '—';
+  return `${escapeHtml(prereqSeq)} — ${escapeHtml(prereqTitle || 'بدون عنوان')}`;
 }
 
 function setClassFilterEnabled(enabled) {
@@ -194,6 +217,7 @@ function renderCards(list) {
   elements.body.innerHTML = list
     .map((card) => {
       const week = normalizeDigits(card.week);
+      const seq = normalizeDigits(card.seq);
       const title = normalizeValue(card.title);
       const gradeLabel = formatGrade(card.grade);
       const classes = Array.isArray(card.classes) ? card.classes : [];
@@ -203,20 +227,34 @@ function renderCards(list) {
         : classes.length
           ? classes.map((entry) => escapeHtml(normalizeDigits(entry))).join(', ')
           : 'غير محدد';
+      const prereqLabel = formatPrereqLabel(card);
 
       return `
         <tr>
           <td class="select-cell">
             <input class="row-check" type="checkbox" data-week="${escapeHtml(week)}" aria-label="تحديد البطاقة" />
           </td>
-          <td class="ltr">${escapeHtml(week)}</td>
+          <td class="ltr">${escapeHtml(seq || '-')}
+            <div class="small muted">ID: ${escapeHtml(week)}</div>
+          </td>
           <td>${escapeHtml(title)}</td>
           <td>${escapeHtml(gradeLabel)}</td>
           <td>${classesLabel}</td>
+          <td>${prereqLabel}</td>
           <td class="actions">
             <button class="btn btn-outline btn-sm icon-btn" data-action="edit" data-week="${escapeHtml(week)}" title="تعديل" aria-label="تعديل">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path fill="currentColor" d="M3 17.25V21h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost btn-sm icon-btn" data-action="content" data-week="${escapeHtml(week)}" title="تحرير المحتوى" aria-label="تحرير المحتوى">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14H7v-2h3v2zm0-4H7v-2h3v2zm0-4H7V7h3v2zm7 8h-5v-2h5v2zm0-4h-5v-2h5v2zm0-4h-5V7h5v2z"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost btn-sm icon-btn" data-action="completions" data-week="${escapeHtml(week)}" title="من أنهى البطاقة" aria-label="من أنهى البطاقة">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
               </svg>
             </button>
             <button class="btn btn-ghost btn-sm icon-btn" data-action="delete" data-week="${escapeHtml(week)}" title="حذف" aria-label="حذف">
@@ -275,22 +313,73 @@ function handleExportCards() {
     return;
   }
 
-  const headers = ['Week', 'Title', 'Grade', 'Classes', 'IsAllClasses'];
+  const headers = ['Seq', 'Title', 'Grade', 'Classes', 'Prereq', 'CompletedCount'];
   const rows = state.cards.map((card) => {
-    const week = normalizeDigits(card.week);
+    const seq = normalizeDigits(card.seq);
     const title = normalizeValue(card.title);
     const grade = normalizeDigits(card.grade);
     const classes = Array.isArray(card.classes) ? card.classes : [];
     const classesText = classes.map((entry) => normalizeDigits(entry)).join(', ');
-    const isAllClasses = card.isAllClasses ? 'true' : 'false';
+    const prereqSeq = normalizeDigits(card.prereqSeq);
+    const prereqTitle = normalizeValue(card.prereqTitle);
+    const prereqText = prereqSeq || prereqTitle ? `${prereqSeq} - ${prereqTitle}` : '';
+    const completedCount = Number(card.completedCount || 0);
 
-    return [week, title, grade, classesText, isAllClasses];
+    return [seq, title, grade, classesText, prereqText, completedCount];
   });
 
   const worksheet = window.XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const workbook = window.XLSX.utils.book_new();
   window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Cards');
   window.XLSX.writeFile(workbook, buildExportFileName());
+}
+
+function buildPrereqOptions(cards, currentWeek) {
+  const options = ['<option value="">لا يوجد</option>'];
+  cards
+    .filter((card) => normalizeDigits(card.week) !== normalizeDigits(currentWeek))
+    .forEach((card) => {
+      const seq = normalizeDigits(card.seq);
+      const title = normalizeValue(card.title);
+      const week = normalizeDigits(card.week);
+      options.push(`<option value="${escapeHtml(week)}">${escapeHtml(seq || '-') } - ${escapeHtml(title || 'بدون عنوان')}</option>`);
+    });
+  return options.join('');
+}
+
+async function updatePrereqOptions(grade, currentWeek, selectedWeek) {
+  if (!elements.prereqSelect) return;
+  if (!grade) {
+    elements.prereqSelect.innerHTML = '<option value="">لا يوجد</option>';
+    elements.prereqSelect.disabled = true;
+    return;
+  }
+
+  elements.prereqSelect.disabled = true;
+  elements.prereqSelect.innerHTML = '<option value="">جاري التحميل...</option>';
+
+  try {
+    const params = new URLSearchParams();
+    params.set('grade', grade);
+    params.set('class', 'ALL_CLASSES');
+
+    const response = await fetch(`${API_BASE}?${params.toString()}`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data?.error || 'تعذر تحميل المتطلبات السابقة.');
+    }
+
+    const cards = Array.isArray(data.cards) ? data.cards : [];
+    cards.sort((a, b) => Number(a.seq) - Number(b.seq));
+    state.prereqOptions = cards;
+    elements.prereqSelect.innerHTML = buildPrereqOptions(cards, currentWeek);
+    elements.prereqSelect.value = normalizeDigits(selectedWeek || '');
+    elements.prereqSelect.disabled = false;
+  } catch (error) {
+    elements.prereqSelect.innerHTML = '<option value="">لا يوجد</option>';
+    elements.prereqSelect.disabled = false;
+    showToast('خطأ', error.message || 'تعذر تحميل المتطلبات السابقة.', 'error');
+  }
 }
 
 function openModal(mode, card = {}) {
@@ -304,14 +393,17 @@ function openModal(mode, card = {}) {
   elements.modal.classList.remove('hidden');
   elements.modal.setAttribute('aria-hidden', 'false');
 
-  elements.weekInput.value = normalizeDigits(card.week);
-  elements.weekInput.disabled = isEdit;
+  elements.weekDisplayRow.style.display = isEdit ? 'block' : 'none';
+  if (elements.weekDisplay) {
+    elements.weekDisplay.textContent = isEdit ? `ID: ${normalizeDigits(card.week)}` : 'سيتم توليد المعرّف تلقائياً';
+  }
+
   elements.titleInput.value = normalizeValue(card.title);
   elements.gradeInput.value = normalizeDigits(card.grade);
+  elements.classesManual.value = '';
 
   const hasAllClasses = Boolean(card.isAllClasses);
   elements.allClassesToggle.checked = hasAllClasses || !Array.isArray(card.classes) || !card.classes.length;
-  elements.classesManual.value = '';
 
   const checkedClasses = new Set(
     (card.classes || []).map((entry) => normalizeDigits(entry)).filter(Boolean)
@@ -322,13 +414,13 @@ function openModal(mode, card = {}) {
   });
 
   setClassesDisabled(elements.allClassesToggle.checked);
+  updatePrereqOptions(elements.gradeInput.value, card.week, card.prereqWeek);
 }
 
 function closeModal() {
   elements.modal.classList.add('hidden');
   elements.modal.setAttribute('aria-hidden', 'true');
   elements.form.reset();
-  elements.weekInput.disabled = false;
   setClassesDisabled(elements.allClassesToggle.checked);
 }
 
@@ -345,6 +437,59 @@ function closeConfirmModal(force = false) {
   confirmAction = null;
   elements.confirmModal.classList.add('hidden');
   elements.confirmModal.setAttribute('aria-hidden', 'true');
+}
+
+function openCompletionsModal(card) {
+  elements.completionsTitle.textContent = `من أنهى البطاقة ${normalizeDigits(card.seq)}`;
+  elements.completionsSubtitle.textContent = 'جاري التحميل...';
+  setCompletionsLoading('تحميل البيانات...');
+  elements.completionsModal.classList.remove('hidden');
+  elements.completionsModal.setAttribute('aria-hidden', 'false');
+
+  fetchCompletions(card);
+}
+
+function closeCompletionsModal() {
+  elements.completionsModal.classList.add('hidden');
+  elements.completionsModal.setAttribute('aria-hidden', 'true');
+}
+
+async function fetchCompletions(card) {
+  const className = normalizeDigits(elements.classFilter.value) || 'ALL_CLASSES';
+  const params = new URLSearchParams();
+  if (className) params.set('class', className);
+
+  try {
+    const response = await fetch(`${API_BASE}/${encodeURIComponent(card.week)}/completions?${params.toString()}`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data?.error || 'تعذر تحميل البيانات.');
+    }
+
+    const students = Array.isArray(data.students) ? data.students : [];
+    elements.completionsSubtitle.textContent = `الإجمالي: ${students.length}`;
+
+    if (!students.length) {
+      setCompletionsLoading('لا يوجد طلاب أكملوا البطاقة بعد.');
+      return;
+    }
+
+    elements.completionsBody.innerHTML = students
+      .map((student) => `
+        <tr>
+          <td class="ltr">${escapeHtml(student.StudentId)}</td>
+          <td>${escapeHtml(student.FullName || '—')}</td>
+          <td>${escapeHtml(student.Class || '—')}</td>
+          <td>${escapeHtml(student.FinalScore ?? '-') }</td>
+          <td>${escapeHtml(new Date(student.CompletedAt).toLocaleString('ar'))}</td>
+        </tr>
+      `)
+      .join('');
+  } catch (error) {
+    elements.completionsSubtitle.textContent = 'تعذر تحميل البيانات.';
+    setCompletionsLoading('تعذر تحميل البيانات.');
+    showToast('خطأ', error.message || 'تعذر تحميل البيانات.', 'error');
+  }
 }
 
 async function handleConfirmSubmit() {
@@ -382,16 +527,12 @@ function collectClasses() {
 async function handleSubmit(event) {
   event.preventDefault();
 
-  const weekValue = normalizeDigits(elements.weekInput.value);
   const title = normalizeValue(elements.titleInput.value);
   const grade = normalizeDigits(elements.gradeInput.value);
   const allClasses = Boolean(elements.allClassesToggle.checked);
   const classes = collectClasses();
-
-  if (!weekValue) {
-    showToast('تنبيه', 'رقم البطاقة مطلوب.', 'warning');
-    return;
-  }
+  const prereqWeekRaw = normalizeDigits(elements.prereqSelect.value);
+  const prereqWeek = prereqWeekRaw ? Number(prereqWeekRaw) : null;
 
   if (!title) {
     showToast('تنبيه', 'العنوان مطلوب.', 'warning');
@@ -404,11 +545,11 @@ async function handleSubmit(event) {
   }
 
   const payload = {
-    week: weekValue,
     title,
     grade,
     classes,
-    allClasses
+    allClasses,
+    prereqWeek
   };
 
   const isEdit = state.mode === 'edit';
@@ -497,6 +638,13 @@ function handleTableClick(event) {
   if (action === 'delete') {
     handleDelete(week);
   }
+  if (action === 'content') {
+    window.open(`/mng/card-editor.html?week=${encodeURIComponent(week)}`, '_blank');
+  }
+  if (action === 'completions') {
+    const card = state.cards.find((item) => normalizeDigits(item.week) === normalizeDigits(week));
+    if (card) openCompletionsModal(card);
+  }
 }
 
 function handleTableChange(event) {
@@ -550,6 +698,12 @@ function handleConfirmBackdropClick(event) {
   }
 }
 
+function handleCompletionsBackdropClick(event) {
+  if (event.target.dataset?.close) {
+    closeCompletionsModal();
+  }
+}
+
 function bindEvents() {
   elements.addButton.addEventListener('click', () => openModal('add'));
   elements.modalClose.addEventListener('click', closeModal);
@@ -565,11 +719,16 @@ function bindEvents() {
   elements.searchInput.addEventListener('input', handleSearchInput);
   elements.gradeFilter.addEventListener('change', handleGradeFilterChange);
   elements.classFilter.addEventListener('change', handleClassFilterChange);
+  elements.gradeInput.addEventListener('change', () => {
+    updatePrereqOptions(normalizeDigits(elements.gradeInput.value), state.activeWeek, null);
+  });
   elements.allClassesToggle.addEventListener('change', handleAllClassesToggle);
   elements.confirmClose.addEventListener('click', closeConfirmModal);
   elements.confirmCancel.addEventListener('click', closeConfirmModal);
   elements.confirmModal.addEventListener('click', handleConfirmBackdropClick);
   elements.confirmSubmit.addEventListener('click', handleConfirmSubmit);
+  elements.completionsClose.addEventListener('click', closeCompletionsModal);
+  elements.completionsModal.addEventListener('click', handleCompletionsBackdropClick);
 }
 
 function init() {

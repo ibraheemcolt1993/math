@@ -24,6 +24,11 @@ function parseWeek(value) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function parseOptionalWeek(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return parseWeek(value);
+}
+
 function normalizeClassList(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -35,10 +40,29 @@ function normalizeClassList(value) {
   return Array.from(seen);
 }
 
+async function renumberSeq(transaction, grade) {
+  if (!grade) return;
+  await new sql.Request(transaction)
+    .input('grade', sql.NVarChar(50), grade)
+    .query(
+      `WITH Ranked AS (
+         SELECT Week,
+                ROW_NUMBER() OVER (ORDER BY Seq, Week) AS SeqValue
+         FROM dbo.Weeks
+         WHERE Grade = @grade AND IsDeleted = 0
+       )
+       UPDATE w
+       SET Seq = r.SeqValue
+       FROM dbo.Weeks w
+       JOIN Ranked r ON w.Week = r.Week;`
+    );
+}
+
 async function handleGet(context, req) {
   const query = getQuery(req);
   const grade = normalizeDigits(toCleanString(query.grade));
-  const className = normalizeDigits(toCleanString(query.class));
+  const classInput = toCleanString(query.class);
+  const className = normalizeDigits(classInput);
   const q = toCleanString(query.q);
   const search = q ? `%${normalizeDigits(q)}%` : '';
 
@@ -54,10 +78,11 @@ async function handleGet(context, req) {
 
   if (search) {
     request.input('q', sql.NVarChar(200), search);
-    conditions.push('(CAST(w.Week AS NVARCHAR(20)) LIKE @q OR w.Title LIKE @q)');
+    conditions.push('(CAST(w.Week AS NVARCHAR(20)) LIKE @q OR CAST(w.Seq AS NVARCHAR(20)) LIKE @q OR w.Title LIKE @q)');
   }
 
-  if (className) {
+  const hasClassFilter = className && className !== 'ALL_CLASSES';
+  if (hasClassFilter) {
     request.input('className', sql.NVarChar(50), className);
     conditions.push(`(
       NOT EXISTS (SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week)
@@ -65,19 +90,45 @@ async function handleGet(context, req) {
         SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week AND wt.Class = @className
       )
     )`);
+  } else if (className) {
+    request.input('className', sql.NVarChar(50), className);
+  }
+
+  const countFilters = [];
+  if (grade) {
+    countFilters.push('s.Grade = @grade');
+  }
+  if (hasClassFilter) {
+    countFilters.push('s.Class = @className');
   }
 
   let sqlQuery = `
-    SELECT w.Week, w.Title, w.Grade, t.Class
+    SELECT w.Week,
+           w.Title,
+           w.Grade,
+           w.Seq,
+           w.PrereqWeek,
+           prereq.Seq AS PrereqSeq,
+           prereq.Title AS PrereqTitle,
+           t.Class,
+           cc.CompletedCount
     FROM dbo.Weeks w
+    LEFT JOIN dbo.Weeks prereq ON w.PrereqWeek = prereq.Week
     LEFT JOIN dbo.WeekTargets t ON w.Week = t.Week
+    LEFT JOIN (
+      SELECT c.Week, COUNT(*) AS CompletedCount
+      FROM dbo.CardCompletions c
+      JOIN dbo.Students s ON s.StudentId = c.StudentId
+      ${countFilters.length ? `WHERE ${countFilters.join(' AND ')}` : ''}
+      GROUP BY c.Week
+    ) cc ON w.Week = cc.Week
   `;
 
   if (conditions.length) {
     sqlQuery += ` WHERE ${conditions.join(' AND ')}`;
   }
 
-  sqlQuery += ' ORDER BY w.Week';
+  sqlQuery += ' ORDER BY w.Grade, w.Seq';
 
   const result = await request.query(sqlQuery);
 
@@ -88,7 +139,12 @@ async function handleGet(context, req) {
         week: row.Week,
         title: row.Title,
         grade: row.Grade,
-        classes: []
+        seq: row.Seq,
+        prereqWeek: row.PrereqWeek ?? null,
+        prereqSeq: row.PrereqSeq ?? null,
+        prereqTitle: row.PrereqTitle ?? null,
+        classes: [],
+        completedCount: row.CompletedCount ?? 0
       });
     }
 
@@ -103,7 +159,12 @@ async function handleGet(context, req) {
       week: card.week,
       title: card.title,
       grade: card.grade,
+      seq: card.seq,
+      prereqWeek: card.prereqWeek,
+      prereqSeq: card.prereqSeq,
+      prereqTitle: card.prereqTitle,
       classes: uniqueClasses,
+      completedCount: card.completedCount,
       isAllClasses: uniqueClasses.length === 0
     };
   });
@@ -118,14 +179,21 @@ async function handlePost(context, req) {
     return;
   }
 
-  const week = parseWeek(payload.week);
+  const requestedWeek = parseWeek(payload.week);
   const title = toCleanString(payload.title);
   const grade = normalizeDigits(toCleanString(payload.grade));
   const allClasses = Boolean(payload.allClasses);
   const classes = allClasses ? [] : normalizeClassList(payload.classes);
+  const prereqWeekRaw = payload.prereqWeek;
+  const prereqWeek = parseOptionalWeek(prereqWeekRaw);
 
-  if (!week) {
+  if (payload.week != null && !requestedWeek) {
     context.res = badRequest('week must be a valid integer.');
+    return;
+  }
+
+  if (prereqWeekRaw !== undefined && prereqWeekRaw !== null && prereqWeekRaw !== '' && prereqWeek === null) {
+    context.res = badRequest('prereqWeek must be a valid integer or null.');
     return;
   }
 
@@ -140,15 +208,51 @@ async function handlePost(context, req) {
   }
 
   const dbPool = await getPool();
-  const existing = await dbPool
-    .request()
-    .input('week', sql.Int, week)
-    .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+  let week = requestedWeek;
 
-  if (existing.recordset.length) {
-    context.res = badRequest('week already exists.');
-    return;
+  if (week) {
+    const existing = await dbPool
+      .request()
+      .input('week', sql.Int, week)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+
+    if (existing.recordset.length) {
+      context.res = badRequest('week already exists.');
+      return;
+    }
+  } else {
+    const maxResult = await dbPool.request().query('SELECT ISNULL(MAX(Week), 0) AS maxWeek FROM dbo.Weeks');
+    week = (maxResult.recordset[0]?.maxWeek || 0) + 1;
   }
+
+  if (prereqWeek != null) {
+    if (prereqWeek === week) {
+      context.res = badRequest('prereqWeek cannot match week.');
+      return;
+    }
+
+    const prereqResult = await dbPool
+      .request()
+      .input('week', sql.Int, prereqWeek)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!prereqResult.recordset.length) {
+      context.res = badRequest('prereqWeek does not exist.');
+      return;
+    }
+
+    if (normalizeDigits(prereqResult.recordset[0].Grade) !== grade) {
+      context.res = badRequest('prereqWeek must belong to the same grade.');
+      return;
+    }
+  }
+
+  const seqResult = await dbPool
+    .request()
+    .input('grade', sql.NVarChar(50), grade)
+    .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+
+  const nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
 
   const transaction = new sql.Transaction(dbPool);
   try {
@@ -158,9 +262,11 @@ async function handlePost(context, req) {
       .input('week', sql.Int, week)
       .input('title', sql.NVarChar(200), title)
       .input('grade', sql.NVarChar(50), grade)
+      .input('seq', sql.Int, nextSeq)
+      .input('prereqWeek', sql.Int, prereqWeek)
       .query(
-        `INSERT INTO dbo.Weeks (Week, Title, Grade, IsDeleted)
-         VALUES (@week, @title, @grade, 0);`
+        `INSERT INTO dbo.Weeks (Week, Title, Grade, Seq, PrereqWeek, IsDeleted)
+         VALUES (@week, @title, @grade, @seq, @prereqWeek, 0);`
       );
 
     for (const classValue of classes) {
@@ -174,7 +280,7 @@ async function handlePost(context, req) {
     }
 
     await transaction.commit();
-    context.res = ok({ ok: true });
+    context.res = ok({ ok: true, week, seq: nextSeq });
   } catch (error) {
     await transaction.rollback();
     context.res = serverError(error);
@@ -198,6 +304,13 @@ async function handlePut(context, req) {
   const grade = normalizeDigits(toCleanString(payload.grade));
   const allClasses = Boolean(payload.allClasses);
   const classes = allClasses ? [] : normalizeClassList(payload.classes);
+  const prereqWeekRaw = payload.prereqWeek;
+  const prereqWeek = parseOptionalWeek(prereqWeekRaw);
+
+  if (prereqWeekRaw !== undefined && prereqWeekRaw !== null && prereqWeekRaw !== '' && prereqWeek === null) {
+    context.res = badRequest('prereqWeek must be a valid integer or null.');
+    return;
+  }
 
   if (!title) {
     context.res = badRequest('title is required.');
@@ -209,15 +322,50 @@ async function handlePut(context, req) {
     return;
   }
 
+  if (prereqWeek === week) {
+    context.res = badRequest('prereqWeek cannot match week.');
+    return;
+  }
+
   const dbPool = await getPool();
   const existing = await dbPool
     .request()
     .input('week', sql.Int, week)
-    .query('SELECT Week FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+    .query('SELECT Week, Grade, Seq FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
 
   if (!existing.recordset.length) {
     context.res = notFound('Card not found.');
     return;
+  }
+
+  const current = existing.recordset[0];
+  const previousGrade = normalizeDigits(current.Grade);
+  const gradeChanged = previousGrade !== grade;
+
+  if (prereqWeek != null) {
+    const prereqResult = await dbPool
+      .request()
+      .input('week', sql.Int, prereqWeek)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!prereqResult.recordset.length) {
+      context.res = badRequest('prereqWeek does not exist.');
+      return;
+    }
+
+    if (normalizeDigits(prereqResult.recordset[0].Grade) !== grade) {
+      context.res = badRequest('prereqWeek must belong to the same grade.');
+      return;
+    }
+  }
+
+  let nextSeq = current.Seq;
+  if (gradeChanged) {
+    const seqResult = await dbPool
+      .request()
+      .input('grade', sql.NVarChar(50), grade)
+      .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+    nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
   }
 
   const transaction = new sql.Transaction(dbPool);
@@ -228,10 +376,14 @@ async function handlePut(context, req) {
       .input('week', sql.Int, week)
       .input('title', sql.NVarChar(200), title)
       .input('grade', sql.NVarChar(50), grade)
+      .input('seq', sql.Int, nextSeq)
+      .input('prereqWeek', sql.Int, prereqWeek)
       .query(
         `UPDATE dbo.Weeks
          SET Title = @title,
-             Grade = @grade
+             Grade = @grade,
+             Seq = @seq,
+             PrereqWeek = @prereqWeek
          WHERE Week = @week AND IsDeleted = 0;`
       );
 
@@ -247,6 +399,11 @@ async function handlePut(context, req) {
           `INSERT INTO dbo.WeekTargets (Week, Class)
            VALUES (@week, @className);`
         );
+    }
+
+    if (gradeChanged) {
+      await renumberSeq(transaction, previousGrade);
+      await renumberSeq(transaction, grade);
     }
 
     await transaction.commit();
@@ -265,28 +422,54 @@ async function handleDelete(context, req) {
   }
 
   const dbPool = await getPool();
-  const result = await dbPool
+  const existing = await dbPool
     .request()
     .input('week', sql.Int, week)
-    .query(
-      `UPDATE dbo.Weeks
-       SET IsDeleted = 1
-       WHERE Week = @week AND IsDeleted = 0;
-       SELECT @@ROWCOUNT AS affected;`
-    );
+    .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
 
-  const affected = result.recordset[0]?.affected || 0;
-  if (!affected) {
+  if (!existing.recordset.length) {
     context.res = notFound('Card not found.');
     return;
   }
 
-  await dbPool
-    .request()
-    .input('week', sql.Int, week)
-    .query('DELETE FROM dbo.WeekTargets WHERE Week = @week;');
+  const grade = normalizeDigits(existing.recordset[0].Grade);
+  const transaction = new sql.Transaction(dbPool);
 
-  context.res = ok({ ok: true });
+  try {
+    await transaction.begin();
+
+    const result = await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query(
+        `UPDATE dbo.Weeks
+         SET IsDeleted = 1
+         WHERE Week = @week AND IsDeleted = 0;
+         SELECT @@ROWCOUNT AS affected;`
+      );
+
+    const affected = result.recordset[0]?.affected || 0;
+    if (!affected) {
+      await transaction.rollback();
+      context.res = notFound('Card not found.');
+      return;
+    }
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query('UPDATE dbo.Weeks SET PrereqWeek = NULL WHERE PrereqWeek = @week;');
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query('DELETE FROM dbo.WeekTargets WHERE Week = @week;');
+
+    await renumberSeq(transaction, grade);
+
+    await transaction.commit();
+    context.res = ok({ ok: true });
+  } catch (error) {
+    await transaction.rollback();
+    context.res = serverError(error);
+  }
 }
 
 module.exports = async function (context, req) {
