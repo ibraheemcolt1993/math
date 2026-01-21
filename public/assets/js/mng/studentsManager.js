@@ -14,8 +14,11 @@ const elements = {
   form: document.getElementById('studentForm'),
   submitButton: document.getElementById('btnSubmit'),
   studentIdInput: document.getElementById('studentIdInput'),
-  birthYearInput: document.getElementById('birthYearInput'),
+  birthYearSelect: document.getElementById('birthYearSelect'),
+  birthMonthSelect: document.getElementById('birthMonthSelect'),
+  birthDaySelect: document.getElementById('birthDaySelect'),
   nameInput: document.getElementById('nameInput'),
+  firstNameInput: document.getElementById('firstNameInput'),
   gradeInput: document.getElementById('gradeInput'),
   classInput: document.getElementById('classInput')
 };
@@ -26,6 +29,7 @@ const state = {
 };
 
 let searchTimeout = null;
+let firstNameTouched = false;
 
 function setLoading(message) {
   elements.body.innerHTML = `
@@ -46,6 +50,82 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function deriveFirstNameFromName(name) {
+  const parts = normalizeValue(name).split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (parts[0] === 'عبد' && parts[1]) {
+    return `عبد ${parts[1]}`;
+  }
+  return parts[0];
+}
+
+function padTwo(value) {
+  return String(value).padStart(2, '0');
+}
+
+function buildSelectOptions(select, options, placeholder) {
+  select.innerHTML = '';
+  if (placeholder) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = placeholder;
+    select.appendChild(option);
+  }
+  options.forEach((item) => {
+    const option = document.createElement('option');
+    option.value = String(item.value);
+    option.textContent = item.label;
+    select.appendChild(option);
+  });
+}
+
+function buildBirthDateSelects() {
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear - 100;
+  const years = [];
+  for (let year = currentYear; year >= startYear; year -= 1) {
+    years.push({ value: year, label: year });
+  }
+  buildSelectOptions(elements.birthYearSelect, years, 'السنة');
+
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    return { value: month, label: padTwo(month) };
+  });
+  buildSelectOptions(elements.birthMonthSelect, months, 'الشهر');
+  buildSelectOptions(elements.birthDaySelect, [], 'اليوم');
+}
+
+function updateBirthDays() {
+  const year = parseInt(elements.birthYearSelect.value, 10);
+  const month = parseInt(elements.birthMonthSelect.value, 10);
+  const currentDay = elements.birthDaySelect.value;
+  if (!year || !month) {
+    buildSelectOptions(elements.birthDaySelect, [], 'اليوم');
+    return;
+  }
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    return { value: day, label: padTwo(day) };
+  });
+  buildSelectOptions(elements.birthDaySelect, days, 'اليوم');
+  if (currentDay) {
+    elements.birthDaySelect.value = currentDay;
+  }
+}
+
+function parseDateParts(value) {
+  if (!value) return null;
+  const match = String(value).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return {
+    year: match[1],
+    month: String(parseInt(match[2], 10)),
+    day: String(parseInt(match[3], 10))
+  };
 }
 
 async function fetchJson(url, options) {
@@ -109,15 +189,30 @@ function renderStudents(list) {
 function openModal(mode, student = {}) {
   state.mode = mode;
   const isEdit = mode === 'edit';
+  firstNameTouched = false;
 
   elements.modalTitle.textContent = isEdit ? 'تعديل بيانات الطالب' : 'إضافة طالب';
   elements.submitButton.textContent = isEdit ? 'حفظ التعديلات' : 'إضافة الطالب';
 
   elements.studentIdInput.value = normalizeValue(student.StudentId || student.studentId);
-  elements.birthYearInput.value = normalizeValue(student.BirthYear || student.birthYear);
   elements.nameInput.value = normalizeValue(student.Name || student.name);
+  elements.firstNameInput.value = normalizeValue(student.FirstName || student.firstName);
   elements.gradeInput.value = normalizeValue(student.Grade || student.grade);
   elements.classInput.value = normalizeValue(student.Class || student.class);
+
+  const birthDateParts = parseDateParts(student.BirthDate || student.birthDate);
+  const fallbackBirthYear = normalizeValue(student.BirthYear || student.birthYear);
+  if (birthDateParts) {
+    elements.birthYearSelect.value = birthDateParts.year;
+    elements.birthMonthSelect.value = birthDateParts.month;
+    updateBirthDays();
+    elements.birthDaySelect.value = birthDateParts.day;
+  } else {
+    elements.birthYearSelect.value = fallbackBirthYear;
+    elements.birthMonthSelect.value = fallbackBirthYear ? '1' : '';
+    updateBirthDays();
+    elements.birthDaySelect.value = fallbackBirthYear ? '1' : '';
+  }
 
   elements.studentIdInput.disabled = isEdit;
 
@@ -127,7 +222,9 @@ function openModal(mode, student = {}) {
 
 function closeModal() {
   elements.form.reset();
+  buildBirthDateSelects();
   elements.studentIdInput.disabled = false;
+  firstNameTouched = false;
   elements.modal.classList.add('hidden');
   elements.modal.setAttribute('aria-hidden', 'true');
 }
@@ -143,8 +240,11 @@ async function handleSubmit(event) {
 
   const payload = {
     studentId: normalizeValue(elements.studentIdInput.value),
-    birthYear: normalizeValue(elements.birthYearInput.value),
+    birthYear: normalizeValue(elements.birthYearSelect.value),
+    birthMonth: normalizeValue(elements.birthMonthSelect.value),
+    birthDay: normalizeValue(elements.birthDaySelect.value),
     name: normalizeValue(elements.nameInput.value),
+    firstName: normalizeValue(elements.firstNameInput.value),
     grade: normalizeValue(elements.gradeInput.value),
     class: normalizeValue(elements.classInput.value)
   };
@@ -154,12 +254,27 @@ async function handleSubmit(event) {
     return;
   }
 
+  if (!payload.birthMonth || !payload.birthDay) {
+    showToast('تنبيه', 'يرجى اختيار تاريخ الميلاد بالكامل.', 'warning');
+    return;
+  }
+
+  const birthDate = `${payload.birthYear}-${padTwo(payload.birthMonth)}-${padTwo(payload.birthDay)}`;
+
   try {
     if (state.mode === 'add') {
       await fetchJson(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          studentId: payload.studentId,
+          birthYear: payload.birthYear,
+          name: payload.name,
+          firstName: payload.firstName,
+          birthDate,
+          grade: payload.grade,
+          class: payload.class
+        })
       });
       showToast('تمت الإضافة', 'تم إضافة الطالب بنجاح.', 'success');
     } else {
@@ -169,6 +284,8 @@ async function handleSubmit(event) {
         body: JSON.stringify({
           birthYear: payload.birthYear,
           name: payload.name,
+          firstName: payload.firstName,
+          birthDate,
           grade: payload.grade,
           class: payload.class
         })
@@ -181,6 +298,20 @@ async function handleSubmit(event) {
   } catch (error) {
     showToast('خطأ', error.message, 'error');
   }
+}
+
+function handleNameBlur() {
+  const nameValue = normalizeValue(elements.nameInput.value);
+  const firstNameValue = normalizeValue(elements.firstNameInput.value);
+  if (!nameValue) return;
+  if (!firstNameValue || !firstNameTouched) {
+    elements.firstNameInput.value = deriveFirstNameFromName(nameValue);
+    firstNameTouched = false;
+  }
+}
+
+function handleFirstNameInput() {
+  firstNameTouched = true;
 }
 
 async function handleDelete(studentId) {
@@ -237,6 +368,7 @@ function handleBackdropClick(event) {
 }
 
 function init() {
+  buildBirthDateSelects();
   elements.addButton.addEventListener('click', () => openModal('add'));
   elements.searchButton.addEventListener('click', handleSearch);
   elements.searchInput.addEventListener('input', handleSearchInput);
@@ -245,6 +377,10 @@ function init() {
   elements.modalClose.addEventListener('click', closeModal);
   elements.modalCancel.addEventListener('click', closeModal);
   elements.modal.addEventListener('click', handleBackdropClick);
+  elements.birthYearSelect.addEventListener('change', updateBirthDays);
+  elements.birthMonthSelect.addEventListener('change', updateBirthDays);
+  elements.nameInput.addEventListener('blur', handleNameBlur);
+  elements.firstNameInput.addEventListener('input', handleFirstNameInput);
 
   loadStudents();
 }

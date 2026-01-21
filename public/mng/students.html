@@ -101,16 +101,35 @@
           <input id="studentIdInput" class="input ltr" inputmode="numeric" autocomplete="off" required />
         </div>
         <div class="field">
-          <label class="label" for="birthYearInput">سنة الميلاد</label>
-          <input id="birthYearInput" class="input ltr" inputmode="numeric" maxlength="4" autocomplete="off" required />
+          <label class="label" for="birthYearSelect">تاريخ الميلاد</label>
+          <div class="row">
+            <select id="birthYearSelect" class="input ltr" required></select>
+            <select id="birthMonthSelect" class="input ltr" required></select>
+            <select id="birthDaySelect" class="input ltr" required></select>
+          </div>
         </div>
         <div class="field">
           <label class="label" for="nameInput">الاسم الرباعي</label>
           <input id="nameInput" class="input" autocomplete="off" required />
         </div>
         <div class="field">
+          <label class="label" for="firstNameInput">الاسم الأول</label>
+          <input id="firstNameInput" class="input" autocomplete="off" />
+        </div>
+        <div class="field">
           <label class="label" for="gradeInput">الصف</label>
-          <input id="gradeInput" class="input" autocomplete="off" />
+          <select id="gradeInput" class="input">
+            <option value="">اختر الصف</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+          </select>
         </div>
         <div class="field">
           <label class="label" for="classInput">الشعبة</label>
