@@ -21,6 +21,23 @@ function isValidBirthYear(value) {
   return /^\d{4}$/.test(value);
 }
 
+function deriveFirstName(name) {
+  const parts = toCleanString(name).split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (parts[0] === 'عبد' && parts[1]) {
+    return `عبد ${parts[1]}`;
+  }
+  return parts[0];
+}
+
+function normalizeDateString(value) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  if (!cleaned) return '';
+  const match = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
 async function handleGet(context, req) {
   const query = getQuery(req);
   const q = typeof query.q === 'string' ? query.q.trim() : '';
@@ -29,7 +46,7 @@ async function handleGet(context, req) {
   const dbPool = await getPool();
   const request = dbPool.request();
   let sqlQuery =
-    'SELECT StudentId, BirthYear, Name, Grade, Class FROM dbo.Students';
+    'SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students';
 
   if (search) {
     request.input('q', sql.NVarChar(200), search);
@@ -52,6 +69,9 @@ async function handlePost(context, req) {
   const studentId = normalizeDigits(toCleanString(payload.studentId));
   const birthYear = normalizeDigits(toCleanString(payload.birthYear));
   const name = toCleanString(payload.name);
+  const birthDateValue = toCleanString(payload.birthDate);
+  const birthDateInput = normalizeDateString(birthDateValue);
+  let firstName = toCleanString(payload.firstName);
   const grade = payload.grade != null ? String(payload.grade).trim() : '';
   const className = payload.class != null ? String(payload.class).trim() : '';
 
@@ -70,6 +90,17 @@ async function handlePost(context, req) {
     return;
   }
 
+  if (birthDateValue && !birthDateInput) {
+    context.res = badRequest('birthDate must be in YYYY-MM-DD format.');
+    return;
+  }
+
+  if (!firstName) {
+    firstName = deriveFirstName(name);
+  }
+
+  const birthDate = birthDateInput || `${birthYear}-01-01`;
+
   const dbPool = await getPool();
   const existingResult = await dbPool
     .request()
@@ -86,12 +117,14 @@ async function handlePost(context, req) {
     .input('studentId', sql.NVarChar(20), studentId)
     .input('birthYear', sql.NVarChar(10), birthYear)
     .input('name', sql.NVarChar(200), name)
+    .input('firstName', sql.NVarChar(100), firstName)
+    .input('birthDate', sql.Date, birthDate)
     .input('grade', sql.NVarChar(50), grade)
     .input('className', sql.NVarChar(50), className)
     .query(
-      `INSERT INTO dbo.Students (StudentId, BirthYear, Name, Grade, Class)
-       VALUES (@studentId, @birthYear, @name, @grade, @className);
-       SELECT StudentId, BirthYear, Name, Grade, Class
+      `INSERT INTO dbo.Students (StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class)
+       VALUES (@studentId, @birthYear, @name, @firstName, @birthDate, @grade, @className);
+       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
        FROM dbo.Students
        WHERE StudentId = @studentId;`
     );
@@ -116,7 +149,7 @@ async function handlePut(context, req) {
   const existingResult = await dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
-    .query('SELECT StudentId, BirthYear, Name, Grade, Class FROM dbo.Students WHERE StudentId = @studentId');
+    .query('SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students WHERE StudentId = @studentId');
 
   if (!existingResult.recordset.length) {
     context.res = notFound('Student not found.');
@@ -128,8 +161,15 @@ async function handlePut(context, req) {
     ? normalizeDigits(toCleanString(payload.birthYear))
     : existing.BirthYear;
   const name = payload.name != null ? String(payload.name).trim() : existing.Name;
+  const incomingFirstName = payload.firstName != null ? String(payload.firstName).trim() : '';
+  let firstName = payload.firstName != null ? incomingFirstName : existing.FirstName;
+  if (payload.name != null && !incomingFirstName) {
+    firstName = deriveFirstName(name);
+  }
   const grade = payload.grade != null ? String(payload.grade).trim() : existing.Grade;
   const className = payload.class != null ? String(payload.class).trim() : existing.Class;
+  const birthDateValue = payload.birthDate != null ? toCleanString(payload.birthDate) : '';
+  let birthDate = existing.BirthDate;
 
   if (!birthYear || !isValidBirthYear(birthYear)) {
     context.res = badRequest('birthYear must be a 4-digit year.');
@@ -141,21 +181,34 @@ async function handlePut(context, req) {
     return;
   }
 
+  if (payload.birthDate != null) {
+    const normalizedBirthDate = normalizeDateString(birthDateValue);
+    if (birthDateValue && !normalizedBirthDate) {
+      context.res = badRequest('birthDate must be in YYYY-MM-DD format.');
+      return;
+    }
+    birthDate = normalizedBirthDate || `${birthYear}-01-01`;
+  }
+
   const updateResult = await dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
     .input('birthYear', sql.NVarChar(10), birthYear)
     .input('name', sql.NVarChar(200), name)
+    .input('firstName', sql.NVarChar(100), firstName)
+    .input('birthDate', sql.Date, birthDate)
     .input('grade', sql.NVarChar(50), grade)
     .input('className', sql.NVarChar(50), className)
     .query(
       `UPDATE dbo.Students
        SET BirthYear = @birthYear,
            Name = @name,
+           FirstName = @firstName,
+           BirthDate = @birthDate,
            Grade = @grade,
            Class = @className
        WHERE StudentId = @studentId;
-       SELECT StudentId, BirthYear, Name, Grade, Class
+       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
        FROM dbo.Students
        WHERE StudentId = @studentId;`
     );
