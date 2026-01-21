@@ -6,6 +6,10 @@ const ROUTES = {
     { methods: ['POST'], path: '/api/progress/complete', description: 'Record student completion.' },
     { methods: ['GET'], path: '/api/progress/completed', description: 'Fetch completed progress.' },
     { methods: ['POST'], path: '/api/students/login', description: 'Student login.' },
+    { methods: ['GET'], path: '/api/mng/students', description: 'List students for management.' },
+    { methods: ['POST'], path: '/api/mng/students', description: 'Create student (management).' },
+    { methods: ['PUT'], path: '/api/mng/students/{studentId}', description: 'Update student (management).' },
+    { methods: ['DELETE'], path: '/api/mng/students/{studentId}', description: 'Delete student (management).' },
     { methods: ['GET'], path: '/api/weeks/{week:int}', description: 'Week details.' },
     { methods: ['GET'], path: '/api/weeks', description: 'Weeks list.' },
     { methods: ['GET'], path: '/api/routes', description: 'Route catalog.' }
