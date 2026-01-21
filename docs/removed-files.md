@@ -13,3 +13,5 @@ The following files were removed as requested:
 - dumb.txt
 - server/ (untracked directory)
 - api/node_modules/ (generated dependencies)
+- public/assets/js/db-template-edit.js
+- public/assets/css/db-template-edit.css
