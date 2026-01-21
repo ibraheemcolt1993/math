@@ -583,6 +583,20 @@ function toLatinDigits(value) {
   return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
 }
 
+function deriveFirstName(firstName, fullName) {
+  const trimmedFirst = typeof firstName === 'string' ? firstName.trim() : '';
+  if (trimmedFirst) {
+    return trimmedFirst;
+  }
+
+  const trimmedFull = typeof fullName === 'string' ? fullName.trim() : '';
+  if (!trimmedFull) {
+    return '';
+  }
+
+  return trimmedFull.split(/\\s+/)[0];
+}
+
 module.exports = async function (context, req) {
   try {
     const payload = readJson(req);
@@ -607,7 +621,7 @@ module.exports = async function (context, req) {
       .input('studentId', sql.NVarChar(20), studentId)
       .input('birthYear', sql.NVarChar(10), birthYear)
       .query(
-        `SELECT TOP (1) StudentId, BirthYear, FirstName, FullName, Class
+        `SELECT TOP (1) StudentId, BirthYear, Name, Grade, Class, FirstName
          FROM dbo.Students
          WHERE StudentId = @studentId AND BirthYear = @birthYear`
       );
@@ -618,14 +632,16 @@ module.exports = async function (context, req) {
     }
 
     const student = result.recordset[0];
+    const fullName = typeof student.Name === 'string' ? student.Name.trim() : '';
+    const firstName = deriveFirstName(student.FirstName, fullName);
 
     context.res = ok({
       ok: true,
       student: {
         StudentId: student.StudentId,
         BirthYear: student.BirthYear,
-        FirstName: student.FirstName,
-        FullName: student.FullName,
+        FirstName: firstName,
+        FullName: fullName,
         Class: student.Class
       }
     });
