@@ -49,6 +49,7 @@ function normalizeStudent(student) {
     birthYear: student.BirthYear ?? student.birthYear ?? '',
     firstName: student.FirstName ?? student.firstName ?? '',
     fullName: student.FullName ?? student.fullName ?? '',
+    grade: student.Grade ?? student.grade ?? '',
     class: student.Class ?? student.class ?? '',
   };
 }

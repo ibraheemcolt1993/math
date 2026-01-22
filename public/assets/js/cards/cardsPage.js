@@ -16,12 +16,14 @@ import {
   getStudentSession,
   isCardDone,
   setCachedCards,
+  setStudentSession,
   syncCardCompletions,
 } from '../core/storage.js';
 import { goToLesson } from '../core/router.js';
 import { showToast } from '../ui/toast.js';
 
-export async function initCardsPage() {
+export async function initCardsPage(options = {}) {
+  const { didRefresh = false } = options;
   const studentId = getLastStudentId();
   if (!studentId) return;
 
@@ -29,11 +31,18 @@ export async function initCardsPage() {
   const studentNameEl = document.getElementById('cardsStudentName');
   let readyWeeks = null;
 
-  const student = getStudentSession();
-  const classInfo =
-    student?.grade && student?.class
-      ? { grade: student.grade, className: student.class }
-      : parseStudentClass(student?.class ?? student?.grade);
+  let student = getStudentSession();
+  if (!student?.grade && !didRefresh && student?.id && student?.birthYear) {
+    const refreshed = await refreshStudentSession(student);
+    if (refreshed) {
+      return initCardsPage({ didRefresh: true });
+    }
+  }
+
+  const classInfo = {
+    grade: normalizeDigits(student?.grade ?? ''),
+    className: normalizeDigits(student?.class ?? ''),
+  };
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
@@ -65,6 +74,29 @@ export async function initCardsPage() {
   }
 }
 
+async function refreshStudentSession(session) {
+  try {
+    const data = await fetchJson(API_PATHS.STUDENT_LOGIN, {
+      method: 'POST',
+      body: {
+        studentId: session.id,
+        birthYear: session.birthYear,
+      },
+    });
+
+    const payload = data?.student ?? data;
+    const normalized = normalizeSessionStudent(payload);
+    if (normalized?.id) {
+      setStudentSession(normalized);
+      return normalized;
+    }
+  } catch (error) {
+    console.warn('Student refresh failed', error);
+  }
+
+  return null;
+}
+
 function parseStudentClass(value) {
   const raw = normalizeDigits(String(value ?? '')).trim();
   if (!raw) return { grade: '', className: '' };
@@ -73,6 +105,43 @@ function parseStudentClass(value) {
     return { grade: match[1], className: match[2] };
   }
   return { grade: raw, className: raw };
+}
+
+function normalizeSessionStudent(student) {
+  if (!student) return null;
+  const normalizedId = student.id ?? student.studentId ?? student.StudentId ?? '';
+  const normalizedBirthYear = student.birthYear ?? student.BirthYear ?? '';
+  const fullName = student.fullName ?? student.FullName ?? student.name ?? student.Name ?? '';
+  const firstName = student.firstName ?? student.FirstName ?? '';
+  const resolvedFullName = String(fullName || '').trim() || `طالب ${normalizedId}`.trim();
+  const resolvedFirstName =
+    String(firstName || '').trim() ||
+    resolvedFullName.split(' ')[0] ||
+    `طالب ${normalizedId}`.trim();
+  const resolvedGrade = student.grade ?? student.Grade ?? '';
+  const resolvedClass = student.class ?? student.Class ?? '';
+  let normalizedGrade = String(resolvedGrade);
+  let normalizedClass = String(resolvedClass);
+
+  if (!normalizedGrade && isLegacyClassString(normalizedClass)) {
+    const legacyInfo = parseStudentClass(normalizedClass);
+    normalizedGrade = legacyInfo.grade;
+    normalizedClass = legacyInfo.className;
+  }
+
+  return {
+    id: String(normalizedId),
+    birthYear: String(normalizedBirthYear),
+    firstName: resolvedFirstName,
+    fullName: resolvedFullName,
+    grade: normalizedGrade,
+    class: normalizedClass,
+  };
+}
+
+function isLegacyClassString(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  return /^(\d+)\s*[/\\-]\s*(\d+)$/.test(raw);
 }
 
 function buildCardsUrl({ grade, className }) {
