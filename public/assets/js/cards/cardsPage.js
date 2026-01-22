@@ -30,7 +30,10 @@ export async function initCardsPage() {
   let readyWeeks = null;
 
   const student = getStudentSession();
-  const classInfo = parseStudentClass(student?.class);
+  const classInfo =
+    student?.grade && student?.class
+      ? { grade: student.grade, className: student.class }
+      : parseStudentClass(student?.class ?? student?.grade);
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
