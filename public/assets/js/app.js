@@ -61,7 +61,15 @@ function initIndexPage() {
 
   hideAllScreens();
 
-  const currentSession = normalizeStoredStudent(getStudentSession());
+  let currentSession = normalizeStoredStudent(getStudentSession());
+  if (!currentSession?.grade) {
+    const legacyStudent = readCurrentStudent();
+    if (legacyStudent && (legacyStudent?.Grade || legacyStudent?.grade || legacyStudent?.Class || legacyStudent?.class)) {
+      const migratedSession = normalizeStoredStudent(legacyStudent);
+      setStudentSession(migratedSession);
+      currentSession = migratedSession;
+    }
+  }
   if (currentSession?.id && currentSession?.birthYear) {
     setLastStudentId(currentSession.id);
     showCards();
@@ -93,12 +101,27 @@ function initIndexPage() {
         return;
       }
 
+      const legacyClassValue = found?.class ?? found?.Class ?? '';
+      const gradeValue = found?.grade ?? found?.Grade ?? '';
+      let resolvedGrade = '';
+      let resolvedClass = '';
+
+      if (isLegacyClassString(legacyClassValue)) {
+        const legacyInfo = parseStudentClass(legacyClassValue);
+        resolvedGrade = legacyInfo.grade;
+        resolvedClass = legacyInfo.className;
+      } else if (gradeValue && legacyClassValue) {
+        resolvedGrade = String(gradeValue);
+        resolvedClass = String(legacyClassValue);
+      }
+
       const student = {
         id: String(found.id),
         birthYear: String(found.birthYear),
         firstName: String(found.firstName || '').trim() || String(found.fullName || '').trim().split(' ')[0] || `طالب ${found.id}`,
         fullName: String(found.fullName || '').trim() || `طالب ${found.id}`,
-        class: found.class ? String(found.class) : '',
+        grade: resolvedGrade,
+        class: resolvedClass,
       };
 
       setLastStudentId(student.id);
@@ -235,6 +258,15 @@ function writeCurrentStudent(student) {
   } catch {}
 }
 
+function readCurrentStudent() {
+  try {
+    const raw = localStorage.getItem(LS_CURRENT_STUDENT);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 function clearCurrentStudent() {
   try {
     localStorage.removeItem(LS_CURRENT_STUDENT);
@@ -277,20 +309,23 @@ function normalizeStoredStudent(student) {
   if (!student) return null;
   const normalizedId = student.id ?? student.studentId ?? student.StudentId ?? '';
   const normalizedBirthYear = student.birthYear ?? student.BirthYear ?? '';
-  const fullName = student.fullName ?? student.FullName ?? '';
+  const fullName = student.fullName ?? student.FullName ?? student.name ?? student.Name ?? '';
   const firstName = student.firstName ?? student.FirstName ?? '';
   const resolvedFullName = String(fullName || '').trim() || `طالب ${normalizedId}`.trim();
   const resolvedFirstName =
     String(firstName || '').trim() ||
     resolvedFullName.split(' ')[0] ||
     `طالب ${normalizedId}`.trim();
+  const resolvedGrade = student.grade ?? student.Grade ?? '';
+  const resolvedClass = student.class ?? student.Class ?? '';
 
   return {
     id: String(normalizedId),
     birthYear: String(normalizedBirthYear),
     firstName: resolvedFirstName,
     fullName: resolvedFullName,
-    class: String(student.class ?? student.Class ?? '')
+    grade: String(resolvedGrade),
+    class: String(resolvedClass)
   };
 }
 
@@ -304,11 +339,33 @@ function parseStudentClass(value) {
   return { grade: raw, className: raw };
 }
 
+function isLegacyClassString(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  return /^(\\d+)\\s*[/\\-]\\s*(\\d+)$/.test(raw);
+}
+
+function isNumericValue(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  return raw !== '' && /^\\d+$/.test(raw);
+}
+
 function buildCardsUrl(student) {
-  const { grade, className } = parseStudentClass(student?.class);
   const params = new URLSearchParams();
-  if (grade) params.set('grade', grade);
-  if (className) params.set('class', className);
+  const gradeValue = student?.grade ?? student?.Grade ?? '';
+  const classValue = student?.class ?? student?.Class ?? '';
+
+  if (isNumericValue(gradeValue) && isNumericValue(classValue)) {
+    params.set('grade', normalizeDigits(String(gradeValue)).trim());
+    params.set('class', normalizeDigits(String(classValue)).trim());
+    return `${API_PATHS.CARDS}?${params.toString()}`;
+  }
+
+  const legacyValue = student?.class ?? student?.grade;
+  if (isLegacyClassString(legacyValue)) {
+    const { grade, className } = parseStudentClass(legacyValue);
+    if (grade) params.set('grade', grade);
+    if (className) params.set('class', className);
+  }
   return `${API_PATHS.CARDS}?${params.toString()}`;
 }
 
