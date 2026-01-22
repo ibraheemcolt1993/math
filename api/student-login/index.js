@@ -72,6 +72,7 @@ module.exports = async function (context, req) {
         BirthYear: student.BirthYear,
         FirstName: firstName,
         FullName: fullName,
+        Grade: student.Grade,
         Class: student.Class
       }
     });

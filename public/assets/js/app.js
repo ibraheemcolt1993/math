@@ -318,14 +318,22 @@ function normalizeStoredStudent(student) {
     `طالب ${normalizedId}`.trim();
   const resolvedGrade = student.grade ?? student.Grade ?? '';
   const resolvedClass = student.class ?? student.Class ?? '';
+  let normalizedGrade = String(resolvedGrade);
+  let normalizedClass = String(resolvedClass);
+
+  if (!normalizedGrade && isLegacyClassString(normalizedClass)) {
+    const legacyInfo = parseStudentClass(normalizedClass);
+    normalizedGrade = legacyInfo.grade;
+    normalizedClass = legacyInfo.className;
+  }
 
   return {
     id: String(normalizedId),
     birthYear: String(normalizedBirthYear),
     firstName: resolvedFirstName,
     fullName: resolvedFullName,
-    grade: String(resolvedGrade),
-    class: String(resolvedClass)
+    grade: normalizedGrade,
+    class: normalizedClass
   };
 }
 
