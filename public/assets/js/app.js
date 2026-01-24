@@ -284,15 +284,23 @@ async function loadStudentData(student, { silent = false } = {}) {
   }
 
   try {
-    const cardsUrl = buildCardsUrl(student);
+    const session = normalizeStoredStudent(getStudentSession()) || normalizeStoredStudent(student);
+    const gradeValue = session?.grade ?? session?.Grade ?? '';
+    const hasGrade = isNumericValue(gradeValue);
+    if (!hasGrade) {
+      console.debug('Skip cards warmup: missing grade');
+    }
+    const cardsUrl = buildCardsUrl(session || student);
     const [progress, cards] = await Promise.all([
       fetchJson(`${API_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(student.id)}`, { noStore: true }),
-      fetchJson(cardsUrl, { noStore: true }),
+      hasGrade ? fetchJson(cardsUrl, { noStore: true }) : Promise.resolve(null),
     ]);
 
     setStudentCompletions(student.id, Array.isArray(progress) ? progress : []);
     syncCardCompletions(student.id, Array.isArray(progress) ? progress : []);
-    setCachedCards(Array.isArray(cards) ? cards : []);
+    if (hasGrade) {
+      setCachedCards(Array.isArray(cards) ? cards : []);
+    }
   } catch (error) {
     if (!silent) {
       showToast('خطأ', error.message || 'تعذر تحميل بيانات الطالب', 'error');

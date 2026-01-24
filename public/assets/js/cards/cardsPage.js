@@ -39,8 +39,10 @@ export async function initCardsPage(options = {}) {
     }
   }
 
+  const gradeValue = normalizeDigits(student?.grade ?? '');
+  const hasGrade = gradeValue !== '' && /^\\d+$/.test(gradeValue);
   const classInfo = {
-    grade: normalizeDigits(student?.grade ?? ''),
+    grade: gradeValue,
     className: normalizeDigits(student?.class ?? ''),
   };
   const displayName =
@@ -58,6 +60,11 @@ export async function initCardsPage(options = {}) {
 
     const progress = getStudentCompletions(studentId);
     syncCardCompletions(studentId, progress);
+
+    if (!hasGrade) {
+      console.debug('Skip cards fetch: missing grade');
+      return;
+    }
 
     const cardsUrl = buildCardsUrl(classInfo);
     const [cards, weeks] = await Promise.all([
