@@ -242,6 +242,12 @@ body.cert-exporting .cert-paper {
   max-height: none;
 }
 
+html.cert-exporting,
+html.cert-exporting body {
+  overflow: visible !important;
+  height: auto !important;
+}
+
 /* Empty */
 #certEmpty.card {
   margin-top: 16px;

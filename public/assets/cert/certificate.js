@@ -56,7 +56,7 @@ function getWeekParam() {
   const raw = params.get('week');
   if (!raw) return null;
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function resolveGradeName(value) {
@@ -130,30 +130,36 @@ async function resolveCertificateData() {
   const lastCertificate = readJson(LS_LAST_CERTIFICATE);
   const weekParam = getWeekParam();
 
+  if (weekParam) {
+    if (!session?.id) {
+      return { source: 'empty', session: session || null, payload: null, message: 'لا توجد شهادة لهذا الأسبوع' };
+    }
+    const completionFromCache = findCompletionInCache(session.id, weekParam);
+    const completion = completionFromCache || (await fetchCompletion(session.id, weekParam));
+    if (!completion && !completionFromCache) {
+      return { source: 'empty', session, payload: null, message: 'لا توجد شهادة لهذا الأسبوع' };
+    }
+
+    return {
+      source: 'query',
+      session,
+      payload: {
+        week: weekParam,
+        studentId: session.id,
+        completedAt: completion?.CompletedAt ?? completion?.completedAt ?? null,
+        finalScore: completion?.FinalScore ?? completion?.finalScore ?? null,
+        cardTitle: '',
+        fullName: session?.fullName ?? '',
+        firstName: session?.firstName ?? ''
+      }
+    };
+  }
+
   if (lastCertificate?.week) {
     return { source: 'last', session, payload: lastCertificate };
   }
 
-  if (!weekParam || !session?.id) {
-    return { source: 'empty', session: session || null, payload: null };
-  }
-
-  const completionFromCache = findCompletionInCache(session.id, weekParam);
-  const completion = completionFromCache || (await fetchCompletion(session.id, weekParam));
-
-  return {
-    source: 'query',
-    session,
-    payload: {
-      week: weekParam,
-      studentId: session.id,
-      completedAt: completion?.CompletedAt ?? completion?.completedAt ?? null,
-      finalScore: completion?.FinalScore ?? completion?.finalScore ?? null,
-      cardTitle: '',
-      fullName: session?.fullName ?? '',
-      firstName: session?.firstName ?? ''
-    }
-  };
+  return { source: 'empty', session: session || null, payload: null };
 }
 
 function renderCertificate({ session, payload }) {
@@ -217,13 +223,20 @@ async function renderCanvas(scale = 2) {
   if (!window.html2canvas) {
     throw new Error('html2canvas not available');
   }
+  const width = Math.ceil(elements.paper.scrollWidth);
+  const height = Math.ceil(elements.paper.scrollHeight);
   return window.html2canvas(elements.paper, {
     scale,
     backgroundColor: '#ffffff',
     useCORS: true,
     allowTaint: false,
     logging: false,
-    imageTimeout: 15000
+    imageTimeout: 15000,
+    width,
+    height,
+    windowWidth: width,
+    windowHeight: height,
+    scrollY: 0
   });
 }
 
@@ -254,6 +267,7 @@ async function waitForAssetsReady() {
 
 async function createCertificateImage(type) {
   if (!elements.paper) throw new Error('Certificate not ready');
+  document.documentElement.classList.add('cert-exporting');
   document.body.classList.add('cert-exporting');
   let canvas;
   try {
@@ -265,6 +279,7 @@ async function createCertificateImage(type) {
     const scale = Math.min(3.25, Math.max(2, rawScale));
     canvas = await renderCanvas(scale);
   } finally {
+    document.documentElement.classList.remove('cert-exporting');
     document.body.classList.remove('cert-exporting');
   }
 
@@ -334,6 +349,9 @@ async function shareCertificate() {
 async function init() {
   const resolved = await resolveCertificateData();
   if (!resolved.payload || !resolved.session) {
+    if (resolved.message) {
+      showNotice(resolved.message);
+    }
     showEmptyState();
     return;
   }
