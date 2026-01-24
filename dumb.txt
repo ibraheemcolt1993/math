@@ -5446,6 +5446,12 @@ math/public/assets/cert/certificate.css
   letter-spacing: 0.4px;
 }
 
+.cert-brand {
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.4px;
+}
+
 /* Body */
 .cert-body {
   margin-top: 8px;
@@ -5478,6 +5484,11 @@ math/public/assets/cert/certificate.css
   font-size: 12px;
   color: #64748b;
   letter-spacing: 0.6px;
+}
+
+.cert-id {
+  font-size: 12px;
+  color: #64748b;
 }
 
 /* Meta */
