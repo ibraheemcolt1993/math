@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math999 — شهادة إتمام بطاقة</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/cert/certificate.css" />
+</head>
+
+<body class="cert-app">
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math999">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math999</b>
+            <span>شهادة إتمام بطاقة</span>
+          </div>
+        </div>
+        <div class="row">
+          <a class="btn btn-ghost btn-sm" href="/" aria-label="العودة للرئيسية">الرئيسية</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <section id="certEmpty" class="card hidden" aria-live="polite">
+        <div class="card-header">
+          <h1 class="h2">لا توجد بيانات شهادة حالياً</h1>
+          <p class="p muted">أكمل بطاقة أولًا أو افتح الشهادة من زر "عرض الشهادة" بعد الإنهاء.</p>
+        </div>
+        <div class="card-body">
+          <a class="btn btn-primary" href="/">العودة للرئيسية</a>
+        </div>
+      </section>
+
+      <section id="certShell" class="cert-shell">
+        <div id="certPaper" class="cert-paper" role="img" aria-label="شهادة إتمام بطاقة">
+          <div class="cert-bg" aria-hidden="true"></div>
+
+          <div class="cert-head">
+            <div class="cert-badge" aria-hidden="true">🏅</div>
+            <div>
+              <div class="cert-brand">math999</div>
+              <h1 class="cert-title">شهادة إتمام بطاقة</h1>
+              <p class="cert-sub">تشهد منصة math999 أن الطالب/ة</p>
+            </div>
+          </div>
+
+          <div class="cert-body">
+            <div id="certName" class="cert-name">—</div>
+            <div id="certCard" class="cert-card">—</div>
+            <div id="certClassLine" class="cert-line">—</div>
+            <div id="certDateLine" class="cert-line">—</div>
+            <div id="certIdLine" class="cert-line cert-id">—</div>
+          </div>
+
+          <div class="cert-meta">
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">رقم البطاقة</span>
+              <span id="certMetaWeek" class="cert-meta-v">—</span>
+            </div>
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">النتيجة</span>
+              <span id="certMetaScore" class="cert-meta-v">—</span>
+            </div>
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">تاريخ الإكمال</span>
+              <span id="certMetaDate" class="cert-meta-v">—</span>
+            </div>
+          </div>
+
+          <div class="cert-footer">
+            <div class="cert-sign">
+              <span class="cert-sign-k">بتوقيع</span>
+              <span class="cert-sign-v">منصة math999</span>
+            </div>
+            <div class="cert-stamp" aria-hidden="true">
+              <div class="cert-stamp-ring"></div>
+              <div class="cert-stamp-text">math999</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="certActions" class="cert-actions" role="group" aria-label="إجراءات الشهادة">
+    <button id="btnDownloadPng" class="btn btn-primary" type="button">تحميل PNG</button>
+    <button id="btnDownloadJpg" class="btn btn-outline" type="button">تحميل JPEG</button>
+    <button id="btnShareWhatsapp" class="btn btn-whatsapp" type="button">مشاركة واتساب</button>
+  </div>
+
+  <div id="certNotice" class="cert-notice hidden" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script type="module" src="/assets/cert/certificate.js"></script>
+</body>
+</html>
