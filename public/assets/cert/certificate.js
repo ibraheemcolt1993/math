@@ -22,6 +22,14 @@ const elements = {
   btnShare: document.getElementById('btnShareWhatsapp')
 };
 
+const certState = {
+  week: '',
+  seq: '',
+  cardTitle: '',
+  certNumber: '',
+  fullName: ''
+};
+
 const gradeNames = {
   1: 'الأول',
   2: 'الثاني',
@@ -110,6 +118,13 @@ function hideNotice() {
   elements.notice.textContent = '';
 }
 
+function showNoticeTemporary(message, timeout = 2600) {
+  showNotice(message);
+  window.setTimeout(() => {
+    hideNotice();
+  }, timeout);
+}
+
 async function resolveCertificateData() {
   const session = readJson(LS_STUDENT_SESSION);
   const lastCertificate = readJson(LS_LAST_CERTIFICATE);
@@ -175,9 +190,15 @@ function renderCertificate({ session, payload }) {
 
   document.title = `شهادة إتمام بطاقة ${seqValue}`;
 
+  certState.week = String(week ?? '');
+  certState.seq = String(seqValue ?? week ?? '');
+  certState.cardTitle = cardTitle;
+  certState.certNumber = certNumber;
+  certState.fullName = fullName;
+
   elements.btnPng?.addEventListener('click', () => downloadCertificate('png', week));
   elements.btnJpg?.addEventListener('click', () => downloadCertificate('jpg', week));
-  elements.btnShare?.addEventListener('click', () => shareCertificate({ week, cardTitle, name: fullName }));
+  elements.btnShare?.addEventListener('click', () => shareCertificate());
 }
 
 function showEmptyState() {
@@ -199,60 +220,109 @@ async function renderCanvas(scale = 2) {
   return window.html2canvas(elements.paper, {
     scale,
     backgroundColor: '#ffffff',
-    useCORS: true
+    useCORS: true,
+    allowTaint: false,
+    logging: false,
+    imageTimeout: 15000
   });
 }
 
-async function downloadCertificate(type, week) {
+async function waitForAssetsReady() {
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {}
+  }
+
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
+  const images = Array.from(elements.paper?.querySelectorAll('img') || []);
+  if (!images.length) return;
+
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    })
+  );
+}
+
+async function createCertificateImage(type) {
+  if (!elements.paper) throw new Error('Certificate not ready');
+  document.body.classList.add('cert-exporting');
+  let canvas;
+  try {
+    await waitForAssetsReady();
+    const scale = Math.min(2, window.devicePixelRatio || 1);
+    canvas = await renderCanvas(scale);
+  } finally {
+    document.body.classList.remove('cert-exporting');
+  }
+
+  const isPng = type === 'png';
+  const mime = isPng ? 'image/png' : 'image/jpeg';
+  const quality = isPng ? 1 : 0.92;
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+  if (!blob) throw new Error('تعذر إنشاء الصورة');
+
+  const fileName = `certificate-${certState.certNumber || certState.seq || 'week'}.${isPng ? 'png' : 'jpg'}`;
+  const file = new File([blob], fileName, { type: mime });
+  return { blob, file };
+}
+
+async function downloadCertificate(type) {
   hideNotice();
   try {
-    const canvas = await renderCanvas(2);
-    const isPng = type === 'png';
-    const mime = isPng ? 'image/png' : 'image/jpeg';
-    const quality = isPng ? 1 : 0.92;
-
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
-    if (!blob) throw new Error('تعذر إنشاء الصورة');
+    const { blob, file } = await createCertificateImage(type);
+    showNoticeTemporary('تم تجهيز الصورة ✅');
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `certificate-week-${week || 'unknown'}.${isPng ? 'png' : 'jpg'}`;
+    link.download = file.name;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
   } catch (error) {
+    document.body.classList.remove('cert-exporting');
     showNotice('تعذر تجهيز الصورة حاليًا. جرّب الطباعة أو أخذ لقطة شاشة.');
   }
 }
 
-async function shareCertificate({ week, cardTitle, name }) {
+async function shareCertificate() {
   hideNotice();
-  const shareText = `شهادة إتمام بطاقة ${cardTitle} - ${name}`;
+  const shareText = `شهادة إتمام للطالب/ة ${certState.fullName} - البطاقة ${certState.seq} - ${certState.certNumber}`;
   const shareUrl = window.location.href;
+
+  if (navigator.share && navigator.canShare) {
+    try {
+      const { file } = await createCertificateImage('png');
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'شهادة إتمام', text: shareText });
+        return;
+      }
+    } catch (error) {
+      console.warn(error);
+    }
+  }
 
   if (navigator.share) {
     try {
-      if (navigator.canShare && window.html2canvas) {
-        const canvas = await renderCanvas(2);
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1));
-        if (blob) {
-          const file = new File([blob], `certificate-week-${week || 'unknown'}.png`, { type: 'image/png' });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: 'شهادة إتمام بطاقة', text: shareText });
-            return;
-          }
-        }
-      }
-
-      await navigator.share({ title: 'شهادة إتمام بطاقة', text: shareText, url: shareUrl });
+      await navigator.share({ title: 'شهادة إتمام', text: shareText, url: shareUrl });
       return;
     } catch (error) {
       console.warn(error);
     }
   }
 
+  showNotice('حمّل الصورة أولًا ثم أرسلها في واتساب.');
   const waUrl = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`;
   window.open(waUrl, '_blank', 'noopener');
 }

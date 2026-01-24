@@ -61,11 +61,19 @@
 .cert-title {
   font-size: 32px;
   margin: 0;
+  letter-spacing: 0 !important;
 }
 
 .cert-sub {
   margin: 4px 0 0;
   color: #64748b;
+  letter-spacing: 0 !important;
+}
+
+.cert-brand {
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.4px;
 }
 
 .cert-brand {
@@ -83,12 +91,13 @@
   margin: 18px 0 6px;
   color: #475569;
   font-size: 14px;
+  letter-spacing: 0 !important;
 }
 
 .cert-name {
   font-size: 34px;
   font-weight: 800;
-  letter-spacing: 0.2px;
+  letter-spacing: 0 !important;
   color: #0f172a;
   padding: 6px 0 2px;
 }
@@ -98,6 +107,13 @@
   font-weight: 700;
   color: #1e293b;
   padding: 4px 0 10px;
+  letter-spacing: 0 !important;
+}
+
+.cert-id {
+  font-size: 12px;
+  color: #64748b;
+  letter-spacing: 0.6px;
 }
 
 .cert-id {
@@ -219,6 +235,25 @@
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
   z-index: 25;
   font-size: 13px;
+}
+
+/* Export mode */
+body.cert-exporting .topbar,
+body.cert-exporting .cert-actions,
+body.cert-exporting .cert-notice {
+  display: none !important;
+}
+
+body.cert-exporting .cert-shell {
+  padding-bottom: 0;
+  min-height: auto;
+}
+
+body.cert-exporting .cert-paper {
+  width: 1024px;
+  height: 1024px;
+  max-height: none;
+  overflow: visible;
 }
 
 /* Empty */
