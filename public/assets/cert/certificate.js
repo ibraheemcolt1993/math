@@ -258,7 +258,11 @@ async function createCertificateImage(type) {
   let canvas;
   try {
     await waitForAssetsReady();
-    const scale = Math.min(2, window.devicePixelRatio || 1);
+    const targetPx = 1080;
+    const rect = elements.paper.getBoundingClientRect();
+    const width = rect?.width || 1;
+    const rawScale = targetPx / Math.max(1, width);
+    const scale = Math.min(3.25, Math.max(2, rawScale));
     canvas = await renderCanvas(scale);
   } finally {
     document.body.classList.remove('cert-exporting');
