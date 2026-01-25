@@ -2723,6 +2723,2650 @@ The following files were removed as requested:
 - dumb.txt
 - server/ (untracked directory)
 - api/node_modules/ (generated dependencies)
+math/dumb.txt
+math/.github/workflows/azure-static-web-apps-mango-smoke-0ebe00210.yml
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MANGO_SMOKE_0EBE00210 }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          action: "upload"
+          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
+          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
+          app_location: "public" # App source code path
+          api_location: "api" # Api source code path - optional
+          output_location: "public" # Built app content directory - optional
+          ###### End of Repository/Build Configurations ######
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MANGO_SMOKE_0EBE00210 }}
+          action: "close"
+math/.gitignore
+node_modules/
+api/node_modules/
+server/
+.DS_Store
+math/api/_migrations/001_card_completions.sql
+IF OBJECT_ID('dbo.CardCompletions', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.CardCompletions (
+    CompletionId INT IDENTITY(1,1) PRIMARY KEY,
+    StudentId NVARCHAR(20) NOT NULL,
+    Week INT NOT NULL,
+    FinalScore INT NOT NULL,
+    CompletedAt DATETIME NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_CardCompletions_Students FOREIGN KEY (StudentId)
+      REFERENCES dbo.Students(StudentId),
+    CONSTRAINT FK_CardCompletions_Weeks FOREIGN KEY (Week)
+      REFERENCES dbo.Weeks(Week),
+    CONSTRAINT UQ_CardCompletions_StudentWeek UNIQUE (StudentId, Week)
+  );
+
+  CREATE INDEX IX_CardCompletions_Week ON dbo.CardCompletions (Week);
+  CREATE INDEX IX_CardCompletions_StudentId ON dbo.CardCompletions (StudentId);
+END
+math/api/_migrations/002_add_week_seq_prereq.sql
+IF COL_LENGTH('dbo.Weeks', 'Seq') IS NULL
+BEGIN
+  ALTER TABLE dbo.Weeks
+    ADD Seq INT NULL;
+END
+
+IF COL_LENGTH('dbo.Weeks', 'PrereqWeek') IS NULL
+BEGIN
+  ALTER TABLE dbo.Weeks
+    ADD PrereqWeek INT NULL;
+END
+
+;WITH Ranked AS (
+  SELECT Week,
+         ROW_NUMBER() OVER (PARTITION BY Grade ORDER BY Week) AS SeqValue
+  FROM dbo.Weeks
+  WHERE IsDeleted = 0
+)
+UPDATE w
+SET Seq = r.SeqValue
+FROM dbo.Weeks w
+JOIN Ranked r ON w.Week = r.Week
+WHERE w.Seq IS NULL OR w.Seq <> r.SeqValue;
+
+UPDATE dbo.Weeks
+SET Seq = 0
+WHERE Seq IS NULL;
+
+IF EXISTS (
+  SELECT 1
+  FROM sys.columns
+  WHERE name = 'Seq'
+    AND object_id = OBJECT_ID('dbo.Weeks')
+    AND is_nullable = 1
+)
+BEGIN
+  ALTER TABLE dbo.Weeks
+    ALTER COLUMN Seq INT NOT NULL;
+END
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes
+  WHERE name = 'IX_Weeks_Grade_Seq_Active'
+    AND object_id = OBJECT_ID('dbo.Weeks')
+)
+BEGIN
+  CREATE UNIQUE INDEX IX_Weeks_Grade_Seq_Active
+    ON dbo.Weeks (Grade, Seq)
+    WHERE IsDeleted = 0;
+END
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes
+  WHERE name = 'IX_Weeks_PrereqWeek'
+    AND object_id = OBJECT_ID('dbo.Weeks')
+)
+BEGIN
+  CREATE INDEX IX_Weeks_PrereqWeek
+    ON dbo.Weeks (PrereqWeek);
+END
+math/api/_shared/db.js
+const sql = require('mssql');
+
+let pool;
+
+async function getPool() {
+  if (pool) {
+    return pool;
+  }
+
+  const connectionString = process.env.SQL_CONNECTION_STRING;
+  if (!connectionString) {
+    throw new Error('SQL_CONNECTION_STRING is not set.');
+  }
+
+  pool = await sql.connect(connectionString);
+  pool.on('error', () => {
+    pool = null;
+  });
+  return pool;
+}
+
+module.exports = {
+  sql,
+  getPool
+};
+math/api/_shared/http.js
+const DEFAULT_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Cache-Control': 'no-store'
+};
+
+function withHeaders(headers) {
+  return { ...DEFAULT_HEADERS, ...(headers || {}) };
+}
+
+function response(status, body, headers) {
+  return {
+    status,
+    headers: withHeaders(headers),
+    body
+  };
+}
+
+function ok(data, headers) {
+  return response(200, data, headers);
+}
+
+function badRequest(message = 'BAD_REQUEST') {
+  return response(400, { ok: false, error: message });
+}
+
+function unauthorized(message = 'UNAUTHORIZED') {
+  return response(401, { ok: false, error: message });
+}
+
+function notFound(message = 'NOT_FOUND') {
+  return response(404, { ok: false, error: message });
+}
+
+function methodNotAllowed(message = 'Method not allowed.') {
+  return response(405, { ok: false, error: message });
+}
+
+function serverError(error) {
+  return response(500, { ok: false, error: 'SERVER_ERROR', detail: error?.message });
+}
+
+module.exports = {
+  DEFAULT_HEADERS,
+  response,
+  ok,
+  badRequest,
+  unauthorized,
+  notFound,
+  methodNotAllowed,
+  serverError
+};
+math/api/_shared/parse.js
+function readJson(req) {
+  if (req?.body && typeof req.body === 'object') {
+    return req.body;
+  }
+
+  if (typeof req?.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  if (req?.rawBody) {
+    try {
+      return JSON.parse(req.rawBody);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function getQuery(req) {
+  return req?.query || {};
+}
+
+module.exports = { readJson, getQuery };
+math/api/cards/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "cards"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/cards/index.js
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, response } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+module.exports = async function (context, req) {
+  try {
+    const query = getQuery(req);
+    const grade = normalizeDigits(toCleanString(query.grade));
+    const classInput = toCleanString(query.class);
+    const className = normalizeDigits(classInput);
+
+    if (!grade) {
+      context.res = badRequest('grade is required.');
+      return;
+    }
+
+    const dbPool = await getPool();
+    const request = dbPool.request();
+    request.input('grade', sql.NVarChar(50), grade);
+
+    const conditions = ['w.IsDeleted = 0', 'w.Grade = @grade'];
+    const hasClassFilter = className && className !== 'ALL_CLASSES';
+
+    if (hasClassFilter) {
+      request.input('className', sql.NVarChar(50), className);
+      conditions.push(`(
+        NOT EXISTS (SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week)
+        OR EXISTS (
+          SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week AND wt.Class = @className
+        )
+      )`);
+    }
+
+    const sqlQuery = `
+      SELECT w.Week,
+             w.Title,
+             w.Grade,
+             w.Seq,
+             w.PrereqWeek,
+             prereq.Seq AS PrereqSeq,
+             t.Class
+      FROM dbo.Weeks w
+      LEFT JOIN dbo.Weeks prereq ON w.PrereqWeek = prereq.Week
+      LEFT JOIN dbo.WeekTargets t ON w.Week = t.Week
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY w.Seq, w.Week
+    `;
+
+    const result = await request.query(sqlQuery);
+
+    const cardsByWeek = new Map();
+    result.recordset.forEach((row) => {
+      if (!cardsByWeek.has(row.Week)) {
+        cardsByWeek.set(row.Week, {
+          week: row.Week,
+          title: row.Title,
+          grade: row.Grade,
+          seq: row.Seq,
+          prereqWeek: row.PrereqWeek ?? null,
+          prereqSeq: row.PrereqSeq ?? null,
+          classes: []
+        });
+      }
+
+      if (row.Class) {
+        cardsByWeek.get(row.Week).classes.push(row.Class);
+      }
+    });
+
+    const cards = Array.from(cardsByWeek.values()).map((card) => {
+      const uniqueClasses = Array.from(new Set(card.classes));
+      return {
+        Week: card.week,
+        Title: card.title,
+        Grade: card.grade,
+        Seq: card.seq,
+        Classes: uniqueClasses,
+        PrereqWeek: card.prereqWeek,
+        PrereqSeq: card.prereqSeq
+      };
+    });
+
+    context.res = ok(cards);
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+math/api/health/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "health"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/health/index.js
+const { getPool } = require('../_shared/db');
+const { ok, response } = require('../_shared/http');
+
+module.exports = async function (context) {
+  try {
+    const dbPool = await getPool();
+    await dbPool.request().query('SELECT 1 AS ok');
+    context.res = ok({ ok: true, db: true });
+  } catch (error) {
+    context.res = response(500, { ok: false, db: false, error: error.message });
+  }
+};
+math/api/host.json
+{
+  "version": "2.0"
+}
+math/api/mng-card-completions/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "mng/cards/{week:int}/completions"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/mng-card-completions/index.js
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, notFound, response } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+module.exports = async function (context, req) {
+  try {
+    const weekParam = Number(req.params.week);
+    if (!Number.isInteger(weekParam)) {
+      context.res = badRequest('week must be a valid integer.');
+      return;
+    }
+
+    const query = getQuery(req);
+    const classInput = toCleanString(query.class);
+    const className = normalizeDigits(classInput);
+    const hasClassFilter = className && className !== 'ALL_CLASSES';
+
+    const dbPool = await getPool();
+    const weekCheck = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!weekCheck.recordset.length) {
+      context.res = notFound('Card not found.');
+      return;
+    }
+
+    const request = dbPool.request();
+    request.input('week', sql.Int, weekParam);
+
+    let sqlQuery = `
+      SELECT c.StudentId,
+             s.Name AS FullName,
+             s.Class,
+             c.FinalScore,
+             c.CompletedAt
+      FROM dbo.CardCompletions c
+      JOIN dbo.Students s ON s.StudentId = c.StudentId
+      WHERE c.Week = @week
+    `;
+
+    if (hasClassFilter) {
+      request.input('className', sql.NVarChar(50), className);
+      sqlQuery += ' AND s.Class = @className';
+    }
+
+    sqlQuery += ' ORDER BY c.CompletedAt DESC, s.Name, s.StudentId';
+
+    const result = await request.query(sqlQuery);
+
+    context.res = ok({ ok: true, students: result.recordset });
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+math/api/mng-cards/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post", "put", "delete"],
+      "route": "mng/cards/{week?}"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/mng-cards/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson, getQuery } = require('../_shared/parse');
+const { ok, badRequest, notFound, methodNotAllowed, serverError } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function parseWeek(value) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  if (!cleaned || !/^\d+$/.test(cleaned)) return null;
+  const parsed = Number.parseInt(cleaned, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function parseOptionalWeek(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return parseWeek(value);
+}
+
+function normalizeClassList(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  value.forEach((entry) => {
+    const cleaned = normalizeDigits(toCleanString(entry));
+    if (!cleaned) return;
+    seen.add(cleaned);
+  });
+  return Array.from(seen);
+}
+
+async function renumberSeq(transaction, grade) {
+  if (!grade) return;
+  await new sql.Request(transaction)
+    .input('grade', sql.NVarChar(50), grade)
+    .query(
+      `WITH Ranked AS (
+         SELECT Week,
+                ROW_NUMBER() OVER (ORDER BY Seq, Week) AS SeqValue
+         FROM dbo.Weeks
+         WHERE Grade = @grade AND IsDeleted = 0
+       )
+       UPDATE w
+       SET Seq = r.SeqValue
+       FROM dbo.Weeks w
+       JOIN Ranked r ON w.Week = r.Week;`
+    );
+}
+
+async function handleGet(context, req) {
+  const query = getQuery(req);
+  const grade = normalizeDigits(toCleanString(query.grade));
+  const classInput = toCleanString(query.class);
+  const className = normalizeDigits(classInput);
+  const q = toCleanString(query.q);
+  const search = q ? `%${normalizeDigits(q)}%` : '';
+
+  const dbPool = await getPool();
+  const request = dbPool.request();
+
+  const conditions = ['w.IsDeleted = 0'];
+
+  if (grade) {
+    request.input('grade', sql.NVarChar(50), grade);
+    conditions.push('w.Grade = @grade');
+  }
+
+  if (search) {
+    request.input('q', sql.NVarChar(200), search);
+    conditions.push('(CAST(w.Week AS NVARCHAR(20)) LIKE @q OR CAST(w.Seq AS NVARCHAR(20)) LIKE @q OR w.Title LIKE @q)');
+  }
+
+  const hasClassFilter = className && className !== 'ALL_CLASSES';
+  if (hasClassFilter) {
+    request.input('className', sql.NVarChar(50), className);
+    conditions.push(`(
+      NOT EXISTS (SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week)
+      OR EXISTS (
+        SELECT 1 FROM dbo.WeekTargets wt WHERE wt.Week = w.Week AND wt.Class = @className
+      )
+    )`);
+  } else if (className) {
+    request.input('className', sql.NVarChar(50), className);
+  }
+
+  const countFilters = [];
+  if (grade) {
+    countFilters.push('s.Grade = @grade');
+  }
+  if (hasClassFilter) {
+    countFilters.push('s.Class = @className');
+  }
+
+  let sqlQuery = `
+    SELECT w.Week,
+           w.Title,
+           w.Grade,
+           w.Seq,
+           w.PrereqWeek,
+           prereq.Seq AS PrereqSeq,
+           prereq.Title AS PrereqTitle,
+           t.Class,
+           cc.CompletedCount
+    FROM dbo.Weeks w
+    LEFT JOIN dbo.Weeks prereq ON w.PrereqWeek = prereq.Week
+    LEFT JOIN dbo.WeekTargets t ON w.Week = t.Week
+    LEFT JOIN (
+      SELECT c.Week, COUNT(*) AS CompletedCount
+      FROM dbo.CardCompletions c
+      JOIN dbo.Students s ON s.StudentId = c.StudentId
+      ${countFilters.length ? `WHERE ${countFilters.join(' AND ')}` : ''}
+      GROUP BY c.Week
+    ) cc ON w.Week = cc.Week
+  `;
+
+  if (conditions.length) {
+    sqlQuery += ` WHERE ${conditions.join(' AND ')}`;
+  }
+
+  sqlQuery += ' ORDER BY w.Grade, w.Seq';
+
+  const result = await request.query(sqlQuery);
+
+  const cardsByWeek = new Map();
+  result.recordset.forEach((row) => {
+    if (!cardsByWeek.has(row.Week)) {
+      cardsByWeek.set(row.Week, {
+        week: row.Week,
+        title: row.Title,
+        grade: row.Grade,
+        seq: row.Seq,
+        prereqWeek: row.PrereqWeek ?? null,
+        prereqSeq: row.PrereqSeq ?? null,
+        prereqTitle: row.PrereqTitle ?? null,
+        classes: [],
+        completedCount: row.CompletedCount ?? 0
+      });
+    }
+
+    if (row.Class) {
+      cardsByWeek.get(row.Week).classes.push(row.Class);
+    }
+  });
+
+  const cards = Array.from(cardsByWeek.values()).map((card) => {
+    const uniqueClasses = Array.from(new Set(card.classes));
+    return {
+      week: card.week,
+      title: card.title,
+      grade: card.grade,
+      seq: card.seq,
+      prereqWeek: card.prereqWeek,
+      prereqSeq: card.prereqSeq,
+      prereqTitle: card.prereqTitle,
+      classes: uniqueClasses,
+      completedCount: card.completedCount,
+      isAllClasses: uniqueClasses.length === 0
+    };
+  });
+
+  context.res = ok({ ok: true, cards });
+}
+
+async function handlePost(context, req) {
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const requestedWeek = parseWeek(payload.week);
+  const title = toCleanString(payload.title);
+  const grade = normalizeDigits(toCleanString(payload.grade));
+  const allClasses = Boolean(payload.allClasses);
+  const classes = allClasses ? [] : normalizeClassList(payload.classes);
+  const prereqWeekRaw = payload.prereqWeek;
+  const prereqWeek = parseOptionalWeek(prereqWeekRaw);
+
+  if (payload.week != null && !requestedWeek) {
+    context.res = badRequest('week must be a valid integer.');
+    return;
+  }
+
+  if (prereqWeekRaw !== undefined && prereqWeekRaw !== null && prereqWeekRaw !== '' && prereqWeek === null) {
+    context.res = badRequest('prereqWeek must be a valid integer or null.');
+    return;
+  }
+
+  if (!title) {
+    context.res = badRequest('title is required.');
+    return;
+  }
+
+  if (!grade) {
+    context.res = badRequest('grade is required.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  let week = requestedWeek;
+
+  if (week) {
+    const existing = await dbPool
+      .request()
+      .input('week', sql.Int, week)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+
+    if (existing.recordset.length) {
+      context.res = badRequest('week already exists.');
+      return;
+    }
+  } else {
+    const maxResult = await dbPool.request().query('SELECT ISNULL(MAX(Week), 0) AS maxWeek FROM dbo.Weeks');
+    week = (maxResult.recordset[0]?.maxWeek || 0) + 1;
+  }
+
+  if (prereqWeek != null) {
+    if (prereqWeek === week) {
+      context.res = badRequest('prereqWeek cannot match week.');
+      return;
+    }
+
+    const prereqResult = await dbPool
+      .request()
+      .input('week', sql.Int, prereqWeek)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!prereqResult.recordset.length) {
+      context.res = badRequest('prereqWeek does not exist.');
+      return;
+    }
+
+    if (normalizeDigits(prereqResult.recordset[0].Grade) !== grade) {
+      context.res = badRequest('prereqWeek must belong to the same grade.');
+      return;
+    }
+  }
+
+  const seqResult = await dbPool
+    .request()
+    .input('grade', sql.NVarChar(50), grade)
+    .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+
+  const nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
+
+  const transaction = new sql.Transaction(dbPool);
+  try {
+    await transaction.begin();
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .input('title', sql.NVarChar(200), title)
+      .input('grade', sql.NVarChar(50), grade)
+      .input('seq', sql.Int, nextSeq)
+      .input('prereqWeek', sql.Int, prereqWeek)
+      .query(
+        `INSERT INTO dbo.Weeks (Week, Title, Grade, Seq, PrereqWeek, IsDeleted)
+         VALUES (@week, @title, @grade, @seq, @prereqWeek, 0);`
+      );
+
+    for (const classValue of classes) {
+      await new sql.Request(transaction)
+        .input('week', sql.Int, week)
+        .input('className', sql.NVarChar(50), classValue)
+        .query(
+          `INSERT INTO dbo.WeekTargets (Week, Class)
+           VALUES (@week, @className);`
+        );
+    }
+
+    await transaction.commit();
+    context.res = ok({ ok: true, week, seq: nextSeq });
+  } catch (error) {
+    await transaction.rollback();
+    context.res = serverError(error);
+  }
+}
+
+async function handlePut(context, req) {
+  const week = parseWeek(req.params?.week);
+  if (!week) {
+    context.res = badRequest('week must be a valid integer.');
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const title = toCleanString(payload.title);
+  const grade = normalizeDigits(toCleanString(payload.grade));
+  const allClasses = Boolean(payload.allClasses);
+  const classes = allClasses ? [] : normalizeClassList(payload.classes);
+  const prereqWeekRaw = payload.prereqWeek;
+  const prereqWeek = parseOptionalWeek(prereqWeekRaw);
+
+  if (prereqWeekRaw !== undefined && prereqWeekRaw !== null && prereqWeekRaw !== '' && prereqWeek === null) {
+    context.res = badRequest('prereqWeek must be a valid integer or null.');
+    return;
+  }
+
+  if (!title) {
+    context.res = badRequest('title is required.');
+    return;
+  }
+
+  if (!grade) {
+    context.res = badRequest('grade is required.');
+    return;
+  }
+
+  if (prereqWeek === week) {
+    context.res = badRequest('prereqWeek cannot match week.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existing = await dbPool
+    .request()
+    .input('week', sql.Int, week)
+    .query('SELECT Week, Grade, Seq FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+  if (!existing.recordset.length) {
+    context.res = notFound('Card not found.');
+    return;
+  }
+
+  const current = existing.recordset[0];
+  const previousGrade = normalizeDigits(current.Grade);
+  const gradeChanged = previousGrade !== grade;
+
+  if (prereqWeek != null) {
+    const prereqResult = await dbPool
+      .request()
+      .input('week', sql.Int, prereqWeek)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!prereqResult.recordset.length) {
+      context.res = badRequest('prereqWeek does not exist.');
+      return;
+    }
+
+    if (normalizeDigits(prereqResult.recordset[0].Grade) !== grade) {
+      context.res = badRequest('prereqWeek must belong to the same grade.');
+      return;
+    }
+  }
+
+  let nextSeq = current.Seq;
+  if (gradeChanged) {
+    const seqResult = await dbPool
+      .request()
+      .input('grade', sql.NVarChar(50), grade)
+      .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+    nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
+  }
+
+  const transaction = new sql.Transaction(dbPool);
+  try {
+    await transaction.begin();
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .input('title', sql.NVarChar(200), title)
+      .input('grade', sql.NVarChar(50), grade)
+      .input('seq', sql.Int, nextSeq)
+      .input('prereqWeek', sql.Int, prereqWeek)
+      .query(
+        `UPDATE dbo.Weeks
+         SET Title = @title,
+             Grade = @grade,
+             Seq = @seq,
+             PrereqWeek = @prereqWeek
+         WHERE Week = @week AND IsDeleted = 0;`
+      );
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query('DELETE FROM dbo.WeekTargets WHERE Week = @week;');
+
+    for (const classValue of classes) {
+      await new sql.Request(transaction)
+        .input('week', sql.Int, week)
+        .input('className', sql.NVarChar(50), classValue)
+        .query(
+          `INSERT INTO dbo.WeekTargets (Week, Class)
+           VALUES (@week, @className);`
+        );
+    }
+
+    if (gradeChanged) {
+      await renumberSeq(transaction, previousGrade);
+      await renumberSeq(transaction, grade);
+    }
+
+    await transaction.commit();
+    context.res = ok({ ok: true });
+  } catch (error) {
+    await transaction.rollback();
+    context.res = serverError(error);
+  }
+}
+
+async function handleDelete(context, req) {
+  const week = parseWeek(req.params?.week);
+  if (!week) {
+    context.res = badRequest('week must be a valid integer.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existing = await dbPool
+    .request()
+    .input('week', sql.Int, week)
+    .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+  if (!existing.recordset.length) {
+    context.res = notFound('Card not found.');
+    return;
+  }
+
+  const grade = normalizeDigits(existing.recordset[0].Grade);
+  const transaction = new sql.Transaction(dbPool);
+
+  try {
+    await transaction.begin();
+
+    const result = await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query(
+        `UPDATE dbo.Weeks
+         SET IsDeleted = 1
+         WHERE Week = @week AND IsDeleted = 0;
+         SELECT @@ROWCOUNT AS affected;`
+      );
+
+    const affected = result.recordset[0]?.affected || 0;
+    if (!affected) {
+      await transaction.rollback();
+      context.res = notFound('Card not found.');
+      return;
+    }
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query('UPDATE dbo.Weeks SET PrereqWeek = NULL WHERE PrereqWeek = @week;');
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, week)
+      .query('DELETE FROM dbo.WeekTargets WHERE Week = @week;');
+
+    await renumberSeq(transaction, grade);
+
+    await transaction.commit();
+    context.res = ok({ ok: true });
+  } catch (error) {
+    await transaction.rollback();
+    context.res = serverError(error);
+  }
+}
+
+module.exports = async function (context, req) {
+  try {
+    switch (req.method) {
+      case 'GET':
+        await handleGet(context, req);
+        return;
+      case 'POST':
+        await handlePost(context, req);
+        return;
+      case 'PUT':
+        await handlePut(context, req);
+        return;
+      case 'DELETE':
+        await handleDelete(context, req);
+        return;
+      default:
+        context.res = methodNotAllowed();
+    }
+  } catch (error) {
+    context.res = serverError(error);
+  }
+};
+math/api/mng-students/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post", "put", "delete"],
+      "route": "mng/students/{studentId?}"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/mng-students/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson, getQuery } = require('../_shared/parse');
+const { ok, badRequest, notFound, methodNotAllowed, serverError } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function normalizeGrade(value) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  if (!cleaned) return '';
+  if (/^[1-9]$/.test(cleaned)) return cleaned;
+
+  let text = cleaned.replace(/\s+/g, '');
+  text = text.replace(/^الصف/, '').replace(/^صف/, '').replace(/^ال/, '');
+  text = text.replace(/[أإآ]/g, 'ا');
+
+  const gradeMap = {
+    اول: '1',
+    ثاني: '2',
+    ثالث: '3',
+    رابع: '4',
+    خامس: '5',
+    سادس: '6',
+    سابع: '7',
+    ثامن: '8',
+    تاسع: '9'
+  };
+
+  return gradeMap[text] || cleaned;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isValidBirthYear(value) {
+  return /^\d{4}$/.test(value);
+}
+
+function deriveFirstName(name) {
+  const parts = toCleanString(name).split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (parts[0] === 'عبد' && parts[1]) {
+    return `عبد ${parts[1]}`;
+  }
+  return parts[0];
+}
+
+function normalizeDateString(value) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  if (!cleaned) return '';
+  const match = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+async function handleGet(context, req) {
+  const query = getQuery(req);
+  const q = typeof query.q === 'string' ? query.q.trim() : '';
+  const search = q ? `%${normalizeDigits(q)}%` : '';
+
+  const dbPool = await getPool();
+  const request = dbPool.request();
+  let sqlQuery =
+    'SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students';
+
+  if (search) {
+    request.input('q', sql.NVarChar(200), search);
+    sqlQuery += ' WHERE StudentId LIKE @q OR Name LIKE @q';
+  }
+
+  sqlQuery += ' ORDER BY Grade, Class, Name, StudentId';
+
+  const result = await request.query(sqlQuery);
+  context.res = ok({ ok: true, students: result.recordset });
+}
+
+async function handlePost(context, req) {
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const studentId = normalizeDigits(toCleanString(payload.studentId));
+  const birthYear = normalizeDigits(toCleanString(payload.birthYear));
+  const name = toCleanString(payload.name);
+  const birthDateValue = toCleanString(payload.birthDate);
+  const birthDateInput = normalizeDateString(birthDateValue);
+  let firstName = toCleanString(payload.firstName);
+  const grade = payload.grade != null ? normalizeGrade(payload.grade) : '';
+  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : '';
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  if (!birthYear || !isValidBirthYear(birthYear)) {
+    context.res = badRequest('birthYear must be a 4-digit year.');
+    return;
+  }
+
+  if (!name) {
+    context.res = badRequest('name is required.');
+    return;
+  }
+
+  if (birthDateValue && !birthDateInput) {
+    context.res = badRequest('birthDate must be in YYYY-MM-DD format.');
+    return;
+  }
+
+  if (!firstName) {
+    firstName = deriveFirstName(name);
+  }
+
+  const birthDate = birthDateInput || `${birthYear}-01-01`;
+
+  const dbPool = await getPool();
+  const existingResult = await dbPool
+    .request()
+    .input('studentId', sql.NVarChar(20), studentId)
+    .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
+
+  if (existingResult.recordset.length) {
+    context.res = badRequest('studentId already exists.');
+    return;
+  }
+
+  const insertResult = await dbPool
+    .request()
+    .input('studentId', sql.NVarChar(20), studentId)
+    .input('birthYear', sql.NVarChar(10), birthYear)
+    .input('name', sql.NVarChar(200), name)
+    .input('firstName', sql.NVarChar(100), firstName)
+    .input('birthDate', sql.Date, birthDate)
+    .input('grade', sql.NVarChar(50), grade)
+    .input('className', sql.NVarChar(50), className)
+    .query(
+      `INSERT INTO dbo.Students (StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class)
+       VALUES (@studentId, @birthYear, @name, @firstName, @birthDate, @grade, @className);
+       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
+       FROM dbo.Students
+       WHERE StudentId = @studentId;`
+    );
+
+  context.res = ok({ ok: true, student: insertResult.recordset[0] });
+}
+
+async function handlePut(context, req) {
+  const studentId = normalizeDigits(toCleanString(req.params?.studentId));
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existingResult = await dbPool
+    .request()
+    .input('studentId', sql.NVarChar(20), studentId)
+    .query('SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students WHERE StudentId = @studentId');
+
+  if (!existingResult.recordset.length) {
+    context.res = notFound('Student not found.');
+    return;
+  }
+
+  const existing = existingResult.recordset[0];
+  const birthYear = payload.birthYear != null
+    ? normalizeDigits(toCleanString(payload.birthYear))
+    : existing.BirthYear;
+  const name = payload.name != null ? String(payload.name).trim() : existing.Name;
+  const incomingFirstName = payload.firstName != null ? String(payload.firstName).trim() : '';
+  let firstName = payload.firstName != null ? incomingFirstName : existing.FirstName;
+  if (payload.name != null && !incomingFirstName) {
+    firstName = deriveFirstName(name);
+  }
+  const grade = payload.grade != null ? normalizeGrade(payload.grade) : existing.Grade;
+  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : existing.Class;
+  const birthDateValue = payload.birthDate != null ? toCleanString(payload.birthDate) : '';
+  let birthDate = existing.BirthDate;
+
+  if (!birthYear || !isValidBirthYear(birthYear)) {
+    context.res = badRequest('birthYear must be a 4-digit year.');
+    return;
+  }
+
+  if (!name) {
+    context.res = badRequest('name is required.');
+    return;
+  }
+
+  if (payload.birthDate != null) {
+    const normalizedBirthDate = normalizeDateString(birthDateValue);
+    if (birthDateValue && !normalizedBirthDate) {
+      context.res = badRequest('birthDate must be in YYYY-MM-DD format.');
+      return;
+    }
+    birthDate = normalizedBirthDate || `${birthYear}-01-01`;
+  }
+
+  const updateResult = await dbPool
+    .request()
+    .input('studentId', sql.NVarChar(20), studentId)
+    .input('birthYear', sql.NVarChar(10), birthYear)
+    .input('name', sql.NVarChar(200), name)
+    .input('firstName', sql.NVarChar(100), firstName)
+    .input('birthDate', sql.Date, birthDate)
+    .input('grade', sql.NVarChar(50), grade)
+    .input('className', sql.NVarChar(50), className)
+    .query(
+      `UPDATE dbo.Students
+       SET BirthYear = @birthYear,
+           Name = @name,
+           FirstName = @firstName,
+           BirthDate = @birthDate,
+           Grade = @grade,
+           Class = @className
+       WHERE StudentId = @studentId;
+       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
+       FROM dbo.Students
+       WHERE StudentId = @studentId;`
+    );
+
+  context.res = ok({ ok: true, student: updateResult.recordset[0] });
+}
+
+async function handleDelete(context, req) {
+  const studentId = normalizeDigits(toCleanString(req.params?.studentId));
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const result = await dbPool
+    .request()
+    .input('studentId', sql.NVarChar(20), studentId)
+    .query(
+      `DELETE FROM dbo.Students
+       WHERE StudentId = @studentId;
+       SELECT @@ROWCOUNT AS affected;`
+    );
+
+  const affected = result.recordset[0]?.affected || 0;
+  if (!affected) {
+    context.res = notFound('Student not found.');
+    return;
+  }
+
+  context.res = ok({ ok: true });
+}
+
+module.exports = async function (context, req) {
+  try {
+    switch (req.method) {
+      case 'GET':
+        await handleGet(context, req);
+        return;
+      case 'POST':
+        await handlePost(context, req);
+        return;
+      case 'PUT':
+        await handlePut(context, req);
+        return;
+      case 'DELETE':
+        await handleDelete(context, req);
+        return;
+      default:
+        context.res = methodNotAllowed();
+    }
+  } catch (error) {
+    context.res = serverError(error);
+  }
+};
+math/api/mng-week-content/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "put"],
+      "route": "mng/weeks/{week:int}/content"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/mng-week-content/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, notFound, methodNotAllowed, response } = require('../_shared/http');
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toNullableString(value) {
+  const cleaned = toCleanString(value);
+  return cleaned ? cleaned : null;
+}
+
+function toNullableInt(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function fetchWeekContent(dbPool, weekParam) {
+  const weekResult = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query('SELECT Week, Title, Seq FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+  if (!weekResult.recordset.length) {
+    return null;
+  }
+
+  const goalsResult = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query(
+      'SELECT GoalId, Week, SortOrder, GoalText FROM dbo.WeekGoals WHERE Week = @week ORDER BY SortOrder'
+    );
+
+  const prerequisitesResult = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query(
+      'SELECT PrerequisiteId, Week, SortOrder, PrerequisiteText FROM dbo.WeekPrerequisites WHERE Week = @week ORDER BY SortOrder'
+    );
+
+  const conceptsResult = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query('SELECT ConceptId, Week, SortOrder, Title FROM dbo.Concepts WHERE Week = @week ORDER BY SortOrder');
+
+  const conceptIds = conceptsResult.recordset.map((concept) => concept.ConceptId);
+  let flowItemsResult = { recordset: [] };
+  let flowDetailsResult = { recordset: [] };
+  let flowHintsResult = { recordset: [] };
+  let flowChoicesResult = { recordset: [] };
+
+  if (conceptIds.length) {
+    const inClause = conceptIds.map((_, index) => `@concept${index}`).join(',');
+    const flowRequest = dbPool.request();
+    conceptIds.forEach((id, index) => {
+      flowRequest.input(`concept${index}`, sql.Int, id);
+    });
+
+    flowItemsResult = await flowRequest.query(
+      `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution
+       FROM dbo.FlowItems
+       WHERE ConceptId IN (${inClause})
+       ORDER BY ConceptId, SortOrder`
+    );
+
+    const flowItemIds = flowItemsResult.recordset.map((item) => item.FlowItemId);
+    if (flowItemIds.length) {
+      const itemClause = flowItemIds.map((_, index) => `@item${index}`).join(',');
+      const detailRequest = dbPool.request();
+      flowItemIds.forEach((id, index) => {
+        detailRequest.input(`item${index}`, sql.Int, id);
+      });
+
+      flowDetailsResult = await detailRequest.query(
+        `SELECT FlowItemDetailId, FlowItemId, SortOrder, DetailText
+         FROM dbo.FlowItemDetails
+         WHERE FlowItemId IN (${itemClause})
+         ORDER BY FlowItemId, SortOrder`
+      );
+
+      const hintRequest = dbPool.request();
+      flowItemIds.forEach((id, index) => {
+        hintRequest.input(`item${index}`, sql.Int, id);
+      });
+
+      flowHintsResult = await hintRequest.query(
+        `SELECT FlowItemHintId, FlowItemId, SortOrder, HintText
+         FROM dbo.FlowItemHints
+         WHERE FlowItemId IN (${itemClause})
+         ORDER BY FlowItemId, SortOrder`
+      );
+
+      const choiceRequest = dbPool.request();
+      flowItemIds.forEach((id, index) => {
+        choiceRequest.input(`item${index}`, sql.Int, id);
+      });
+
+      flowChoicesResult = await choiceRequest.query(
+        `SELECT FlowItemChoiceId, FlowItemId, SortOrder, ChoiceText
+         FROM dbo.FlowItemChoices
+         WHERE FlowItemId IN (${itemClause})
+         ORDER BY FlowItemId, SortOrder`
+      );
+    }
+  }
+
+  const assessmentsResult = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query(
+      'SELECT AssessmentId, Week, Title, Description FROM dbo.Assessments WHERE Week = @week ORDER BY AssessmentId'
+    );
+
+  const assessmentIds = assessmentsResult.recordset.map(
+    (assessment) => assessment.AssessmentId
+  );
+  let assessmentQuestionsResult = { recordset: [] };
+  let assessmentChoicesResult = { recordset: [] };
+
+  if (assessmentIds.length) {
+    const assessmentClause = assessmentIds.map((_, index) => `@assessment${index}`).join(',');
+    const assessmentRequest = dbPool.request();
+    assessmentIds.forEach((id, index) => {
+      assessmentRequest.input(`assessment${index}`, sql.Int, id);
+    });
+
+    assessmentQuestionsResult = await assessmentRequest.query(
+      `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex
+       FROM dbo.AssessmentQuestions
+       WHERE AssessmentId IN (${assessmentClause})
+       ORDER BY AssessmentId, SortOrder`
+    );
+
+    const questionIds = assessmentQuestionsResult.recordset.map(
+      (question) => question.AssessmentQuestionId
+    );
+
+    if (questionIds.length) {
+      const questionClause = questionIds.map((_, index) => `@question${index}`).join(',');
+      const questionRequest = dbPool.request();
+      questionIds.forEach((id, index) => {
+        questionRequest.input(`question${index}`, sql.Int, id);
+      });
+
+      assessmentChoicesResult = await questionRequest.query(
+        `SELECT AssessmentChoiceId, AssessmentQuestionId, SortOrder, ChoiceText
+         FROM dbo.AssessmentQuestionChoices
+         WHERE AssessmentQuestionId IN (${questionClause})
+         ORDER BY AssessmentQuestionId, SortOrder`
+      );
+    }
+  }
+
+  const detailsByItem = new Map();
+  flowDetailsResult.recordset.forEach((detail) => {
+    if (!detailsByItem.has(detail.FlowItemId)) {
+      detailsByItem.set(detail.FlowItemId, []);
+    }
+    detailsByItem.get(detail.FlowItemId).push(detail);
+  });
+
+  const hintsByItem = new Map();
+  flowHintsResult.recordset.forEach((hint) => {
+    if (!hintsByItem.has(hint.FlowItemId)) {
+      hintsByItem.set(hint.FlowItemId, []);
+    }
+    hintsByItem.get(hint.FlowItemId).push(hint);
+  });
+
+  const choicesByItem = new Map();
+  flowChoicesResult.recordset.forEach((choice) => {
+    if (!choicesByItem.has(choice.FlowItemId)) {
+      choicesByItem.set(choice.FlowItemId, []);
+    }
+    choicesByItem.get(choice.FlowItemId).push(choice);
+  });
+
+  const flowItemsByConcept = new Map();
+  flowItemsResult.recordset.forEach((item) => {
+    if (!flowItemsByConcept.has(item.ConceptId)) {
+      flowItemsByConcept.set(item.ConceptId, []);
+    }
+    flowItemsByConcept.get(item.ConceptId).push({
+      item,
+      details: detailsByItem.get(item.FlowItemId) || [],
+      hints: hintsByItem.get(item.FlowItemId) || [],
+      choices: choicesByItem.get(item.FlowItemId) || []
+    });
+  });
+
+  const concepts = conceptsResult.recordset.map((concept) => ({
+    concept,
+    flow: flowItemsByConcept.get(concept.ConceptId) || []
+  }));
+
+  const choicesByQuestion = new Map();
+  assessmentChoicesResult.recordset.forEach((choice) => {
+    if (!choicesByQuestion.has(choice.AssessmentQuestionId)) {
+      choicesByQuestion.set(choice.AssessmentQuestionId, []);
+    }
+    choicesByQuestion.get(choice.AssessmentQuestionId).push(choice);
+  });
+
+  const questionsByAssessment = new Map();
+  assessmentQuestionsResult.recordset.forEach((question) => {
+    if (!questionsByAssessment.has(question.AssessmentId)) {
+      questionsByAssessment.set(question.AssessmentId, []);
+    }
+    questionsByAssessment.get(question.AssessmentId).push({
+      question,
+      choices: choicesByQuestion.get(question.AssessmentQuestionId) || []
+    });
+  });
+
+  const assessments = assessmentsResult.recordset.map((assessment) => ({
+    assessment,
+    questions: questionsByAssessment.get(assessment.AssessmentId) || []
+  }));
+
+  const weekData = weekResult.recordset[0];
+  const goals = goalsResult.recordset.map((goal) => goal.GoalText);
+  const prerequisites = prerequisitesResult.recordset.map(
+    (prereq) => prereq.PrerequisiteText
+  );
+
+  const normalizedConcepts = concepts.map(({ concept, flow }) => ({
+    title: concept.Title,
+    flow: flow.map(({ item, details, hints, choices }) => {
+      const type = String(item.ItemType || '').trim().toLowerCase();
+      const mapped = {
+        type,
+        text: item.ItemText,
+        title: item.ItemTitle,
+        description: item.ItemDescription,
+        url: item.ItemUrl,
+        answer: item.Answer,
+        correctIndex: item.CorrectIndex,
+        solution: item.Solution,
+        details: details.map((detail) => detail.DetailText),
+        hints: hints.map((hint) => hint.HintText),
+        choices: choices.map((choice) => choice.ChoiceText)
+      };
+
+      if (!mapped.details.length) delete mapped.details;
+      if (!mapped.hints.length) delete mapped.hints;
+      if (!mapped.choices.length) delete mapped.choices;
+
+      return mapped;
+    })
+  }));
+
+  const normalizedAssessments = assessments.map(({ assessment, questions }) => ({
+    title: assessment.Title,
+    description: assessment.Description,
+    questions: questions.map(({ question, choices }) => {
+      const rawType = String(question.QuestionType || '').trim().toLowerCase();
+      const choiceTexts = choices.map((choice) => choice.ChoiceText);
+      let type = rawType;
+      if (!['mcq', 'input'].includes(type)) {
+        type = choiceTexts.length ? 'mcq' : 'input';
+      }
+
+      const normalized = {
+        type,
+        text: question.QuestionText,
+        points: Number.isFinite(question.Points) ? question.Points : 1
+      };
+
+      if (type === 'mcq') {
+        normalized.choices = choiceTexts;
+        normalized.correctIndex =
+          typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
+      } else {
+        normalized.answer = question.Answer ?? '';
+      }
+
+      return normalized;
+    })
+  }));
+
+  return {
+    week: weekData.Week,
+    seq: weekData.Seq,
+    title: weekData.Title,
+    goals,
+    prerequisites,
+    concepts: normalizedConcepts,
+    assessment: normalizedAssessments[0] || null
+  };
+}
+
+async function handleGet(context, weekParam) {
+  const dbPool = await getPool();
+  const payload = await fetchWeekContent(dbPool, weekParam);
+
+  if (!payload) {
+    context.res = notFound('Week not found.');
+    return;
+  }
+
+  context.res = ok(payload);
+}
+
+async function handlePut(context, req, weekParam) {
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existing = await dbPool
+    .request()
+    .input('week', sql.Int, weekParam)
+    .query('SELECT Week FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+  if (!existing.recordset.length) {
+    context.res = notFound('Week not found.');
+    return;
+  }
+
+  const goals = Array.isArray(payload.goals) ? payload.goals : [];
+  const prerequisites = Array.isArray(payload.prerequisites) ? payload.prerequisites : [];
+  const concepts = Array.isArray(payload.concepts) ? payload.concepts : [];
+  const assessment = payload.assessment ?? null;
+
+  const transaction = new sql.Transaction(dbPool);
+  try {
+    await transaction.begin();
+
+    await new sql.Request(transaction)
+      .input('week', sql.Int, weekParam)
+      .query(
+        `DELETE FROM dbo.FlowItemDetails
+         WHERE FlowItemId IN (
+           SELECT FlowItemId FROM dbo.FlowItems
+           WHERE ConceptId IN (SELECT ConceptId FROM dbo.Concepts WHERE Week = @week)
+         );
+         DELETE FROM dbo.FlowItemHints
+         WHERE FlowItemId IN (
+           SELECT FlowItemId FROM dbo.FlowItems
+           WHERE ConceptId IN (SELECT ConceptId FROM dbo.Concepts WHERE Week = @week)
+         );
+         DELETE FROM dbo.FlowItemChoices
+         WHERE FlowItemId IN (
+           SELECT FlowItemId FROM dbo.FlowItems
+           WHERE ConceptId IN (SELECT ConceptId FROM dbo.Concepts WHERE Week = @week)
+         );
+         DELETE FROM dbo.FlowItems
+         WHERE ConceptId IN (SELECT ConceptId FROM dbo.Concepts WHERE Week = @week);
+         DELETE FROM dbo.Concepts WHERE Week = @week;
+         DELETE FROM dbo.WeekGoals WHERE Week = @week;
+         DELETE FROM dbo.WeekPrerequisites WHERE Week = @week;
+         DELETE FROM dbo.AssessmentQuestionChoices
+         WHERE AssessmentQuestionId IN (
+           SELECT AssessmentQuestionId FROM dbo.AssessmentQuestions
+           WHERE AssessmentId IN (SELECT AssessmentId FROM dbo.Assessments WHERE Week = @week)
+         );
+         DELETE FROM dbo.AssessmentQuestions
+         WHERE AssessmentId IN (SELECT AssessmentId FROM dbo.Assessments WHERE Week = @week);
+         DELETE FROM dbo.Assessments WHERE Week = @week;`
+      );
+
+    for (let i = 0; i < goals.length; i += 1) {
+      const text = toCleanString(goals[i]);
+      if (!text) continue;
+      await new sql.Request(transaction)
+        .input('week', sql.Int, weekParam)
+        .input('sortOrder', sql.Int, i + 1)
+        .input('goalText', sql.NVarChar(500), text)
+        .query(
+          `INSERT INTO dbo.WeekGoals (Week, SortOrder, GoalText)
+           VALUES (@week, @sortOrder, @goalText);`
+        );
+    }
+
+    for (let i = 0; i < prerequisites.length; i += 1) {
+      const text = toCleanString(prerequisites[i]);
+      if (!text) continue;
+      await new sql.Request(transaction)
+        .input('week', sql.Int, weekParam)
+        .input('sortOrder', sql.Int, i + 1)
+        .input('prereqText', sql.NVarChar(500), text)
+        .query(
+          `INSERT INTO dbo.WeekPrerequisites (Week, SortOrder, PrerequisiteText)
+           VALUES (@week, @sortOrder, @prereqText);`
+        );
+    }
+
+    for (let i = 0; i < concepts.length; i += 1) {
+      const concept = concepts[i] || {};
+      const conceptTitle = toCleanString(concept.title);
+      const conceptResult = await new sql.Request(transaction)
+        .input('week', sql.Int, weekParam)
+        .input('sortOrder', sql.Int, i + 1)
+        .input('title', sql.NVarChar(200), conceptTitle)
+        .query(
+          `INSERT INTO dbo.Concepts (Week, SortOrder, Title)
+           OUTPUT INSERTED.ConceptId AS ConceptId
+           VALUES (@week, @sortOrder, @title);`
+        );
+
+      const conceptId = conceptResult.recordset[0]?.ConceptId;
+      const flow = Array.isArray(concept.flow) ? concept.flow : [];
+
+      for (let j = 0; j < flow.length; j += 1) {
+        const flowItem = flow[j] || {};
+        const type = toCleanString(flowItem.type).toLowerCase();
+        const itemResult = await new sql.Request(transaction)
+          .input('conceptId', sql.Int, conceptId)
+          .input('sortOrder', sql.Int, j + 1)
+          .input('itemType', sql.NVarChar(50), type)
+          .input('itemText', sql.NVarChar(sql.MAX), toNullableString(flowItem.text))
+          .input('itemTitle', sql.NVarChar(200), toNullableString(flowItem.title))
+          .input('itemDescription', sql.NVarChar(sql.MAX), toNullableString(flowItem.description))
+          .input('itemUrl', sql.NVarChar(500), toNullableString(flowItem.url))
+          .input('answer', sql.NVarChar(sql.MAX), toNullableString(flowItem.answer))
+          .input('correctIndex', sql.Int, toNullableInt(flowItem.correctIndex))
+          .input('solution', sql.NVarChar(sql.MAX), toNullableString(flowItem.solution))
+          .query(
+            `INSERT INTO dbo.FlowItems (
+               ConceptId,
+               SortOrder,
+               ItemType,
+               ItemText,
+               ItemTitle,
+               ItemDescription,
+               ItemUrl,
+               Answer,
+               CorrectIndex,
+               Solution
+             )
+             OUTPUT INSERTED.FlowItemId AS FlowItemId
+             VALUES (
+               @conceptId,
+               @sortOrder,
+               @itemType,
+               @itemText,
+               @itemTitle,
+               @itemDescription,
+               @itemUrl,
+               @answer,
+               @correctIndex,
+               @solution
+             );`
+          );
+
+        const flowItemId = itemResult.recordset[0]?.FlowItemId;
+        const details = Array.isArray(flowItem.details) ? flowItem.details : [];
+        const hints = Array.isArray(flowItem.hints) ? flowItem.hints : [];
+        const choices = Array.isArray(flowItem.choices) ? flowItem.choices : [];
+
+        for (let k = 0; k < details.length; k += 1) {
+          const text = toCleanString(details[k]);
+          if (!text) continue;
+          await new sql.Request(transaction)
+            .input('itemId', sql.Int, flowItemId)
+            .input('sortOrder', sql.Int, k + 1)
+            .input('detailText', sql.NVarChar(sql.MAX), text)
+            .query(
+              `INSERT INTO dbo.FlowItemDetails (FlowItemId, SortOrder, DetailText)
+               VALUES (@itemId, @sortOrder, @detailText);`
+            );
+        }
+
+        for (let k = 0; k < hints.length; k += 1) {
+          const text = toCleanString(hints[k]);
+          if (!text) continue;
+          await new sql.Request(transaction)
+            .input('itemId', sql.Int, flowItemId)
+            .input('sortOrder', sql.Int, k + 1)
+            .input('hintText', sql.NVarChar(sql.MAX), text)
+            .query(
+              `INSERT INTO dbo.FlowItemHints (FlowItemId, SortOrder, HintText)
+               VALUES (@itemId, @sortOrder, @hintText);`
+            );
+        }
+
+        for (let k = 0; k < choices.length; k += 1) {
+          const text = toCleanString(choices[k]);
+          if (!text) continue;
+          await new sql.Request(transaction)
+            .input('itemId', sql.Int, flowItemId)
+            .input('sortOrder', sql.Int, k + 1)
+            .input('choiceText', sql.NVarChar(sql.MAX), text)
+            .query(
+              `INSERT INTO dbo.FlowItemChoices (FlowItemId, SortOrder, ChoiceText)
+               VALUES (@itemId, @sortOrder, @choiceText);`
+            );
+        }
+      }
+    }
+
+    if (assessment) {
+      const assessmentTitle = toCleanString(assessment.title);
+      const assessmentDescription = toNullableString(assessment.description);
+      const assessmentResult = await new sql.Request(transaction)
+        .input('week', sql.Int, weekParam)
+        .input('title', sql.NVarChar(200), assessmentTitle)
+        .input('description', sql.NVarChar(sql.MAX), assessmentDescription)
+        .query(
+          `INSERT INTO dbo.Assessments (Week, Title, Description)
+           OUTPUT INSERTED.AssessmentId AS AssessmentId
+           VALUES (@week, @title, @description);`
+        );
+
+      const assessmentId = assessmentResult.recordset[0]?.AssessmentId;
+      const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
+
+      for (let i = 0; i < questions.length; i += 1) {
+        const question = questions[i] || {};
+        const questionType = toCleanString(question.type).toLowerCase() || 'input';
+        const questionText = toCleanString(question.text);
+        const points = toNullableInt(question.points) ?? 1;
+        const answer = questionType === 'input' ? toNullableString(question.answer) : null;
+        const correctIndex = questionType === 'mcq' ? toNullableInt(question.correctIndex) : null;
+
+        const questionResult = await new sql.Request(transaction)
+          .input('assessmentId', sql.Int, assessmentId)
+          .input('sortOrder', sql.Int, i + 1)
+          .input('questionType', sql.NVarChar(50), questionType)
+          .input('questionText', sql.NVarChar(sql.MAX), questionText)
+          .input('answer', sql.NVarChar(sql.MAX), answer)
+          .input('points', sql.Int, points)
+          .input('correctIndex', sql.Int, correctIndex)
+          .query(
+            `INSERT INTO dbo.AssessmentQuestions (
+               AssessmentId,
+               SortOrder,
+               QuestionType,
+               QuestionText,
+               Answer,
+               Points,
+               CorrectIndex
+             )
+             OUTPUT INSERTED.AssessmentQuestionId AS AssessmentQuestionId
+             VALUES (
+               @assessmentId,
+               @sortOrder,
+               @questionType,
+               @questionText,
+               @answer,
+               @points,
+               @correctIndex
+             );`
+          );
+
+        const questionId = questionResult.recordset[0]?.AssessmentQuestionId;
+        const choices = Array.isArray(question.choices) ? question.choices : [];
+
+        for (let j = 0; j < choices.length; j += 1) {
+          const text = toCleanString(choices[j]);
+          if (!text) continue;
+          await new sql.Request(transaction)
+            .input('questionId', sql.Int, questionId)
+            .input('sortOrder', sql.Int, j + 1)
+            .input('choiceText', sql.NVarChar(sql.MAX), text)
+            .query(
+              `INSERT INTO dbo.AssessmentQuestionChoices (AssessmentQuestionId, SortOrder, ChoiceText)
+               VALUES (@questionId, @sortOrder, @choiceText);`
+            );
+        }
+      }
+    }
+
+    await transaction.commit();
+    context.res = ok({ ok: true });
+  } catch (error) {
+    await transaction.rollback();
+    context.res = response(500, { ok: false, error: error.message });
+  }
+}
+
+module.exports = async function (context, req) {
+  const weekParam = Number(req.params.week);
+  if (!Number.isInteger(weekParam)) {
+    context.res = badRequest('Invalid week parameter.');
+    return;
+  }
+
+  try {
+    switch (req.method) {
+      case 'GET':
+        await handleGet(context, weekParam);
+        return;
+      case 'PUT':
+        await handlePut(context, req, weekParam);
+        return;
+      default:
+        context.res = methodNotAllowed();
+    }
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+math/api/package.json
+{
+  "name": "math-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Functions API for Math app",
+  "main": "index.js",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "mssql": "^10.0.2"
+  }
+}
+math/api/progress-complete/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post"],
+      "route": "progress/complete"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/progress-complete/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, notFound, response } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+
+  return String(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
+module.exports = async function (context, req) {
+  try {
+    const payload = readJson(req);
+    if (!payload) {
+      context.res = badRequest('Invalid JSON body.');
+      return;
+    }
+
+    const studentId =
+      typeof payload.studentId === 'string'
+        ? normalizeDigits(payload.studentId).trim()
+        : '';
+    const week = Number(payload.week);
+    const finalScore = Number(payload.finalScore);
+
+    if (!studentId) {
+      context.res = badRequest('studentId is required.');
+      return;
+    }
+
+    if (!Number.isInteger(week)) {
+      context.res = badRequest('week must be an integer.');
+      return;
+    }
+
+    if (!Number.isInteger(finalScore) || finalScore < 0 || finalScore > 100) {
+      context.res = badRequest('finalScore must be an integer between 0 and 100.');
+      return;
+    }
+
+    const dbPool = await getPool();
+
+    const studentResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
+
+    if (!studentResult.recordset.length) {
+      context.res = notFound('Student not found.');
+      return;
+    }
+
+    const weekResult = await dbPool
+      .request()
+      .input('week', sql.Int, week)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+
+    if (!weekResult.recordset.length) {
+      context.res = notFound('Week not found.');
+      return;
+    }
+
+    const completionResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('week', sql.Int, week)
+      .input('finalScore', sql.Int, finalScore)
+      .query(
+        `IF EXISTS (SELECT 1 FROM dbo.CardCompletions WHERE StudentId = @studentId AND Week = @week)
+         BEGIN
+           UPDATE dbo.CardCompletions
+           SET FinalScore = @finalScore,
+               CompletedAt = GETDATE()
+           WHERE StudentId = @studentId AND Week = @week;
+         END
+         ELSE
+         BEGIN
+           INSERT INTO dbo.CardCompletions (StudentId, Week, FinalScore)
+           VALUES (@studentId, @week, @finalScore);
+         END
+
+         SELECT StudentId, Week, FinalScore, CompletedAt
+         FROM dbo.CardCompletions
+         WHERE StudentId = @studentId AND Week = @week;`
+      );
+
+    const record = completionResult.recordset[0];
+
+    context.res = ok({
+      ok: true,
+      studentId: record.StudentId,
+      week: record.Week,
+      finalScore: record.FinalScore,
+      completedAt: record.CompletedAt
+    });
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+math/api/progress-completed/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "progress/completed"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/progress-completed/index.js
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, response } = require('../_shared/http');
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0',
+    '١': '1',
+    '٢': '2',
+    '٣': '3',
+    '٤': '4',
+    '٥': '5',
+    '٦': '6',
+    '٧': '7',
+    '٨': '8',
+    '٩': '9',
+    '۰': '0',
+    '۱': '1',
+    '۲': '2',
+    '۳': '3',
+    '۴': '4',
+    '۵': '5',
+    '۶': '6',
+    '۷': '7',
+    '۸': '8',
+    '۹': '9'
+  };
+
+  return String(value)
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
+module.exports = async function (context, req) {
+  try {
+    const query = getQuery(req);
+    const studentId =
+      typeof query.studentId === 'string' ? normalizeDigits(query.studentId).trim() : '';
+
+    if (!studentId) {
+      context.res = badRequest('studentId is required.');
+      return;
+    }
+
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .query(
+        'SELECT Week, FinalScore, CompletedAt FROM dbo.CardCompletions WHERE StudentId = @studentId ORDER BY CompletedAt DESC'
+      );
+
+    context.res = ok(result.recordset);
+  } catch (error) {
+    context.res = response(500, { ok: false, error: error.message });
+  }
+};
+math/api/routes/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "routes"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/routes/index.js
+const { ok } = require('../_shared/http');
+
+const ROUTES = {
+  official: [
+    { methods: ['GET'], path: '/api/health', description: 'Health check.' },
+    { methods: ['POST'], path: '/api/progress/complete', description: 'Record student completion.' },
+    { methods: ['GET'], path: '/api/progress/completed', description: 'Fetch completed progress.' },
+    { methods: ['POST'], path: '/api/students/login', description: 'Student login.' },
+    { methods: ['GET'], path: '/api/mng/students', description: 'List students for management.' },
+    { methods: ['POST'], path: '/api/mng/students', description: 'Create student (management).' },
+    { methods: ['PUT'], path: '/api/mng/students/{studentId}', description: 'Update student (management).' },
+    { methods: ['DELETE'], path: '/api/mng/students/{studentId}', description: 'Delete student (management).' },
+    { methods: ['GET'], path: '/api/mng/cards', description: 'List cards for management.' },
+    { methods: ['POST'], path: '/api/mng/cards', description: 'Create card (management).' },
+    { methods: ['PUT'], path: '/api/mng/cards/{week}', description: 'Update card (management).' },
+    { methods: ['DELETE'], path: '/api/mng/cards/{week}', description: 'Delete card (management).' },
+    { methods: ['GET'], path: '/api/mng/cards/{week}/completions', description: 'List card completions (management).' },
+    { methods: ['GET'], path: '/api/mng/weeks/{week}/content', description: 'Fetch week content (management).' },
+    { methods: ['PUT'], path: '/api/mng/weeks/{week}/content', description: 'Update week content (management).' },
+    { methods: ['GET'], path: '/api/cards', description: 'Cards list.' },
+    { methods: ['GET'], path: '/api/weeks/{week:int}', description: 'Week details.' },
+    { methods: ['GET'], path: '/api/weeks', description: 'Weeks list.' },
+    { methods: ['GET'], path: '/api/routes', description: 'Route catalog.' }
+  ],
+  aliases: []
+};
+
+module.exports = async function (context) {
+  context.res = ok({ ok: true, routes: ROUTES });
+};
+math/api/student-login/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post"],
+      "route": "students/login"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/student-login/index.js
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, response } = require('../_shared/http');
+
+function toLatinDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value).replace(/[٠-٩۰-۹]/g, (digit) => map[digit] ?? digit);
+}
+
+function deriveFirstName(firstName, fullName) {
+  const trimmedFirst = typeof firstName === 'string' ? firstName.trim() : '';
+  if (trimmedFirst) {
+    return trimmedFirst;
+  }
+
+  const trimmedFull = typeof fullName === 'string' ? fullName.trim() : '';
+  if (!trimmedFull) {
+    return '';
+  }
+
+  return trimmedFull.split(/\s+/)[0];
+}
+
+module.exports = async function (context, req) {
+  try {
+    const payload = readJson(req);
+    if (!payload) {
+      context.res = badRequest('Invalid JSON body.');
+      return;
+    }
+
+    const studentId =
+      typeof payload.studentId === 'string' ? toLatinDigits(payload.studentId).trim() : '';
+    const birthYear =
+      typeof payload.birthYear === 'string' ? toLatinDigits(payload.birthYear).trim() : '';
+
+    if (!studentId || !birthYear) {
+      context.res = badRequest('studentId and birthYear are required.');
+      return;
+    }
+
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('birthYear', sql.NVarChar(10), birthYear)
+      .query(
+        `SELECT TOP (1) StudentId, BirthYear, Name, Grade, Class, FirstName
+         FROM dbo.Students
+         WHERE StudentId = @studentId AND BirthYear = @birthYear`
+      );
+
+    if (!result.recordset.length) {
+      context.res = unauthorized('INVALID_CREDENTIALS');
+      return;
+    }
+
+    const student = result.recordset[0];
+    const fullName = typeof student.Name === 'string' ? student.Name.trim() : '';
+    const firstName = deriveFirstName(student.FirstName, fullName);
+
+    context.res = ok({
+      ok: true,
+      student: {
+        StudentId: student.StudentId,
+        BirthYear: student.BirthYear,
+        FirstName: firstName,
+        FullName: fullName,
+        Grade: student.Grade,
+        Class: student.Class
+      }
+    });
+  } catch (error) {
+    context.res = response(500, { ok: false, message: 'DB_ERROR' });
+  }
+};
+math/api/week/function.json
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "weeks/{week:int}"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+math/api/week/index.js
+const { getPool, sql } = require('../_shared/db');
+const { DEFAULT_HEADERS } = require('../_shared/http');
+
+module.exports = async function (context, req) {
+  try {
+    const weekParam = Number(req.params.week);
+    if (!Number.isInteger(weekParam)) {
+      context.res = {
+        status: 400,
+        headers: DEFAULT_HEADERS,
+        body: { ok: false, error: 'Invalid week parameter.' }
+      };
+      return;
+    }
+
+    const dbPool = await getPool();
+
+    if (req.method !== 'GET') {
+      context.res = {
+        status: 405,
+        headers: DEFAULT_HEADERS,
+        body: { ok: false, error: 'Method not allowed.' }
+      };
+      return;
+    }
+
+    const weekResult = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query('SELECT Week, Title FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+
+    if (!weekResult.recordset.length) {
+      context.res = {
+        status: 404,
+        headers: DEFAULT_HEADERS,
+        body: { ok: false, error: 'Week not found.' }
+      };
+      return;
+    }
+
+    const goalsResult = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query(
+        'SELECT GoalId, Week, SortOrder, GoalText FROM dbo.WeekGoals WHERE Week = @week ORDER BY SortOrder'
+      );
+
+    const prerequisitesResult = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query(
+        'SELECT PrerequisiteId, Week, SortOrder, PrerequisiteText FROM dbo.WeekPrerequisites WHERE Week = @week ORDER BY SortOrder'
+      );
+
+    const conceptsResult = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query('SELECT ConceptId, Week, SortOrder, Title FROM dbo.Concepts WHERE Week = @week ORDER BY SortOrder');
+
+    const conceptIds = conceptsResult.recordset.map((concept) => concept.ConceptId);
+    let flowItemsResult = { recordset: [] };
+    let flowDetailsResult = { recordset: [] };
+    let flowHintsResult = { recordset: [] };
+    let flowChoicesResult = { recordset: [] };
+
+    if (conceptIds.length) {
+      const inClause = conceptIds.map((_, index) => `@concept${index}`).join(',');
+      const flowRequest = dbPool.request();
+      conceptIds.forEach((id, index) => {
+        flowRequest.input(`concept${index}`, sql.Int, id);
+      });
+
+      flowItemsResult = await flowRequest.query(
+        `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution
+         FROM dbo.FlowItems
+         WHERE ConceptId IN (${inClause})
+         ORDER BY ConceptId, SortOrder`
+      );
+
+      const flowItemIds = flowItemsResult.recordset.map((item) => item.FlowItemId);
+      if (flowItemIds.length) {
+        const itemClause = flowItemIds.map((_, index) => `@item${index}`).join(',');
+        const detailRequest = dbPool.request();
+        flowItemIds.forEach((id, index) => {
+          detailRequest.input(`item${index}`, sql.Int, id);
+        });
+
+        flowDetailsResult = await detailRequest.query(
+          `SELECT FlowItemDetailId, FlowItemId, SortOrder, DetailText
+           FROM dbo.FlowItemDetails
+           WHERE FlowItemId IN (${itemClause})
+           ORDER BY FlowItemId, SortOrder`
+        );
+
+        const hintRequest = dbPool.request();
+        flowItemIds.forEach((id, index) => {
+          hintRequest.input(`item${index}`, sql.Int, id);
+        });
+
+        flowHintsResult = await hintRequest.query(
+          `SELECT FlowItemHintId, FlowItemId, SortOrder, HintText
+           FROM dbo.FlowItemHints
+           WHERE FlowItemId IN (${itemClause})
+           ORDER BY FlowItemId, SortOrder`
+        );
+
+        const choiceRequest = dbPool.request();
+        flowItemIds.forEach((id, index) => {
+          choiceRequest.input(`item${index}`, sql.Int, id);
+        });
+
+        flowChoicesResult = await choiceRequest.query(
+          `SELECT FlowItemChoiceId, FlowItemId, SortOrder, ChoiceText
+           FROM dbo.FlowItemChoices
+           WHERE FlowItemId IN (${itemClause})
+           ORDER BY FlowItemId, SortOrder`
+        );
+      }
+    }
+
+    const assessmentsResult = await dbPool
+      .request()
+      .input('week', sql.Int, weekParam)
+      .query(
+        'SELECT AssessmentId, Week, Title, Description FROM dbo.Assessments WHERE Week = @week ORDER BY AssessmentId'
+      );
+
+    const assessmentIds = assessmentsResult.recordset.map(
+      (assessment) => assessment.AssessmentId
+    );
+    let assessmentQuestionsResult = { recordset: [] };
+    let assessmentChoicesResult = { recordset: [] };
+
+    if (assessmentIds.length) {
+      const assessmentClause = assessmentIds.map((_, index) => `@assessment${index}`).join(',');
+      const assessmentRequest = dbPool.request();
+      assessmentIds.forEach((id, index) => {
+        assessmentRequest.input(`assessment${index}`, sql.Int, id);
+      });
+
+      assessmentQuestionsResult = await assessmentRequest.query(
+        `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex
+         FROM dbo.AssessmentQuestions
+         WHERE AssessmentId IN (${assessmentClause})
+         ORDER BY AssessmentId, SortOrder`
+      );
+
+      const questionIds = assessmentQuestionsResult.recordset.map(
+        (question) => question.AssessmentQuestionId
+      );
+
+      if (questionIds.length) {
+        const questionClause = questionIds.map((_, index) => `@question${index}`).join(',');
+        const questionRequest = dbPool.request();
+        questionIds.forEach((id, index) => {
+          questionRequest.input(`question${index}`, sql.Int, id);
+        });
+
+        assessmentChoicesResult = await questionRequest.query(
+          `SELECT AssessmentChoiceId, AssessmentQuestionId, SortOrder, ChoiceText
+           FROM dbo.AssessmentQuestionChoices
+           WHERE AssessmentQuestionId IN (${questionClause})
+           ORDER BY AssessmentQuestionId, SortOrder`
+        );
+      }
+    }
+
+    const detailsByItem = new Map();
+    flowDetailsResult.recordset.forEach((detail) => {
+      if (!detailsByItem.has(detail.FlowItemId)) {
+        detailsByItem.set(detail.FlowItemId, []);
+      }
+      detailsByItem.get(detail.FlowItemId).push(detail);
+    });
+
+    const hintsByItem = new Map();
+    flowHintsResult.recordset.forEach((hint) => {
+      if (!hintsByItem.has(hint.FlowItemId)) {
+        hintsByItem.set(hint.FlowItemId, []);
+      }
+      hintsByItem.get(hint.FlowItemId).push(hint);
+    });
+
+    const choicesByItem = new Map();
+    flowChoicesResult.recordset.forEach((choice) => {
+      if (!choicesByItem.has(choice.FlowItemId)) {
+        choicesByItem.set(choice.FlowItemId, []);
+      }
+      choicesByItem.get(choice.FlowItemId).push(choice);
+    });
+
+    const flowItemsByConcept = new Map();
+    flowItemsResult.recordset.forEach((item) => {
+      if (!flowItemsByConcept.has(item.ConceptId)) {
+        flowItemsByConcept.set(item.ConceptId, []);
+      }
+      flowItemsByConcept.get(item.ConceptId).push({
+        item,
+        details: detailsByItem.get(item.FlowItemId) || [],
+        hints: hintsByItem.get(item.FlowItemId) || [],
+        choices: choicesByItem.get(item.FlowItemId) || []
+      });
+    });
+
+    const concepts = conceptsResult.recordset.map((concept) => ({
+      concept,
+      flow: flowItemsByConcept.get(concept.ConceptId) || []
+    }));
+
+    const choicesByQuestion = new Map();
+    assessmentChoicesResult.recordset.forEach((choice) => {
+      if (!choicesByQuestion.has(choice.AssessmentQuestionId)) {
+        choicesByQuestion.set(choice.AssessmentQuestionId, []);
+      }
+      choicesByQuestion.get(choice.AssessmentQuestionId).push(choice);
+    });
+
+    const questionsByAssessment = new Map();
+    assessmentQuestionsResult.recordset.forEach((question) => {
+      if (!questionsByAssessment.has(question.AssessmentId)) {
+        questionsByAssessment.set(question.AssessmentId, []);
+      }
+      questionsByAssessment.get(question.AssessmentId).push({
+        question,
+        choices: choicesByQuestion.get(question.AssessmentQuestionId) || []
+      });
+    });
+
+    const assessments = assessmentsResult.recordset.map((assessment) => ({
+      assessment,
+      questions: questionsByAssessment.get(assessment.AssessmentId) || []
+    }));
+
+    const weekData = weekResult.recordset[0];
+    const goals = goalsResult.recordset.map((goal) => goal.GoalText);
+    const prerequisites = prerequisitesResult.recordset.map(
+      (prereq) => prereq.PrerequisiteText
+    );
+
+    const normalizedConcepts = concepts.map(({ concept, flow }) => ({
+      title: concept.Title,
+      flow: flow.map(({ item, details, hints, choices }) => {
+        const type = String(item.ItemType || '').trim().toLowerCase();
+        const mapped = {
+          type,
+          text: item.ItemText,
+          title: item.ItemTitle,
+          description: item.ItemDescription,
+          url: item.ItemUrl,
+          answer: item.Answer,
+          correctIndex: item.CorrectIndex,
+          solution: item.Solution,
+          details: details.map((detail) => detail.DetailText),
+          hints: hints.map((hint) => hint.HintText),
+          choices: choices.map((choice) => choice.ChoiceText)
+        };
+
+        if (!mapped.details.length) delete mapped.details;
+        if (!mapped.hints.length) delete mapped.hints;
+        if (!mapped.choices.length) delete mapped.choices;
+
+        return mapped;
+      })
+    }));
+
+    const normalizedAssessments = assessments.map(({ assessment, questions }) => ({
+      title: assessment.Title,
+      description: assessment.Description,
+      questions: questions.map(({ question, choices }) => {
+        const rawType = String(question.QuestionType || '').trim().toLowerCase();
+        const choiceTexts = choices.map((choice) => choice.ChoiceText);
+        let type = rawType;
+        if (!['mcq', 'input'].includes(type)) {
+          type = choiceTexts.length ? 'mcq' : 'input';
+        }
+
+        const normalized = {
+          type,
+          text: question.QuestionText,
+          points: Number.isFinite(question.Points) ? question.Points : 1
+        };
+
+        if (type === 'mcq') {
+          normalized.choices = choiceTexts;
+          normalized.correctIndex =
+            typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
+        } else {
+          normalized.answer = question.Answer ?? '';
+        }
+
+        return normalized;
+      })
+    }));
+
+    context.res = {
+      status: 200,
+      headers: DEFAULT_HEADERS,
+      body: {
+        week: weekData.Week,
+        title: weekData.Title,
+        goals,
+        prerequisites,
+        concepts: normalizedConcepts,
+        assessment: normalizedAssessments[0] || null
+      }
+    };
+  } catch (error) {
+    context.res = {
+      status: 500,
+      headers: DEFAULT_HEADERS,
+      body: { ok: false, error: error.message }
+    };
+  }
+};
 math/public/assets/cert/certificate.css
 /* =========================================================
    certificate.css — Certificate Page Styles (Light Material)
@@ -2733,11 +5377,15 @@ math/public/assets/cert/certificate.css
 
 .cert-app {
   background: #f6f7fb;
+  min-height: 100vh;
 }
 
 .cert-shell {
-  max-width: 980px;
-  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 120px);
+  padding-bottom: 120px;
 }
 
 /* Certificate Paper */
@@ -2747,7 +5395,36 @@ math/public/assets/cert/certificate.css
   border-radius: 16px;
   padding: 40px 36px 32px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  border: 2px solid rgba(37, 99, 235, 0.15);
+  aspect-ratio: 1 / 1;
+  width: min(92vw, 560px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   overflow: hidden;
+}
+
+.cert-export-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1080px;
+  height: 1080px;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.cert-paper.is-export {
+  width: 1080px;
+  height: 1080px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  overflow: visible;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 /* Subtle background */
@@ -2777,11 +5454,19 @@ math/public/assets/cert/certificate.css
 .cert-title {
   font-size: 32px;
   margin: 0;
+  letter-spacing: 0 !important;
 }
 
 .cert-sub {
   margin: 4px 0 0;
   color: #64748b;
+  letter-spacing: 0 !important;
+}
+
+.cert-brand {
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.4px;
 }
 
 /* Body */
@@ -2793,12 +5478,13 @@ math/public/assets/cert/certificate.css
   margin: 18px 0 6px;
   color: #475569;
   font-size: 14px;
+  letter-spacing: 0 !important;
 }
 
 .cert-name {
   font-size: 34px;
   font-weight: 800;
-  letter-spacing: 0.2px;
+  letter-spacing: 0 !important;
   color: #0f172a;
   padding: 6px 0 2px;
 }
@@ -2808,6 +5494,13 @@ math/public/assets/cert/certificate.css
   font-weight: 700;
   color: #1e293b;
   padding: 4px 0 10px;
+  letter-spacing: 0 !important;
+}
+
+.cert-id {
+  font-size: 12px;
+  color: #64748b;
+  letter-spacing: 0.6px;
 }
 
 /* Meta */
@@ -2890,9 +5583,62 @@ math/public/assets/cert/certificate.css
 
 /* Actions */
 .cert-actions {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 20;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
-  margin-top: 16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(246, 247, 251, 0.95);
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.btn-whatsapp {
+  background: #22c55e;
+  color: #fff;
+}
+
+.btn-whatsapp:hover {
+  background: #16a34a;
+}
+
+.cert-notice {
+  position: fixed;
+  top: 88px;
+  right: 16px;
+  left: 16px;
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  z-index: 25;
+  font-size: 13px;
+}
+
+/* Export mode */
+body.cert-exporting .topbar,
+body.cert-exporting .cert-actions,
+body.cert-exporting .cert-notice {
+  display: none !important;
+}
+
+body.cert-exporting .cert-shell {
+  padding-bottom: 0;
+  min-height: auto;
+}
+
+body.cert-exporting .cert-paper {
+  max-height: none;
+}
+
+html.cert-exporting,
+html.cert-exporting body {
+  overflow: visible !important;
+  height: auto !important;
 }
 
 /* Empty */
@@ -2933,7 +5679,7 @@ math/public/assets/cert/certificate.css
   /* make page fit screen */
   html, body {
     height: 100%;
-    overflow: hidden; /* screenshot بدون سكرول */
+    overflow: hidden;
   }
 
   .container.section {
@@ -2944,17 +5690,13 @@ math/public/assets/cert/certificate.css
     height: calc(100vh - 72px); /* تقريبًا ارتفاع topbar */
     display: grid;
     place-items: center;
-  }
-
-  /* Hide actions on mobile for one-screen screenshot */
-  .cert-actions {
-    display: none !important;
+    padding-bottom: 100px;
   }
 
   /* Fit paper into viewport */
   .cert-paper {
     width: min(94vw, 420px);
-    max-height: calc(100vh - 92px);
+    max-height: calc(100vh - 140px);
     padding: 18px 16px 14px;
     box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
     overflow: hidden;
@@ -3039,7 +5781,538 @@ math/public/assets/cert/certificate.css
   .cert-sign-v {
     font-size: 12px;
   }
+
+  html.is-zoomed,
+  html.is-zoomed body {
+    height: auto;
+    overflow: auto;
+  }
+
+  html.is-zoomed .cert-shell {
+    height: auto;
+    min-height: calc(100vh - 72px);
+    place-items: start center;
+    padding-bottom: 16px;
+  }
+
+  html.is-zoomed .cert-paper {
+    max-height: none;
+    overflow: visible;
+  }
 }
+math/public/assets/cert/certificate.html
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math999 — شهادة إتمام بطاقة</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/cert/certificate.css" />
+</head>
+
+<body class="cert-app">
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math999">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math999</b>
+            <span>شهادة إتمام بطاقة</span>
+          </div>
+        </div>
+        <div class="row">
+          <a class="btn btn-ghost btn-sm" href="/" aria-label="العودة للرئيسية">الرئيسية</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <section id="certEmpty" class="card hidden" aria-live="polite">
+        <div class="card-header">
+          <h1 class="h2">لا توجد بيانات شهادة حالياً</h1>
+          <p class="p muted">أكمل بطاقة أولًا أو افتح الشهادة من زر "عرض الشهادة" بعد الإنهاء.</p>
+        </div>
+        <div class="card-body">
+          <a class="btn btn-primary" href="/">العودة للرئيسية</a>
+        </div>
+      </section>
+
+      <section id="certShell" class="cert-shell">
+        <div id="certPaper" class="cert-paper" role="img" aria-label="شهادة إتمام بطاقة">
+          <div class="cert-bg" aria-hidden="true"></div>
+
+          <div class="cert-head">
+            <div class="cert-badge" aria-hidden="true">🏅</div>
+            <div>
+              <div class="cert-brand">math999</div>
+              <h1 class="cert-title">شهادة إتمام بطاقة</h1>
+              <p class="cert-sub">تشهد منصة math999 أن الطالب/ة</p>
+            </div>
+          </div>
+
+          <div class="cert-body">
+            <div id="certName" class="cert-name">—</div>
+            <div id="certCard" class="cert-card">—</div>
+            <div id="certClassLine" class="cert-line">—</div>
+            <div id="certDateLine" class="cert-line">—</div>
+            <div id="certIdLine" class="cert-line cert-id">—</div>
+          </div>
+
+          <div class="cert-meta">
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">رقم البطاقة</span>
+              <span id="certMetaWeek" class="cert-meta-v">—</span>
+            </div>
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">النتيجة</span>
+              <span id="certMetaScore" class="cert-meta-v">—</span>
+            </div>
+            <div class="cert-meta-item">
+              <span class="cert-meta-k">تاريخ الإكمال</span>
+              <span id="certMetaDate" class="cert-meta-v">—</span>
+            </div>
+          </div>
+
+          <div class="cert-footer">
+            <div class="cert-sign">
+              <span class="cert-sign-k">بتوقيع</span>
+              <span class="cert-sign-v">منصة math999</span>
+            </div>
+            <div class="cert-stamp" aria-hidden="true">
+              <div class="cert-stamp-ring"></div>
+              <div class="cert-stamp-text">math999</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="certActions" class="cert-actions" role="group" aria-label="إجراءات الشهادة">
+    <button id="btnDownloadPng" class="btn btn-primary" type="button">تحميل PNG</button>
+    <button id="btnDownloadJpg" class="btn btn-outline" type="button">تحميل JPEG</button>
+    <button id="btnShareWhatsapp" class="btn btn-whatsapp" type="button">مشاركة واتساب</button>
+  </div>
+
+  <div id="certNotice" class="cert-notice hidden" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script type="module" src="/assets/cert/certificate.js"></script>
+</body>
+</html>
+math/public/assets/cert/certificate.js
+const LS_STUDENT_SESSION = 'math:studentSession';
+const LS_LAST_CERTIFICATE = 'math:lastCertificate';
+const LS_STUDENT_COMPLETIONS = 'math:studentCompletions';
+const LS_CARDS_CACHE = 'math:cardsCache';
+const EXPORT_SIZE = 1080;
+
+const elements = {
+  shell: document.getElementById('certShell'),
+  paper: document.getElementById('certPaper'),
+  empty: document.getElementById('certEmpty'),
+  actions: document.getElementById('certActions'),
+  notice: document.getElementById('certNotice'),
+  name: document.getElementById('certName'),
+  card: document.getElementById('certCard'),
+  classLine: document.getElementById('certClassLine'),
+  dateLine: document.getElementById('certDateLine'),
+  idLine: document.getElementById('certIdLine'),
+  metaWeek: document.getElementById('certMetaWeek'),
+  metaScore: document.getElementById('certMetaScore'),
+  metaDate: document.getElementById('certMetaDate'),
+  btnPng: document.getElementById('btnDownloadPng'),
+  btnJpg: document.getElementById('btnDownloadJpg'),
+  btnShare: document.getElementById('btnShareWhatsapp')
+};
+
+const certState = {
+  week: '',
+  seq: '',
+  cardTitle: '',
+  certNumber: '',
+  fullName: ''
+};
+
+const gradeNames = {
+  1: 'الأول',
+  2: 'الثاني',
+  3: 'الثالث',
+  4: 'الرابع',
+  5: 'الخامس',
+  6: 'السادس',
+  7: 'السابع',
+  8: 'الثامن',
+  9: 'التاسع'
+};
+
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value ?? '')
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
+function readJson(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getWeekParam() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('week');
+  if (!raw) return null;
+  const normalized = normalizeDigits(raw).trim();
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveGradeName(value) {
+  const key = Number.parseInt(value, 10);
+  return gradeNames[key] || value || '—';
+}
+
+function formatArabicDate(dateInput) {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function buildCertNumber({ studentId, week, dateInput }) {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const yyyy = safeDate.getFullYear();
+  const mm = String(safeDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(safeDate.getDate()).padStart(2, '0');
+  return `CERT-${studentId}-${week}-${yyyy}${mm}${dd}`;
+}
+
+function findCardFromCache(week) {
+  const cards = readJson(LS_CARDS_CACHE, []);
+  if (!Array.isArray(cards)) return null;
+  return cards.find((card) => Number(card?.week ?? card?.Week) === Number(week)) || null;
+}
+
+function findCompletionInCache(studentId, week) {
+  const root = readJson(LS_STUDENT_COMPLETIONS, {});
+  const list = Array.isArray(root?.[studentId]) ? root[studentId] : [];
+  return list.find((item) => Number(item?.Week ?? item?.week) === Number(week)) || null;
+}
+
+async function fetchCompletion(studentId, week) {
+  try {
+    const response = await fetch(`/api/progress/completed?studentId=${encodeURIComponent(studentId)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('تعذر تحميل الإنجازات');
+    const data = await response.json();
+    if (!Array.isArray(data)) return null;
+    return data.find((item) => Number(item?.Week ?? item?.week) === Number(week)) || null;
+  } catch (error) {
+    console.warn(error);
+    return null;
+  }
+}
+
+function showNotice(message) {
+  if (!elements.notice) return;
+  elements.notice.textContent = message;
+  elements.notice.classList.remove('hidden');
+}
+
+function hideNotice() {
+  if (!elements.notice) return;
+  elements.notice.classList.add('hidden');
+  elements.notice.textContent = '';
+}
+
+function showNoticeTemporary(message, timeout = 2600) {
+  showNotice(message);
+  window.setTimeout(() => {
+    hideNotice();
+  }, timeout);
+}
+
+async function resolveCertificateData() {
+  const session = readJson(LS_STUDENT_SESSION);
+  const lastCertificate = readJson(LS_LAST_CERTIFICATE);
+  const weekParam = getWeekParam();
+
+  if (weekParam) {
+    if (!session?.id) {
+      return { source: 'empty', session: session || null, payload: null, message: 'لا توجد شهادة لهذا الأسبوع' };
+    }
+    const completionFromCache = findCompletionInCache(session.id, weekParam);
+    const completion = completionFromCache || (await fetchCompletion(session.id, weekParam));
+    if (!completion && !completionFromCache) {
+      return { source: 'empty', session, payload: null, message: 'لا توجد شهادة لهذا الأسبوع' };
+    }
+
+    return {
+      source: 'query',
+      session,
+      payload: {
+        week: weekParam,
+        studentId: session.id,
+        completedAt: completion?.CompletedAt ?? completion?.completedAt ?? null,
+        finalScore: completion?.FinalScore ?? completion?.finalScore ?? null,
+        cardTitle: '',
+        fullName: session?.fullName ?? '',
+        firstName: session?.firstName ?? ''
+      }
+    };
+  }
+
+  if (lastCertificate?.week) {
+    return { source: 'last', session, payload: lastCertificate };
+  }
+
+  return { source: 'empty', session: session || null, payload: null };
+}
+
+function renderCertificate({ session, payload }) {
+  const week = payload?.week ?? '';
+  const studentId = payload?.studentId || session?.id || '';
+  const cachedCard = week ? findCardFromCache(week) : null;
+
+  const fullName = payload?.fullName || session?.fullName || session?.firstName || `طالب ${studentId}`;
+  const className = session?.class ? String(session.class) : '—';
+  const gradeName = resolveGradeName(session?.grade ? String(session.grade) : '');
+
+  const cardTitle =
+    payload?.cardTitle ||
+    cachedCard?.Title ||
+    cachedCard?.title ||
+    (week ? `بطاقة رقم ${week}` : '—');
+
+  const seqValue = cachedCard?.Seq ?? cachedCard?.seq ?? week;
+  const completedAt = payload?.completedAt || payload?.issuedAt || payload?.CompletedAt || null;
+  const finalScore = payload?.finalScore ?? payload?.FinalScore ?? null;
+
+  const dateLabel = formatArabicDate(completedAt);
+  const certNumber = buildCertNumber({ studentId, week, dateInput: completedAt });
+
+  elements.name.textContent = fullName;
+  elements.card.textContent = `أتمّ بطاقة رقم ${seqValue} بعنوان: ${cardTitle}`;
+  elements.classLine.textContent = `الصف: ${gradeName}  |  الشعبة: ${className}`;
+  elements.dateLine.textContent = `التاريخ: ${dateLabel}`;
+  elements.idLine.textContent = `رقم الشهادة: ${certNumber}`;
+
+  elements.metaWeek.textContent = String(seqValue ?? week ?? '—');
+  elements.metaScore.textContent = finalScore !== null && finalScore !== undefined ? String(finalScore) : '—';
+  elements.metaDate.textContent = dateLabel;
+
+  document.title = `شهادة إتمام بطاقة ${seqValue}`;
+
+  certState.week = String(week ?? '');
+  certState.seq = String(seqValue ?? week ?? '');
+  certState.cardTitle = cardTitle;
+  certState.certNumber = certNumber;
+  certState.fullName = fullName;
+
+  elements.btnPng?.addEventListener('click', () => downloadCertificate('png', week));
+  elements.btnJpg?.addEventListener('click', () => downloadCertificate('jpg', week));
+  elements.btnShare?.addEventListener('click', () => shareCertificate());
+}
+
+function showEmptyState() {
+  elements.empty?.classList.remove('hidden');
+  elements.shell?.classList.add('hidden');
+  elements.actions?.classList.add('hidden');
+}
+
+function showCertificateState() {
+  elements.empty?.classList.add('hidden');
+  elements.shell?.classList.remove('hidden');
+  elements.actions?.classList.remove('hidden');
+}
+
+async function renderCanvas(target, { scale = 2, width, height, backgroundColor = null } = {}) {
+  if (!window.html2canvas) {
+    throw new Error('html2canvas not available');
+  }
+  return window.html2canvas(target, {
+    scale,
+    backgroundColor,
+    useCORS: true,
+    allowTaint: false,
+    logging: false,
+    imageTimeout: 15000,
+    width,
+    height,
+    windowWidth: width,
+    windowHeight: height,
+    scrollX: 0,
+    scrollY: 0
+  });
+}
+
+async function waitForAssetsReady() {
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {}
+  }
+
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
+  const images = Array.from(elements.paper?.querySelectorAll('img') || []);
+  if (!images.length) return;
+
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    })
+  );
+}
+
+function buildExportStage() {
+  const stage = document.createElement('div');
+  stage.className = 'cert-export-stage';
+  stage.style.width = `${EXPORT_SIZE}px`;
+  stage.style.height = `${EXPORT_SIZE}px`;
+
+  const clone = elements.paper.cloneNode(true);
+  clone.classList.add('is-export');
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+
+  return { stage, clone };
+}
+
+async function createCertificateImage(type) {
+  if (!elements.paper) throw new Error('Certificate not ready');
+  let stage;
+  let canvas;
+  try {
+    await waitForAssetsReady();
+    const exportStage = buildExportStage();
+    stage = exportStage.stage;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    canvas = await renderCanvas(stage, {
+      scale: 2,
+      width: EXPORT_SIZE,
+      height: EXPORT_SIZE,
+      backgroundColor: null
+    });
+  } finally {
+    stage?.remove();
+  }
+
+  const isPng = type === 'png';
+  const mime = isPng ? 'image/png' : 'image/jpeg';
+  const quality = isPng ? 1 : 0.92;
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+  if (!blob) throw new Error('تعذر إنشاء الصورة');
+
+  const fileName = `certificate-${certState.certNumber || certState.seq || 'week'}.${isPng ? 'png' : 'jpg'}`;
+  const file = new File([blob], fileName, { type: mime });
+  return { blob, file };
+}
+
+async function downloadCertificate(type) {
+  hideNotice();
+  try {
+    const { blob, file } = await createCertificateImage(type);
+    showNoticeTemporary('تم تجهيز الصورة ✅');
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    document.body.classList.remove('cert-exporting');
+    showNotice('تعذر تجهيز الصورة حاليًا. جرّب الطباعة أو أخذ لقطة شاشة.');
+  }
+}
+
+async function shareCertificate() {
+  hideNotice();
+  const shareText = `شهادة إتمام للطالب/ة ${certState.fullName} - البطاقة ${certState.seq} - ${certState.certNumber}`;
+  const shareUrl = window.location.href;
+
+  if (navigator.share && navigator.canShare) {
+    try {
+      const { file } = await createCertificateImage('png');
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'شهادة إتمام', text: shareText });
+        return;
+      }
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'شهادة إتمام', text: shareText, url: shareUrl });
+      return;
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  showNotice('حمّل الصورة أولًا ثم أرسلها في واتساب.');
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`;
+  window.open(waUrl, '_blank', 'noopener');
+}
+
+async function init() {
+  const resolved = await resolveCertificateData();
+  if (!resolved.payload || !resolved.session) {
+    if (resolved.message) {
+      showNotice(resolved.message);
+    }
+    showEmptyState();
+    return;
+  }
+
+  showCertificateState();
+  renderCertificate({ session: resolved.session, payload: resolved.payload });
+}
+
+function initZoomWatcher() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+
+  const updateZoomClass = () => {
+    const isZoomed = viewport.scale > 1.01;
+    document.documentElement.classList.toggle('is-zoomed', isZoomed);
+  };
+
+  updateZoomClass();
+  viewport.addEventListener('resize', updateZoomClass);
+  viewport.addEventListener('scroll', updateZoomClass);
+}
+
+initZoomWatcher();
+init();
 math/public/assets/css/base.css
 /* =========================================================
    base.css — Light Material Design System (Arabic-first)
