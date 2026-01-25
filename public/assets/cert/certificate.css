@@ -34,6 +34,29 @@
   overflow: hidden;
 }
 
+.cert-export-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1080px;
+  height: 1080px;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.cert-paper.is-export {
+  width: 1080px;
+  height: 1080px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  overflow: visible;
+  box-sizing: border-box;
+  margin: 0;
+}
+
 /* Subtle background */
 .cert-bg {
   position: absolute;

@@ -5404,6 +5404,29 @@ math/public/assets/cert/certificate.css
   overflow: hidden;
 }
 
+.cert-export-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1080px;
+  height: 1080px;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.cert-paper.is-export {
+  width: 1080px;
+  height: 1080px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  overflow: visible;
+  box-sizing: border-box;
+  margin: 0;
+}
+
 /* Subtle background */
 .cert-bg {
   position: absolute;
@@ -5886,6 +5909,7 @@ const LS_STUDENT_SESSION = 'math:studentSession';
 const LS_LAST_CERTIFICATE = 'math:lastCertificate';
 const LS_STUDENT_COMPLETIONS = 'math:studentCompletions';
 const LS_CARDS_CACHE = 'math:cardsCache';
+const EXPORT_SIZE = 1080;
 
 const elements = {
   shell: document.getElementById('certShell'),
@@ -5926,6 +5950,20 @@ const gradeNames = {
   9: 'التاسع'
 };
 
+function normalizeDigits(value) {
+  const map = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+
+  return String(value ?? '')
+    .split('')
+    .map((char) => map[char] ?? char)
+    .join('');
+}
+
 function readJson(key, fallback = null) {
   try {
     const raw = localStorage.getItem(key);
@@ -5939,7 +5977,8 @@ function getWeekParam() {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('week');
   if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
+  const normalized = normalizeDigits(raw).trim();
+  const parsed = Number.parseInt(normalized, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
@@ -6103,15 +6142,13 @@ function showCertificateState() {
   elements.actions?.classList.remove('hidden');
 }
 
-async function renderCanvas(scale = 2) {
+async function renderCanvas(target, { scale = 2, width, height, backgroundColor = null } = {}) {
   if (!window.html2canvas) {
     throw new Error('html2canvas not available');
   }
-  const width = Math.ceil(elements.paper.scrollWidth);
-  const height = Math.ceil(elements.paper.scrollHeight);
-  return window.html2canvas(elements.paper, {
+  return window.html2canvas(target, {
     scale,
-    backgroundColor: '#ffffff',
+    backgroundColor,
     useCORS: true,
     allowTaint: false,
     logging: false,
@@ -6120,6 +6157,7 @@ async function renderCanvas(scale = 2) {
     height,
     windowWidth: width,
     windowHeight: height,
+    scrollX: 0,
     scrollY: 0
   });
 }
@@ -6149,22 +6187,37 @@ async function waitForAssetsReady() {
   );
 }
 
+function buildExportStage() {
+  const stage = document.createElement('div');
+  stage.className = 'cert-export-stage';
+  stage.style.width = `${EXPORT_SIZE}px`;
+  stage.style.height = `${EXPORT_SIZE}px`;
+
+  const clone = elements.paper.cloneNode(true);
+  clone.classList.add('is-export');
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+
+  return { stage, clone };
+}
+
 async function createCertificateImage(type) {
   if (!elements.paper) throw new Error('Certificate not ready');
-  document.documentElement.classList.add('cert-exporting');
-  document.body.classList.add('cert-exporting');
+  let stage;
   let canvas;
   try {
     await waitForAssetsReady();
-    const targetPx = 1080;
-    const rect = elements.paper.getBoundingClientRect();
-    const width = rect?.width || 1;
-    const rawScale = targetPx / Math.max(1, width);
-    const scale = Math.min(3.25, Math.max(2, rawScale));
-    canvas = await renderCanvas(scale);
+    const exportStage = buildExportStage();
+    stage = exportStage.stage;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    canvas = await renderCanvas(stage, {
+      scale: 2,
+      width: EXPORT_SIZE,
+      height: EXPORT_SIZE,
+      backgroundColor: null
+    });
   } finally {
-    document.documentElement.classList.remove('cert-exporting');
-    document.body.classList.remove('cert-exporting');
+    stage?.remove();
   }
 
   const isPng = type === 'png';
