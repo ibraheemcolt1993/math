@@ -12,6 +12,16 @@
 | GET | `/api/weeks` | Weeks list. |
 | GET | `/api/routes` | Route catalog. |
 
+## Management routes
+
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | `/api/mng/media/sas` | Generate a short-lived SAS URL for direct image uploads. |
+
+> ملاحظة: يجب تفعيل CORS في حساب Azure Storage للسماح بالطلبات من
+> `https://mango-smoke-0ebe00210.2.azurestaticapps.net` مع السماح بـ `PUT/GET/HEAD/OPTIONS`
+> والرؤوس `x-ms-blob-type` و `content-type`.
+
 ## cURL examples
 
 ```bash

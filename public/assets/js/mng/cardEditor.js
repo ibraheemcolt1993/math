@@ -8,6 +8,7 @@ const elements = {
   btnSave: document.getElementById('btnSave'),
   btnAddConcept: document.getElementById('btnAddConcept'),
   btnAddItem: document.getElementById('btnAddItem'),
+  btnAddImage: document.getElementById('btnAddImage'),
   btnAddQuestion: document.getElementById('btnAddQuestion'),
   btnBack: document.getElementById('btnBack'),
   confirmLeave: document.getElementById('confirmLeave'),
@@ -160,6 +161,7 @@ function renderFlowItem(item, conceptIndex, flowIndex) {
   const showUrl = ['image', 'video'].includes(type);
   const showAnswer = ['question', 'mcq'].includes(type);
   const showChoices = type === 'mcq';
+  const isUploading = Boolean(item.uploading);
 
   return `
     <div class="item-card" data-flow-index="${flowIndex}">
@@ -198,6 +200,24 @@ function renderFlowItem(item, conceptIndex, flowIndex) {
         <div class="field">
           <label class="label">الرابط</label>
           <input class="input ltr" data-field="url" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.url || '')}" />
+        </div>
+      ` : ''}
+      ${type === 'image' ? `
+        <div class="field">
+          <label class="label">رفع صورة</label>
+          <div class="item-row">
+            <input class="input" type="file" accept="image/*" multiple data-image-file="true" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''} />
+            <button class="btn btn-outline btn-sm" data-action="upload-image" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''}>
+              ${isUploading ? 'جاري الرفع...' : 'رفع'}
+            </button>
+          </div>
+          <div class="help">يمكن اختيار أكثر من صورة في نفس المرة.</div>
+          ${item.url ? `
+            <div class="image-preview">
+              <img src="${escapeHtml(item.url)}" alt="صورة البطاقة" />
+              <button class="btn btn-ghost btn-sm small-btn" data-action="copy-image-url" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">نسخ الرابط</button>
+            </div>
+          ` : ''}
         </div>
       ` : ''}
       ${showAnswer ? `
@@ -441,6 +461,16 @@ function handleEditorInput(event) {
   }
 }
 
+function handleEditorChange(event) {
+  const target = event.target;
+  if (!target.dataset.imageFile) return;
+  const conceptIndex = Number(target.dataset.conceptIndex);
+  const flowIndex = Number(target.dataset.flowIndex);
+  const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+  if (!flowItem) return;
+  flowItem.pendingFiles = Array.from(target.files || []);
+}
+
 function handleEditorClick(event) {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
@@ -523,6 +553,28 @@ function handleEditorClick(event) {
     return;
   }
 
+  if (action === 'copy-image-url') {
+    const conceptIndex = Number(button.dataset.conceptIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    const url = state.concepts?.[conceptIndex]?.flow?.[flowIndex]?.url;
+    if (!url) {
+      showToast('تنبيه', 'لا يوجد رابط لنسخه.', 'warning');
+      return;
+    }
+    navigator.clipboard?.writeText(url).then(
+      () => showToast('نجاح', 'تم نسخ الرابط.', 'success'),
+      () => showToast('خطأ', 'تعذر نسخ الرابط.', 'error')
+    );
+    return;
+  }
+
+  if (action === 'upload-image') {
+    const conceptIndex = Number(button.dataset.conceptIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    handleImageUpload(conceptIndex, flowIndex);
+    return;
+  }
+
   if (action === 'move-flow') {
     const conceptIndex = Number(button.dataset.conceptIndex);
     const flowIndex = Number(button.dataset.flowIndex);
@@ -580,6 +632,129 @@ function addFlowItem() {
   const index = Number(state.activeSection.split('-')[1]);
   state.concepts[index].flow.push({ type: 'goal', text: '', title: '', description: '', url: '', answer: '', correctIndex: 0, solution: '', details: [], hints: [], choices: [] });
   setDirty(true);
+  renderPanel();
+}
+
+function addImageItem() {
+  if (!state.activeSection.startsWith('concept-')) {
+    showToast('تنبيه', 'اختر مفهومًا لإضافة صورة.', 'warning');
+    return;
+  }
+  const index = Number(state.activeSection.split('-')[1]);
+  state.concepts[index].flow.push({
+    type: 'image',
+    text: '',
+    title: '',
+    description: '',
+    url: '',
+    answer: '',
+    correctIndex: 0,
+    solution: '',
+    details: [],
+    hints: [],
+    choices: []
+  });
+  setDirty(true);
+  renderPanel();
+}
+
+function getExtension(file) {
+  if (file.type) {
+    const subtype = file.type.split('/')[1];
+    if (subtype) return `.${subtype}`;
+  }
+  const match = file.name?.match(/\.[a-zA-Z0-9]+$/);
+  return match ? match[0].toLowerCase() : '';
+}
+
+function buildBlobName(week, file) {
+  const extension = getExtension(file) || '.png';
+  const timestamp = Date.now();
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `cards/week-${week}/img_${timestamp}_${rand}${extension}`;
+}
+
+async function requestUploadSas(name, contentType) {
+  const response = await fetch('/api/mng/media/sas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, contentType })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) {
+    throw new Error(data?.error || 'تعذر إنشاء رابط الرفع.');
+  }
+  return data;
+}
+
+async function uploadFileToBlob(uploadUrl, file) {
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'x-ms-blob-type': 'BlockBlob',
+      'Content-Type': file.type || 'application/octet-stream'
+    },
+    body: file
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('تعذر رفع الملف.');
+  }
+}
+
+async function handleImageUpload(conceptIndex, flowIndex) {
+  const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+  if (!flowItem) return;
+  const files = flowItem.pendingFiles || [];
+  if (!files.length) {
+    showToast('تنبيه', 'اختر صورة أولاً.', 'warning');
+    return;
+  }
+
+  flowItem.uploading = true;
+  renderPanel();
+
+  // ملاحظة: يجب تفعيل CORS في Azure Storage للسماح بـ PUT/GET/HEAD/OPTIONS
+  // مع headers: x-ms-blob-type, content-type للـ origin الخاص بالتطبيق.
+  const successes = [];
+
+  for (const file of files) {
+    try {
+      const blobName = buildBlobName(state.week, file);
+      const sas = await requestUploadSas(blobName, file.type || 'application/octet-stream');
+      await uploadFileToBlob(sas.uploadUrl, file);
+      successes.push(sas.publicUrl);
+    } catch (error) {
+      showToast('خطأ', `تعذر رفع ${file.name || 'الصورة'}.`, 'error');
+    }
+  }
+
+  flowItem.pendingFiles = [];
+  flowItem.uploading = false;
+
+  if (successes.length) {
+    const [first, ...rest] = successes;
+    flowItem.url = first;
+    if (rest.length) {
+      const insertIndex = flowIndex + 1;
+      const newItems = rest.map((url) => ({
+        type: 'image',
+        text: '',
+        title: '',
+        description: '',
+        url,
+        answer: '',
+        correctIndex: 0,
+        solution: '',
+        details: [],
+        hints: [],
+        choices: []
+      }));
+      state.concepts[conceptIndex].flow.splice(insertIndex, 0, ...newItems);
+    }
+    setDirty(true);
+  }
+
   renderPanel();
 }
 
@@ -670,9 +845,11 @@ function handleBackClick(event) {
 function bindEvents() {
   elements.sectionsList.addEventListener('click', handleSidebarClick);
   elements.editorContent.addEventListener('input', handleEditorInput);
+  elements.editorContent.addEventListener('change', handleEditorChange);
   elements.editorContent.addEventListener('click', handleEditorClick);
   elements.btnAddConcept.addEventListener('click', addConcept);
   elements.btnAddItem.addEventListener('click', addFlowItem);
+  elements.btnAddImage.addEventListener('click', addImageItem);
   elements.btnAddQuestion.addEventListener('click', addQuestion);
   elements.btnSave.addEventListener('click', saveContent);
   elements.btnBack.addEventListener('click', handleBackClick);

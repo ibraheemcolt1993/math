@@ -14,6 +14,7 @@ const ROUTES = {
     { methods: ['POST'], path: '/api/mng/cards', description: 'Create card (management).' },
     { methods: ['PUT'], path: '/api/mng/cards/{week}', description: 'Update card (management).' },
     { methods: ['DELETE'], path: '/api/mng/cards/{week}', description: 'Delete card (management).' },
+    { methods: ['POST'], path: '/api/mng/media/sas', description: 'Generate blob upload SAS (management).' },
     { methods: ['GET'], path: '/api/mng/cards/{week}/completions', description: 'List card completions (management).' },
     { methods: ['GET'], path: '/api/mng/weeks/{week}/content', description: 'Fetch week content (management).' },
     { methods: ['PUT'], path: '/api/mng/weeks/{week}/content', description: 'Update week content (management).' },
