@@ -388,4 +388,22 @@ html.cert-exporting body {
   .cert-sign-v {
     font-size: 12px;
   }
+
+  html.is-zoomed,
+  html.is-zoomed body {
+    height: auto;
+    overflow: auto;
+  }
+
+  html.is-zoomed .cert-shell {
+    height: auto;
+    min-height: calc(100vh - 72px);
+    place-items: start center;
+    padding-bottom: 16px;
+  }
+
+  html.is-zoomed .cert-paper {
+    max-height: none;
+    overflow: visible;
+  }
 }

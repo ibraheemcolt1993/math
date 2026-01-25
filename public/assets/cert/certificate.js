@@ -360,4 +360,19 @@ async function init() {
   renderCertificate({ session: resolved.session, payload: resolved.payload });
 }
 
+function initZoomWatcher() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+
+  const updateZoomClass = () => {
+    const isZoomed = viewport.scale > 1.01;
+    document.documentElement.classList.toggle('is-zoomed', isZoomed);
+  };
+
+  updateZoomClass();
+  viewport.addEventListener('resize', updateZoomClass);
+  viewport.addEventListener('scroll', updateZoomClass);
+}
+
+initZoomWatcher();
 init();
