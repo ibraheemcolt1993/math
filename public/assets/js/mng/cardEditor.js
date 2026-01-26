@@ -1590,11 +1590,19 @@ function applyImageEdit() {
 
 function buildPayload() {
   syncGoalsWithConcepts();
+  const concepts = Array.isArray(state.concepts) ? state.concepts : [];
+  const goals = concepts.map((concept, idx) => {
+    const rawGoal = state.goals?.[idx];
+    const cleaned = normalizeValue(rawGoal);
+    const fallback = normalizeValue(concept?.title);
+    return cleaned || fallback || `هدف ${idx + 1}`;
+  });
+
   return {
     week: state.week,
     seq: state.seq,
     title: state.title,
-    goals: state.goals.filter((goal) => normalizeValue(goal)),
+    goals,
     prerequisites: state.prerequisites.map((item) => ({
       type: item.type === 'mcq' ? 'mcq' : 'input',
       text: normalizeValue(item.text),
