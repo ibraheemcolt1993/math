@@ -3,6 +3,7 @@ import { showToast } from '../ui/toast.js';
 const elements = {
   cardTitle: document.getElementById('cardTitle'),
   cardSubtitle: document.getElementById('cardSubtitle'),
+  saveStatus: document.getElementById('saveStatus'),
   sectionsList: document.getElementById('sectionsList'),
   editorContent: document.getElementById('editorContent'),
   btnSave: document.getElementById('btnSave'),
@@ -10,11 +11,20 @@ const elements = {
   btnAddItem: document.getElementById('btnAddItem'),
   btnAddImage: document.getElementById('btnAddImage'),
   btnAddQuestion: document.getElementById('btnAddQuestion'),
+  btnPreview: document.getElementById('btnPreview'),
+  btnFab: document.getElementById('btnFab'),
+  mobileSheet: document.getElementById('mobileSheet'),
   btnBack: document.getElementById('btnBack'),
   confirmLeave: document.getElementById('confirmLeave'),
   btnCloseLeave: document.getElementById('btnCloseLeave'),
   btnCancelLeave: document.getElementById('btnCancelLeave'),
-  btnConfirmLeave: document.getElementById('btnConfirmLeave')
+  btnConfirmLeave: document.getElementById('btnConfirmLeave'),
+  imageEditor: document.getElementById('imageEditor'),
+  imageEditorPreview: document.getElementById('imageEditorPreview'),
+  imageEditorThumb: document.getElementById('imageEditorThumb'),
+  btnCloseImageEditor: document.getElementById('btnCloseImageEditor'),
+  btnCancelImageEdit: document.getElementById('btnCancelImageEdit'),
+  btnApplyImageEdit: document.getElementById('btnApplyImageEdit')
 };
 
 const state = {
@@ -27,7 +37,16 @@ const state = {
   assessment: { title: '', description: '', questions: [] },
   activeSection: 'goals',
   dirty: false,
+  saving: false,
   pendingNavigation: null
+};
+
+const imageEditorState = {
+  cropper: null,
+  activeEntry: null,
+  aspect: 'free',
+  frame: 'none',
+  flip: 1
 };
 
 function normalizeValue(value) {
@@ -45,6 +64,36 @@ function escapeHtml(value) {
 
 function setDirty(value = true) {
   state.dirty = value;
+  updateSaveStatus();
+}
+
+function setSaving(value = true) {
+  state.saving = value;
+  updateSaveStatus();
+}
+
+function updateSaveStatus() {
+  if (!elements.saveStatus) return;
+  if (state.saving) {
+    elements.saveStatus.textContent = 'جارٍ الحفظ...';
+    elements.saveStatus.style.color = '#f97316';
+    elements.saveStatus.style.borderColor = '#fed7aa';
+    elements.saveStatus.style.background = '#fff7ed';
+    return;
+  }
+
+  if (state.dirty) {
+    elements.saveStatus.textContent = 'غير محفوظ';
+    elements.saveStatus.style.color = '#dc2626';
+    elements.saveStatus.style.borderColor = '#fecaca';
+    elements.saveStatus.style.background = '#fef2f2';
+    return;
+  }
+
+  elements.saveStatus.textContent = 'تم الحفظ';
+  elements.saveStatus.style.color = '#10b981';
+  elements.saveStatus.style.borderColor = '#bbf7d0';
+  elements.saveStatus.style.background = '#ecfdf3';
 }
 
 function getWeekParam() {
@@ -59,6 +108,7 @@ function setHeader() {
   const titleLabel = state.title || 'بدون عنوان';
   elements.cardTitle.textContent = `بطاقة رقم ${seqLabel}: ${titleLabel}`;
   elements.cardSubtitle.textContent = `المعرّف الداخلي: ${state.week ?? '—'}`;
+  updateSaveStatus();
 }
 
 function buildSections() {
@@ -153,6 +203,12 @@ function renderStringList(list, listName, conceptIndex, flowIndex) {
   `;
 }
 
+function renderHintsList(list, conceptIndex, flowIndex) {
+  const items = Array.isArray(list) ? [...list] : [];
+  while (items.length < 3) items.push('');
+  return renderStringList(items, 'hints', conceptIndex, flowIndex);
+}
+
 function renderFlowItem(item, conceptIndex, flowIndex) {
   const type = item.type || 'goal';
   const showText = ['goal', 'explain', 'question', 'note', 'mcq'].includes(type);
@@ -161,7 +217,10 @@ function renderFlowItem(item, conceptIndex, flowIndex) {
   const showUrl = ['image', 'video'].includes(type);
   const showAnswer = ['question', 'mcq'].includes(type);
   const showChoices = type === 'mcq';
+  const showHints = ['question', 'mcq', 'ordering'].includes(type);
   const isUploading = Boolean(item.uploading);
+  const imageFiles = Array.isArray(item.imageFiles) ? item.imageFiles : [];
+  const uploadStatus = item.uploadStatus;
 
   return `
     <div class="item-card" data-flow-index="${flowIndex}">
@@ -212,9 +271,22 @@ function renderFlowItem(item, conceptIndex, flowIndex) {
             </button>
           </div>
           <div class="help">يمكن اختيار أكثر من صورة في نفس المرة.</div>
+          ${imageFiles.length ? `
+            <div class="image-gallery">
+              ${imageFiles.map((entry) => `
+                <div class="image-thumb">
+                  <img src="${escapeHtml(entry.editedUrl || entry.previewUrl || '')}" alt="معاينة" />
+                  <div class="image-thumb-actions">
+                    <button class="btn btn-ghost btn-sm small-btn" data-action="edit-image" data-image-id="${entry.id}" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">تعديل</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+          ${uploadStatus ? `<div class="upload-progress">${escapeHtml(uploadStatus)}</div>` : ''}
           ${item.url ? `
             <div class="image-preview">
-              <img src="${escapeHtml(item.url)}" alt="صورة البطاقة" />
+              <img src="${escapeHtml(item.url)}" alt="صورة البطاقة" loading="lazy" />
               <button class="btn btn-ghost btn-sm small-btn" data-action="copy-image-url" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">نسخ الرابط</button>
             </div>
           ` : ''}
@@ -240,10 +312,14 @@ function renderFlowItem(item, conceptIndex, flowIndex) {
         <label class="label">تفاصيل إضافية</label>
         ${renderStringList(item.details || [], 'details', conceptIndex, flowIndex)}
       </div>
-      <div class="field">
-        <label class="label">تلميحات</label>
-        ${renderStringList(item.hints || [], 'hints', conceptIndex, flowIndex)}
-      </div>
+      ${showHints ? `
+        <div class="field">
+          <details class="hint-panel">
+            <summary>تلميحات السؤال</summary>
+            ${renderHintsList(item.hints || [], conceptIndex, flowIndex)}
+          </details>
+        </div>
+      ` : ''}
       <div class="field">
         <label class="label">الحل</label>
         <input class="input" data-field="solution" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.solution || '')}" />
@@ -468,7 +544,10 @@ function handleEditorChange(event) {
   const flowIndex = Number(target.dataset.flowIndex);
   const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
   if (!flowItem) return;
-  flowItem.pendingFiles = Array.from(target.files || []);
+  const files = Array.from(target.files || []);
+  flowItem.imageFiles = files.map((file) => createImageEntry(file));
+  setDirty(true);
+  renderPanel();
 }
 
 function handleEditorClick(event) {
@@ -568,6 +647,14 @@ function handleEditorClick(event) {
     return;
   }
 
+  if (action === 'edit-image') {
+    const conceptIndex = Number(button.dataset.conceptIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    const imageId = button.dataset.imageId;
+    openImageEditor(conceptIndex, flowIndex, imageId);
+    return;
+  }
+
   if (action === 'upload-image') {
     const conceptIndex = Number(button.dataset.conceptIndex);
     const flowIndex = Number(button.dataset.flowIndex);
@@ -624,13 +711,13 @@ function addConcept() {
   renderAll();
 }
 
-function addFlowItem() {
+function addFlowItem(type = 'question') {
   if (!state.activeSection.startsWith('concept-')) {
     showToast('تنبيه', 'اختر مفهومًا لإضافة عنصر.', 'warning');
     return;
   }
   const index = Number(state.activeSection.split('-')[1]);
-  state.concepts[index].flow.push({ type: 'goal', text: '', title: '', description: '', url: '', answer: '', correctIndex: 0, solution: '', details: [], hints: [], choices: [] });
+  state.concepts[index].flow.push({ type, text: '', title: '', description: '', url: '', answer: '', correctIndex: 0, solution: '', details: [], hints: [], choices: [] });
   setDirty(true);
   renderPanel();
 }
@@ -652,36 +739,83 @@ function addImageItem() {
     solution: '',
     details: [],
     hints: [],
-    choices: []
+    choices: [],
+    imageFiles: []
   });
   setDirty(true);
   renderPanel();
 }
 
-function getExtension(file) {
-  if (file.type) {
-    const subtype = file.type.split('/')[1];
-    if (subtype) return `.${subtype}`;
+function createImageEntry(file) {
+  const previewUrl = URL.createObjectURL(file);
+  return {
+    id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    file,
+    type: file.type || 'image/jpeg',
+    previewUrl,
+    editedBlob: null,
+    editedUrl: null,
+    frame: 'none',
+    aspect: 'free'
+  };
+}
+
+function getOutputSize(aspect, cropper) {
+  if (aspect === '1') return { width: 1080, height: 1080 };
+  if (aspect === '4/3') return { width: 1200, height: 900 };
+  if (aspect === '16/9') return { width: 1280, height: 720 };
+
+  const data = cropper.getData(true);
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const clamp = (value, min, max) => Math.min(Math.max(Math.round(value), min), max);
+  const width = clamp(data.width * pixelRatio, 320, 2048);
+  const height = clamp(data.height * pixelRatio, 320, 2048);
+  return { width, height };
+}
+
+function applyFrameToCanvas(canvas, frame) {
+  if (frame === 'none') return canvas;
+
+  const result = document.createElement('canvas');
+  result.width = canvas.width;
+  result.height = canvas.height;
+  const ctx = result.getContext('2d');
+
+  if (frame === 'rounded') {
+    const radius = Math.max(16, Math.round(canvas.width * 0.04));
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(radius, 0);
+    ctx.arcTo(canvas.width, 0, canvas.width, canvas.height, radius);
+    ctx.arcTo(canvas.width, canvas.height, 0, canvas.height, radius);
+    ctx.arcTo(0, canvas.height, 0, 0, radius);
+    ctx.arcTo(0, 0, canvas.width, 0, radius);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(canvas, 0, 0);
+    ctx.restore();
+    return result;
   }
-  const match = file.name?.match(/\.[a-zA-Z0-9]+$/);
-  return match ? match[0].toLowerCase() : '';
+
+  ctx.drawImage(canvas, 0, 0);
+  const border = Math.max(6, Math.round(canvas.width * 0.01));
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = border;
+  ctx.strokeRect(border / 2, border / 2, canvas.width - border, canvas.height - border);
+  return result;
 }
 
-function buildBlobName(week, file) {
-  const extension = getExtension(file) || '.png';
-  const timestamp = Date.now();
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `cards/week-${week}/img_${timestamp}_${rand}${extension}`;
-}
-
-async function requestUploadSas(name, contentType) {
+async function requestUploadSasBatch(week, files) {
   const response = await fetch('/api/mng/media/sas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, contentType })
+    body: JSON.stringify({
+      week,
+      files: files.map((file) => ({ name: file.name, type: file.type }))
+    })
   });
   const data = await response.json();
-  if (!response.ok || !data.ok) {
+  if (!response.ok) {
     throw new Error(data?.error || 'تعذر إنشاء رابط الرفع.');
   }
   return data;
@@ -705,32 +839,55 @@ async function uploadFileToBlob(uploadUrl, file) {
 async function handleImageUpload(conceptIndex, flowIndex) {
   const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
   if (!flowItem) return;
-  const files = flowItem.pendingFiles || [];
-  if (!files.length) {
+  const images = Array.isArray(flowItem.imageFiles) ? flowItem.imageFiles : [];
+  if (!images.length) {
     showToast('تنبيه', 'اختر صورة أولاً.', 'warning');
     return;
   }
 
   flowItem.uploading = true;
+  flowItem.uploadStatus = 'جارٍ تجهيز الصور...';
   renderPanel();
 
   // ملاحظة: يجب تفعيل CORS في Azure Storage للسماح بـ PUT/GET/HEAD/OPTIONS
   // مع headers: x-ms-blob-type, content-type للـ origin الخاص بالتطبيق.
   const successes = [];
+  const uploadEntries = images.map((entry) => {
+    const blob = entry.editedBlob || entry.file;
+    return {
+      entry,
+      blob,
+      name: entry.file?.name || 'image.png',
+      type: blob.type || entry.type || 'image/png'
+    };
+  });
 
-  for (const file of files) {
-    try {
-      const blobName = buildBlobName(state.week, file);
-      const sas = await requestUploadSas(blobName, file.type || 'application/octet-stream');
-      await uploadFileToBlob(sas.uploadUrl, file);
-      successes.push(sas.publicUrl);
-    } catch (error) {
-      showToast('خطأ', `تعذر رفع ${file.name || 'الصورة'}.`, 'error');
+  try {
+    const sasResponse = await requestUploadSasBatch(state.week, uploadEntries);
+    const items = Array.isArray(sasResponse.items) ? sasResponse.items : [];
+    if (items.length !== uploadEntries.length) {
+      throw new Error('بيانات الرفع غير مكتملة.');
     }
+
+    for (let i = 0; i < uploadEntries.length; i += 1) {
+      const entry = uploadEntries[i];
+      const sasItem = items[i];
+      flowItem.uploadStatus = `جارٍ رفع ${i + 1} من ${uploadEntries.length}...`;
+      renderPanel();
+      try {
+        await uploadFileToBlob(sasItem.uploadUrl, entry.blob);
+        successes.push(sasItem.readUrl);
+      } catch (error) {
+        showToast('خطأ', `تعذر رفع ${entry.name || 'الصورة'}.`, 'error');
+      }
+    }
+  } catch (error) {
+    showToast('خطأ', error.message || 'تعذر رفع الصور.', 'error');
   }
 
-  flowItem.pendingFiles = [];
+  flowItem.imageFiles = [];
   flowItem.uploading = false;
+  flowItem.uploadStatus = '';
 
   if (successes.length) {
     const [first, ...rest] = successes;
@@ -753,17 +910,113 @@ async function handleImageUpload(conceptIndex, flowIndex) {
       state.concepts[conceptIndex].flow.splice(insertIndex, 0, ...newItems);
     }
     setDirty(true);
+    showToast('نجاح', rest.length ? 'تم رفع الصور.' : 'تم رفع الصورة.', 'success');
   }
 
   renderPanel();
 }
 
+function openImageEditor(conceptIndex, flowIndex, imageId) {
+  const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+  if (!flowItem) return;
+  const entry = (flowItem.imageFiles || []).find((file) => file.id === imageId);
+  if (!entry) return;
+  if (typeof Cropper === 'undefined') {
+    showToast('خطأ', 'محرر الصور غير متاح حالياً.', 'error');
+    return;
+  }
+
+  if (imageEditorState.cropper) {
+    imageEditorState.cropper.destroy();
+    imageEditorState.cropper = null;
+  }
+
+  imageEditorState.activeEntry = { conceptIndex, flowIndex, entry };
+  imageEditorState.aspect = entry.aspect || 'free';
+  imageEditorState.frame = entry.frame || 'none';
+  imageEditorState.flip = 1;
+
+  elements.imageEditorPreview.onload = () => {
+    const aspectValue = imageEditorState.aspect === 'free' ? NaN : Number(imageEditorState.aspect);
+    imageEditorState.cropper = new Cropper(elements.imageEditorPreview, {
+      aspectRatio: Number.isFinite(aspectValue) ? aspectValue : NaN,
+      viewMode: 1,
+      autoCropArea: 1,
+      background: false,
+      dragMode: 'move',
+      ready: () => updateImageEditorThumb(),
+      crop: () => updateImageEditorThumb()
+    });
+  };
+
+  elements.imageEditorPreview.src = entry.editedUrl || entry.previewUrl;
+  elements.imageEditorThumb.src = entry.editedUrl || entry.previewUrl;
+
+  elements.imageEditor.classList.remove('hidden');
+  elements.imageEditor.setAttribute('aria-hidden', 'false');
+}
+
+function closeImageEditor() {
+  if (imageEditorState.cropper) {
+    imageEditorState.cropper.destroy();
+    imageEditorState.cropper = null;
+  }
+  imageEditorState.activeEntry = null;
+  elements.imageEditor.classList.add('hidden');
+  elements.imageEditor.setAttribute('aria-hidden', 'true');
+}
+
+function updateImageEditorThumb() {
+  if (!imageEditorState.cropper) return;
+  const canvas = imageEditorState.cropper.getCroppedCanvas({ width: 240, height: 240 });
+  if (!canvas) return;
+  const framed = applyFrameToCanvas(canvas, imageEditorState.frame);
+  elements.imageEditorThumb.src = framed.toDataURL('image/png');
+}
+
+function applyImageEdit() {
+  if (!imageEditorState.cropper || !imageEditorState.activeEntry) return;
+  const { entry } = imageEditorState.activeEntry;
+  const { width, height } = getOutputSize(imageEditorState.aspect, imageEditorState.cropper);
+  let canvas = imageEditorState.cropper.getCroppedCanvas({
+    width,
+    height,
+    imageSmoothingQuality: 'high'
+  });
+  if (!canvas) return;
+  canvas = applyFrameToCanvas(canvas, imageEditorState.frame);
+
+  const outputType = imageEditorState.frame === 'rounded' || entry.type === 'image/png'
+    ? 'image/png'
+    : 'image/jpeg';
+  const quality = outputType === 'image/jpeg' ? 0.92 : 1;
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    if (entry.editedUrl) URL.revokeObjectURL(entry.editedUrl);
+    entry.editedBlob = blob;
+    entry.editedUrl = URL.createObjectURL(blob);
+    entry.type = outputType;
+    entry.frame = imageEditorState.frame;
+    entry.aspect = imageEditorState.aspect;
+    setDirty(true);
+    closeImageEditor();
+    renderPanel();
+    showToast('نجاح', 'تم تحديث الصورة.', 'success');
+  }, outputType, quality);
+}
+
 function addQuestion() {
-  const questions = state.assessment.questions || [];
-  questions.push({ type: 'mcq', text: '', points: 1, choices: [''], correctIndex: 0, answer: '' });
-  state.assessment.questions = questions;
-  setDirty(true);
-  renderPanel();
+  if (state.activeSection === 'assessment') {
+    const questions = state.assessment.questions || [];
+    questions.push({ type: 'mcq', text: '', points: 1, choices: [''], correctIndex: 0, answer: '' });
+    state.assessment.questions = questions;
+    setDirty(true);
+    renderPanel();
+    return;
+  }
+
+  addFlowItem('question');
 }
 
 async function saveContent() {
@@ -804,6 +1057,8 @@ async function saveContent() {
   };
 
   try {
+    setSaving(true);
+    elements.btnSave.disabled = true;
     const response = await fetch(`/api/mng/weeks/${encodeURIComponent(state.week)}/content`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -819,6 +1074,9 @@ async function saveContent() {
     showToast('نجاح', 'تم الحفظ', 'success');
   } catch (error) {
     showToast('خطأ', error.message || 'تعذر حفظ المحتوى.', 'error');
+  } finally {
+    setSaving(false);
+    elements.btnSave.disabled = false;
   }
 }
 
@@ -832,6 +1090,18 @@ function closeLeaveModal() {
   elements.confirmLeave.classList.add('hidden');
   elements.confirmLeave.setAttribute('aria-hidden', 'true');
   state.pendingNavigation = null;
+}
+
+function openMobileSheet() {
+  if (!elements.mobileSheet) return;
+  elements.mobileSheet.classList.remove('hidden');
+  elements.mobileSheet.setAttribute('aria-hidden', 'false');
+}
+
+function closeMobileSheet() {
+  if (!elements.mobileSheet) return;
+  elements.mobileSheet.classList.add('hidden');
+  elements.mobileSheet.setAttribute('aria-hidden', 'true');
 }
 
 function handleBackClick(event) {
@@ -848,10 +1118,16 @@ function bindEvents() {
   elements.editorContent.addEventListener('change', handleEditorChange);
   elements.editorContent.addEventListener('click', handleEditorClick);
   elements.btnAddConcept.addEventListener('click', addConcept);
-  elements.btnAddItem.addEventListener('click', addFlowItem);
+  elements.btnAddItem.addEventListener('click', () => addFlowItem('question'));
   elements.btnAddImage.addEventListener('click', addImageItem);
   elements.btnAddQuestion.addEventListener('click', addQuestion);
   elements.btnSave.addEventListener('click', saveContent);
+  elements.btnPreview?.addEventListener('click', () => {
+    if (!state.week) return;
+    window.open(`/lesson.html?week=${encodeURIComponent(state.week)}`, '_blank');
+    showToast('تنبيه', 'تأكد من تسجيل طالب قبل المعاينة.', 'warning');
+  });
+  elements.btnFab?.addEventListener('click', () => openMobileSheet());
   elements.btnBack.addEventListener('click', handleBackClick);
   elements.btnCloseLeave.addEventListener('click', closeLeaveModal);
   elements.btnCancelLeave.addEventListener('click', closeLeaveModal);
@@ -865,6 +1141,60 @@ function bindEvents() {
       next();
     }
   });
+
+  elements.mobileSheet?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-sheet-action]')?.dataset?.sheetAction;
+    if (event.target.dataset?.close) {
+      closeMobileSheet();
+      return;
+    }
+    if (!action) return;
+    closeMobileSheet();
+    if (action === 'add-question') addFlowItem('question');
+    if (action === 'add-image') addImageItem();
+    if (action === 'add-section') addConcept();
+    if (action === 'add-item') addFlowItem('goal');
+  });
+
+  elements.imageEditor?.addEventListener('click', (event) => {
+    if (event.target.dataset?.close) {
+      closeImageEditor();
+      return;
+    }
+    const aspect = event.target.dataset?.aspect;
+    if (aspect && imageEditorState.cropper) {
+      imageEditorState.aspect = aspect;
+      const ratio = aspect === 'free' ? NaN : Number(aspect);
+      imageEditorState.cropper.setAspectRatio(Number.isFinite(ratio) ? ratio : NaN);
+      updateImageEditorThumb();
+      return;
+    }
+    const frame = event.target.dataset?.frame;
+    if (frame) {
+      imageEditorState.frame = frame;
+      updateImageEditorThumb();
+      return;
+    }
+    const action = event.target.dataset?.action;
+    if (!action || !imageEditorState.cropper) return;
+    if (action === 'zoom-in') imageEditorState.cropper.zoom(0.1);
+    if (action === 'zoom-out') imageEditorState.cropper.zoom(-0.1);
+    if (action === 'rotate-left') imageEditorState.cropper.rotate(-15);
+    if (action === 'rotate-right') imageEditorState.cropper.rotate(15);
+    if (action === 'flip') {
+      imageEditorState.flip = imageEditorState.flip === 1 ? -1 : 1;
+      imageEditorState.cropper.scaleX(imageEditorState.flip);
+    }
+    if (action === 'reset') {
+      imageEditorState.cropper.reset();
+      imageEditorState.flip = 1;
+    }
+    updateImageEditorThumb();
+  });
+
+  elements.btnCloseImageEditor?.addEventListener('click', closeImageEditor);
+  elements.btnCancelImageEdit?.addEventListener('click', closeImageEditor);
+  elements.btnApplyImageEdit?.addEventListener('click', applyImageEdit);
 
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return;

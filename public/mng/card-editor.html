@@ -10,18 +10,22 @@
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
 </head>
 
 <body>
   <div class="page-shell">
     <header class="editor-header">
       <div class="container header-inner">
-        <div>
+        <div class="header-main">
           <a id="btnBack" class="btn btn-ghost btn-sm" href="/mng/cards.html">رجوع للبطاقات</a>
           <h1 class="editor-title" id="cardTitle">بطاقة رقم —</h1>
           <p class="editor-subtitle" id="cardSubtitle">تحميل البيانات...</p>
         </div>
-        <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
+        <div class="header-actions">
+          <div id="saveStatus" class="save-status">تم الحفظ</div>
+          <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
+        </div>
       </div>
     </header>
 
@@ -36,11 +40,99 @@
       </section>
     </main>
 
-    <div class="floating-actions">
-      <button id="btnAddConcept" class="btn btn-outline">إضافة قسم/مفهوم</button>
-      <button id="btnAddItem" class="btn btn-outline">إضافة عنصر</button>
-      <button id="btnAddImage" class="btn btn-outline">إضافة صورة</button>
-      <button id="btnAddQuestion" class="btn btn-outline">إضافة سؤال</button>
+    <aside class="editor-toolbar" aria-label="أدوات سريعة">
+      <button id="btnAddItem" class="toolbar-btn" type="button">
+        <span class="toolbar-icon">+</span>
+        <span class="toolbar-label">سؤال</span>
+      </button>
+      <button id="btnAddImage" class="toolbar-btn" type="button">
+        <span class="toolbar-icon">🖼️</span>
+        <span class="toolbar-label">صورة</span>
+      </button>
+      <button id="btnAddConcept" class="toolbar-btn" type="button">
+        <span class="toolbar-icon">⎘</span>
+        <span class="toolbar-label">قسم</span>
+      </button>
+      <button id="btnPreview" class="toolbar-btn" type="button">
+        <span class="toolbar-icon">👁️</span>
+        <span class="toolbar-label">معاينة</span>
+      </button>
+      <button id="btnAddQuestion" class="toolbar-btn" type="button">
+        <span class="toolbar-icon">❓</span>
+        <span class="toolbar-label">تقييم</span>
+      </button>
+    </aside>
+
+    <button id="btnFab" class="fab" type="button" aria-label="إضافة">+</button>
+    <div id="mobileSheet" class="bottom-sheet hidden" aria-hidden="true">
+      <div class="bottom-sheet-backdrop" data-close="true"></div>
+      <div class="bottom-sheet-card" role="dialog" aria-modal="true">
+        <div class="bottom-sheet-header">
+          <h3 class="h3">إضافة عنصر</h3>
+          <button class="btn btn-ghost btn-sm" data-close="true" type="button">إغلاق</button>
+        </div>
+        <div class="bottom-sheet-body">
+          <button class="sheet-btn" data-sheet-action="add-question" type="button">سؤال</button>
+          <button class="sheet-btn" data-sheet-action="add-image" type="button">صورة</button>
+          <button class="sheet-btn" data-sheet-action="add-section" type="button">قسم/مفهوم</button>
+          <button class="sheet-btn" data-sheet-action="add-item" type="button">عنصر عام</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="imageEditor" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-lg image-editor" role="dialog" aria-modal="true" aria-labelledby="imageEditorTitle">
+      <div class="modal-header">
+        <h2 id="imageEditorTitle" class="h2">تعديل الصورة</h2>
+        <button id="btnCloseImageEditor" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body image-editor-body">
+        <div class="image-editor-stage">
+          <img id="imageEditorPreview" alt="معاينة القص" />
+        </div>
+        <div class="image-editor-tools">
+          <div class="tool-group">
+            <label class="label">نسبة القص</label>
+            <div class="tool-options">
+              <button class="btn btn-ghost btn-sm" data-aspect="free" type="button">حر</button>
+              <button class="btn btn-ghost btn-sm" data-aspect="1" type="button">1:1</button>
+              <button class="btn btn-ghost btn-sm" data-aspect="4/3" type="button">4:3</button>
+              <button class="btn btn-ghost btn-sm" data-aspect="16/9" type="button">16:9</button>
+            </div>
+          </div>
+          <div class="tool-group">
+            <label class="label">تحكم</label>
+            <div class="tool-options">
+              <button class="btn btn-ghost btn-sm" data-action="zoom-in" type="button">تكبير +</button>
+              <button class="btn btn-ghost btn-sm" data-action="zoom-out" type="button">تصغير -</button>
+              <button class="btn btn-ghost btn-sm" data-action="rotate-left" type="button">دوران ⟲</button>
+              <button class="btn btn-ghost btn-sm" data-action="rotate-right" type="button">دوران ⟳</button>
+              <button class="btn btn-ghost btn-sm" data-action="flip" type="button">قلب أفقي</button>
+              <button class="btn btn-ghost btn-sm" data-action="reset" type="button">إعادة ضبط</button>
+            </div>
+          </div>
+          <div class="tool-group">
+            <label class="label">الإطار</label>
+            <div class="tool-options">
+              <button class="btn btn-ghost btn-sm" data-frame="none" type="button">بدون</button>
+              <button class="btn btn-ghost btn-sm" data-frame="border" type="button">إطار أبيض</button>
+              <button class="btn btn-ghost btn-sm" data-frame="rounded" type="button">حواف دائرية</button>
+            </div>
+          </div>
+          <div class="image-editor-preview">
+            <span class="label">المعاينة</span>
+            <div class="image-editor-thumb">
+              <img id="imageEditorThumb" alt="معاينة مصغرة" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnCancelImageEdit" class="btn btn-outline" type="button">إلغاء</button>
+        <button id="btnApplyImageEdit" class="btn btn-primary" type="button">اعتماد التعديل</button>
+      </div>
     </div>
   </div>
 
@@ -61,6 +153,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script type="module" src="/assets/js/mng/cardEditor.js"></script>
 </body>
 </html>

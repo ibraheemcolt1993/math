@@ -515,6 +515,8 @@ export function initEngine({ week, studentId, data, mountEl }) {
         body.appendChild(renderQuestionItem(item, i));
       } else if (item.type === 'video') {
         body.appendChild(renderVideoItem(item, i));
+      } else if (item.type === 'image') {
+        body.appendChild(renderImageItem(item, i));
       } else {
         body.appendChild(renderTextItem(item, i));
       }
@@ -714,6 +716,27 @@ export function initEngine({ week, studentId, data, mountEl }) {
       <p class="step-title">${escapeHtml(title)}</p>
       ${description ? `<div class="step-text">${escapeHtml(description)}</div>` : ''}
       <div class="video-frame">${embed}</div>
+    `;
+
+    return el;
+  }
+
+  function renderImageItem(item, idx) {
+    const el = document.createElement('div');
+    el.className = 'step image';
+    el.setAttribute('data-step-index', String(idx));
+    el.setAttribute('data-step-key', 'image');
+
+    const title = item?.title || 'صورة توضيحية';
+    const description = item?.description || item?.text || '';
+    const url = item?.url || '';
+
+    el.innerHTML = `
+      <p class="step-title">${escapeHtml(title)}</p>
+      ${description ? `<div class="step-text">${escapeHtml(description)}</div>` : ''}
+      ${url
+        ? `<img class="step-image" src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy" />`
+        : '<div class="video-empty">لم يتم إضافة صورة بعد.</div>'}
     `;
 
     return el;
