@@ -7,12 +7,14 @@ import { renderInputQuestion } from './input.js';
 import { renderMcqQuestion } from './mcq.js';
 import { renderMatchQuestion } from './match.js';
 import { renderOrderingQuestion } from './ordering.js';
+import { renderFillBlankQuestion } from './fillblank.js';
 
 const REGISTRY = {
   input: renderInputQuestion,
   mcq: renderMcqQuestion,
-  match: renderMatchQuestion, // structure only for now
+  match: renderMatchQuestion,
   ordering: renderOrderingQuestion,
+  fillblank: renderFillBlankQuestion,
 };
 
 export function renderQuestion({ mountEl, question }) {

@@ -153,21 +153,49 @@
 
 /* ---------- Match (Structure only / future) ---------- */
 .q-match{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.q-match .col{
   display:flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
-.q-match .item{
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(17,24,39,.14);
+.match-list{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.match-row{
+  display:grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 1fr);
+  gap: 12px;
+  align-items:center;
+}
+.match-left{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.12);
   background: rgba(255,255,255,.9);
-  box-shadow: var(--shadow-xs);
+  font-weight: 700;
+}
+.match-select{
+  width: 100%;
+}
+
+/* ---------- Fill blank ---------- */
+.q-fillblank{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fillblank-sentence{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.fillblank-input{
+  min-width: 90px;
+  text-align: center;
+  font-weight: 700;
 }
 
 /* ---------- Feedback ---------- */
@@ -183,7 +211,7 @@
 }
 
 @media (max-width: 560px){
-  .q-match{
+  .match-row{
     grid-template-columns: 1fr;
   }
 }

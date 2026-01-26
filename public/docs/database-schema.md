@@ -23,6 +23,9 @@
 | Answer | nvarchar | 200 | YES |
 | Points | int |  | NO |
 | CorrectIndex | int |  | YES |
+| IsRequired | bit |  | NO |
+| DataJson | nvarchar | max | YES |
+| ValidationJson | nvarchar | max | YES |
 
 ## Assessments
 
@@ -113,6 +116,9 @@
 | Answer | nvarchar | 200 | YES |
 | CorrectIndex | int |  | YES |
 | Solution | nvarchar | 1000 | YES |
+| IsRequired | bit |  | NO |
+| DataJson | nvarchar | max | YES |
+| ValidationJson | nvarchar | max | YES |
 
 ## Students
 

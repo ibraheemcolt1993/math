@@ -118,6 +118,20 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
               ? q.choices
               : [];
       }
+      if (q.type === 'match' && !Array.isArray(q.pairs)) {
+        q.pairs = Array.isArray(item?.pairs) ? item.pairs : Array.isArray(q?.pairs) ? q.pairs : [];
+      }
+      if (q.type === 'fillblank' && !Array.isArray(q.blanks)) {
+        q.blanks = Array.isArray(item?.blanks)
+          ? item.blanks
+          : Array.isArray(q?.blanks)
+            ? q.blanks
+            : [];
+      }
+      if (q.validation && typeof q.validation !== 'object') {
+        q.validation = null;
+      }
+      if (q.isRequired == null) q.isRequired = item?.isRequired !== false;
 
       return q;
     }
@@ -134,6 +148,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       text: item?.text || 'سؤال',
       hints: Array.isArray(item?.hints) ? item.hints : [],
       solution: item?.solution || '',
+      isRequired: item?.isRequired !== false,
+      validation: item?.validation && typeof item.validation === 'object' ? item.validation : null
     };
 
     if (inferredType === 'mcq') {
@@ -145,6 +161,10 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         : Array.isArray(item?.choices)
           ? item.choices
           : [];
+    } else if (inferredType === 'match') {
+      q.pairs = Array.isArray(item?.pairs) ? item.pairs : [];
+    } else if (inferredType === 'fillblank') {
+      q.blanks = Array.isArray(item?.blanks) ? item.blanks : [];
     } else {
       q.answer = item?.answer ?? '';
       q.placeholder = item?.placeholder;
@@ -183,15 +203,27 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         type: inferredType,
         text: question?.text || 'سؤال',
         points: Number.isFinite(question?.points) ? Number(question.points) : 1,
+        isRequired: question?.isRequired !== false,
+        validation: question?.validation && typeof question.validation === 'object' ? question.validation : null
       };
 
       if (inferredType === 'mcq') {
         normalized.choices = Array.isArray(question?.choices) ? question.choices : [];
         normalized.correctIndex =
           typeof question?.correctIndex === 'number' ? question.correctIndex : 0;
-      } else {
+      } else if (inferredType === 'input') {
         normalized.answer = question?.answer ?? '';
         normalized.placeholder = question?.placeholder || 'اكتب إجابتك هنا';
+      } else if (inferredType === 'ordering') {
+        normalized.items = Array.isArray(question?.items)
+          ? question.items
+          : Array.isArray(question?.choices)
+            ? question.choices
+            : [];
+      } else if (inferredType === 'match') {
+        normalized.pairs = Array.isArray(question?.pairs) ? question.pairs : [];
+      } else if (inferredType === 'fillblank') {
+        normalized.blanks = Array.isArray(question?.blanks) ? question.blanks : [];
       }
 
       return normalized;
@@ -429,7 +461,16 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         if (req.type === 'input' || req.type === 'mcq') {
           const wrap = document.createElement('div');
           wrap.className = 'question-wrap';
-          wrap.innerHTML = `<p class="question-title">${escapeHtml(req.text || `سؤال ${idx + 1}`)}</p>`;
+          const title = document.createElement('p');
+          title.className = 'question-title';
+          title.textContent = req.text || `سؤال ${idx + 1}`;
+          if (req.isRequired === false) {
+            const badge = document.createElement('span');
+            badge.className = 'question-badge';
+            badge.textContent = 'اختياري';
+            title.appendChild(badge);
+          }
+          wrap.appendChild(title);
 
           const mount = document.createElement('div');
           wrap.appendChild(mount);
@@ -723,15 +764,27 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     el.setAttribute('data-step-index', String(idx));
     el.setAttribute('data-step-key', item.type);
 
-    const details = Array.isArray(item.details)
-      ? item.details.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
-      : '';
+    const title = document.createElement('p');
+    title.className = 'step-title';
+    title.textContent = cfg.title;
 
-    el.innerHTML = `
-      <p class="step-title">${cfg.title}</p>
-      <div class="step-text">${escapeHtml(item.text ?? '')}</div>
-      ${details ? `<ul class="step-details">${details}</ul>` : ''}
-    `;
+    const text = document.createElement('div');
+    text.className = 'step-text';
+    text.appendChild(buildTokenFragment(item.text ?? ''));
+
+    el.appendChild(title);
+    el.appendChild(text);
+
+    if (Array.isArray(item.details) && item.details.length) {
+      const list = document.createElement('ul');
+      list.className = 'step-details';
+      item.details.forEach((line) => {
+        const li = document.createElement('li');
+        li.appendChild(buildTokenFragment(line));
+        list.appendChild(li);
+      });
+      el.appendChild(list);
+    }
     return el;
   }
 
@@ -766,13 +819,31 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const description = item?.description || item?.text || '';
     const url = item?.url || '';
 
-    el.innerHTML = `
-      <p class="step-title">${escapeHtml(title)}</p>
-      ${description ? `<div class="step-text">${escapeHtml(description)}</div>` : ''}
-      ${url
-        ? `<img class="step-image" src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy" />`
-        : '<div class="video-empty">لم يتم إضافة صورة بعد.</div>'}
-    `;
+    const titleEl = document.createElement('p');
+    titleEl.className = 'step-title';
+    titleEl.textContent = title;
+    el.appendChild(titleEl);
+
+    if (description) {
+      const descEl = document.createElement('div');
+      descEl.className = 'step-text';
+      descEl.appendChild(buildTokenFragment(description));
+      el.appendChild(descEl);
+    }
+
+    if (url) {
+      const img = document.createElement('img');
+      img.className = 'step-image';
+      img.src = url;
+      img.alt = title;
+      img.loading = 'lazy';
+      el.appendChild(img);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'video-empty';
+      empty.textContent = 'لم يتم إضافة صورة بعد.';
+      el.appendChild(empty);
+    }
 
     return el;
   }
@@ -802,7 +873,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
   }
 
   function isQuestionItem(item) {
-    return ['question', 'ordering', 'mcq', 'input'].includes(item?.type);
+    return ['question', 'ordering', 'mcq', 'input', 'match', 'fillblank'].includes(item?.type);
   }
 
   function renderQuestionItem(item, idx) {
@@ -817,6 +888,12 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const title = document.createElement('p');
     title.className = 'question-title';
     title.textContent = qData.text || 'سؤال';
+    if (qData.isRequired === false) {
+      const badge = document.createElement('span');
+      badge.className = 'question-badge';
+      badge.textContent = 'اختياري';
+      title.appendChild(badge);
+    }
 
     const attemptsWrap = document.createElement('div');
     attemptsWrap.className = 'attempts';
@@ -875,43 +952,33 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     wrap.appendChild(title);
 
-    if (question.type === 'mcq') {
-      const groupName = `assessment-${index}`;
-
-      (question.choices || []).forEach((choice, cIdx) => {
-        const label = document.createElement('label');
-        label.className = 'choice';
-
-        const radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = groupName;
-        radio.value = String(cIdx);
-        radio.checked = question._selectedIndex === cIdx;
-        radio.addEventListener('change', () => {
-          question._selectedIndex = cIdx;
-        });
-
-        const span = document.createElement('span');
-        span.textContent = choice;
-
-        label.appendChild(radio);
-        label.appendChild(span);
-        wrap.appendChild(label);
-      });
-
-      return wrap;
+    if (question.isRequired === false) {
+      const badge = document.createElement('span');
+      badge.className = 'question-badge';
+      badge.textContent = 'اختياري';
+      wrap.appendChild(badge);
     }
 
-    const input = document.createElement('input');
-    input.className = 'input ltr';
-    input.type = 'text';
-    input.placeholder = question.placeholder || 'اكتب إجابتك هنا';
-    input.value = question._value || '';
-    input.addEventListener('input', () => {
-      question._value = input.value;
-    });
+    const mount = document.createElement('div');
+    wrap.appendChild(mount);
 
-    wrap.appendChild(input);
+    try {
+      const prevText = question.text;
+      const prevPrompt = question.prompt;
+      if (question.type !== 'fillblank') {
+        question.prompt = '';
+        question.text = '';
+      }
+      renderQuestion({ mountEl: mount, question });
+      question.text = prevText;
+      question.prompt = prevPrompt;
+    } catch (error) {
+      const err = document.createElement('div');
+      err.className = 'solution';
+      err.innerHTML = '<p class="solution-title">تعذر عرض السؤال</p>';
+      wrap.appendChild(err);
+    }
+
     return wrap;
   }
 
@@ -926,6 +993,9 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     questions.forEach((question) => {
       const points = Number.isFinite(question.points) ? question.points : 1;
+      if (!question.isRequired && !hasResponse(question)) {
+        return;
+      }
       total += points;
 
       if (question.type === 'mcq') {
@@ -933,27 +1003,51 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         return;
       }
 
+      if (question.type === 'ordering') {
+        if (isOrderingCorrect(question)) score += points;
+        return;
+      }
+
+      if (question.type === 'match') {
+        if (isMatchCorrect(question)) score += points;
+        return;
+      }
+
+      if (question.type === 'fillblank') {
+        if (isFillBlankCorrect(question)) score += points;
+        return;
+      }
+
       const rawUser = question._value ?? '';
       const rawAns = question.answer ?? '';
-      const ok = compareAnswer(rawUser, rawAns);
+      const ok = compareAnswer(rawUser, rawAns, question.validation);
       if (ok) score += points;
     });
 
     return { score, total };
   }
 
-  function compareAnswer(userValue, answerValue) {
+  function compareAnswer(userValue, answerValue, validation = {}) {
     const user = normalizeSpaces(userValue);
     const ans = normalizeSpaces(answerValue);
 
-    if (isNumericAnswer(ans)) {
+    if (validation.numericOnly || isNumericAnswer(ans)) {
       const userNum = parseNumericValue(user);
       const ansNum = parseNumericValue(ans);
 
       return Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
     }
 
-    return user !== '' && user === ans;
+    if (user !== '' && user === ans) return true;
+
+    if (validation.fuzzyAutocorrect && user !== '') {
+      const normalizedUser = normalizeArabic(user);
+      const normalizedAns = normalizeArabic(ans);
+      if (normalizedUser === normalizedAns) return true;
+      return similarity(normalizedUser, normalizedAns) >= 0.85;
+    }
+
+    return false;
   }
 
   function normalizeSpaces(s) {
@@ -978,6 +1072,14 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       .replace(',', '.')
       .replace(/\s+/g, '');
 
+    if (/^[-+]?[\d.]+\/[-+]?[\d.]+$/.test(normalized)) {
+      const [numRaw, denRaw] = normalized.split('/');
+      const num = Number(numRaw);
+      const den = Number(denRaw);
+      if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return NaN;
+      return num / den;
+    }
+
     if (!/^[-+]?(\d+(\.\d+)?|\.\d+)$/.test(normalized)) return NaN;
 
     const num = Number(normalized);
@@ -986,6 +1088,93 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
   function isNumericAnswer(ans) {
     return Number.isFinite(parseNumericValue(ans));
+  }
+
+  function normalizeArabic(value) {
+    return normalizeSpaces(value)
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+      .replace(/ـ/g, '')
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/\bال/g, '')
+      .toLowerCase();
+  }
+
+  function similarity(a, b) {
+    if (!a && !b) return 1;
+    const aLen = a.length;
+    const bLen = b.length;
+    if (!aLen || !bLen) return 0;
+
+    const dp = Array.from({ length: aLen + 1 }, () => Array(bLen + 1).fill(0));
+    for (let i = 0; i <= aLen; i += 1) dp[i][0] = i;
+    for (let j = 0; j <= bLen; j += 1) dp[0][j] = j;
+
+    for (let i = 1; i <= aLen; i += 1) {
+      for (let j = 1; j <= bLen; j += 1) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + cost
+        );
+      }
+    }
+
+    const distance = dp[aLen][bLen];
+    return 1 - distance / Math.max(aLen, bLen);
+  }
+
+  function hasResponse(question) {
+    if (!question) return false;
+    if (question.type === 'mcq') return typeof question._selectedIndex === 'number';
+    if (question.type === 'ordering') {
+      return Array.isArray(question._order) && question._order.some((item) => item != null);
+    }
+    if (question.type === 'match') {
+      return Array.isArray(question._matches)
+        && question._matches.some((value) => String(value || '').trim());
+    }
+    if (question.type === 'fillblank') {
+      return Array.isArray(question._blanks)
+        && question._blanks.some((value) => String(value || '').trim());
+    }
+    return String(question._value || '').trim() !== '';
+  }
+
+  function isOrderingCorrect(question) {
+    const originalItems = Array.isArray(question.items)
+      ? question.items
+      : Array.isArray(question.choices)
+        ? question.choices
+        : [];
+    const order = Array.isArray(question._order) ? question._order : [];
+    if (!originalItems.length) return true;
+    if (order.length !== originalItems.length) return false;
+    if (order.some((item) => item == null)) return false;
+    return order.every((value, index) => String(value ?? '').trim() === String(originalItems[index] ?? '').trim());
+  }
+
+  function isMatchCorrect(question) {
+    const pairs = Array.isArray(question.pairs) ? question.pairs : [];
+    const selections = Array.isArray(question._matches) ? question._matches : [];
+    if (!pairs.length) return true;
+    if (selections.length !== pairs.length) return false;
+    if (selections.some((value) => !String(value || '').trim())) return false;
+    return pairs.every((pair, index) => {
+      const expected = String(pair?.right ?? '').trim();
+      const actual = String(selections[index] ?? '').trim();
+      return expected !== '' && expected === actual;
+    });
+  }
+
+  function isFillBlankCorrect(question) {
+    const blanks = Array.isArray(question.blanks) ? question.blanks : [];
+    const values = Array.isArray(question._blanks) ? question._blanks : [];
+    if (!blanks.length) return true;
+    if (values.length < blanks.length) return false;
+    return blanks.every((ans, index) => compareAnswer(values[index] ?? '', ans ?? '', question.validation));
   }
 
   function getYouTubeId(url) {
@@ -1007,6 +1196,11 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     if (!activeQuestion || !activeQuestion.btn) return;
 
     if (activeQuestion.verifiedOk) {
+      advanceWithFocus();
+      return;
+    }
+
+    if (activeQuestion.qData.isRequired === false && !hasResponse(activeQuestion.qData)) {
       advanceWithFocus();
       return;
     }
@@ -1171,6 +1365,79 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     return list;
   }
 
+  function buildTokenFragment(text) {
+    const fragment = document.createDocumentFragment();
+    const raw = String(text ?? '');
+    const regex = /\[\[(frac|table):([^\]]+)\]\]/g;
+    let lastIndex = 0;
+    let match = null;
+
+    while ((match = regex.exec(raw)) !== null) {
+      if (match.index > lastIndex) {
+        fragment.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
+      }
+
+      const type = match[1];
+      const body = match[2];
+
+      if (type === 'frac') {
+        const [top, bottom] = body.split('|');
+        const frac = document.createElement('span');
+        frac.className = 'token-frac';
+
+        const numerator = document.createElement('span');
+        numerator.className = 'token-frac-top';
+        numerator.textContent = top ?? '';
+
+        const denominator = document.createElement('span');
+        denominator.className = 'token-frac-bottom';
+        denominator.textContent = bottom ?? '';
+
+        frac.appendChild(numerator);
+        frac.appendChild(denominator);
+        fragment.appendChild(frac);
+      } else if (type === 'table') {
+        const [sizePart, ...cells] = body.split('|');
+        const [rowsRaw, colsRaw] = String(sizePart || '').toLowerCase().split('x');
+        const rows = Number(rowsRaw);
+        const cols = Number(colsRaw);
+
+        if (Number.isInteger(rows) && Number.isInteger(cols) && rows > 0 && cols > 0) {
+          const table = document.createElement('table');
+          table.className = 'token-table';
+          const tbody = document.createElement('tbody');
+          let cellIndex = 0;
+
+          for (let r = 0; r < rows; r += 1) {
+            const tr = document.createElement('tr');
+            for (let c = 0; c < cols; c += 1) {
+              const td = document.createElement('td');
+              td.textContent = cells[cellIndex] ?? '';
+              tr.appendChild(td);
+              cellIndex += 1;
+            }
+            tbody.appendChild(tr);
+          }
+
+          table.appendChild(tbody);
+          fragment.appendChild(table);
+        } else {
+          fragment.appendChild(document.createTextNode(match[0]));
+        }
+      } else {
+        fragment.appendChild(document.createTextNode(match[0]));
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < raw.length) {
+      fragment.appendChild(document.createTextNode(raw.slice(lastIndex)));
+    }
+
+    return fragment;
+  }
+
   function escapeHtml(s) {
     return String(s)
       .replaceAll('&', '&amp;')
@@ -1231,7 +1498,12 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         return {
           type,
           text,
-          choices: Array.isArray(item.choices) ? item.choices : []
+          choices: Array.isArray(item.choices) ? item.choices : [],
+          hints: Array.isArray(item.hints) ? item.hints : [],
+          answer: item.answer ?? '',
+          correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : 0,
+          isRequired: item.isRequired !== false,
+          validation: item.validation && typeof item.validation === 'object' ? item.validation : null
         };
       }
       return null;
