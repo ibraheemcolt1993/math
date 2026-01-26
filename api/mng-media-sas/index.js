@@ -41,11 +41,21 @@ function parseConnectionString(connectionString) {
   const parts = connectionString.split(';');
   const map = new Map();
   parts.forEach((part) => {
-    const [key, value] = part.split('=');
+    if (!part) return;
+    const eqIndex = part.indexOf('=');
+    if (eqIndex <= 0) return;
+    const key = part.slice(0, eqIndex).trim();
+    const value = part.slice(eqIndex + 1).trim();
     if (key && value) {
       map.set(key, value);
     }
   });
+  if (process.env.NODE_ENV !== 'production' && map.has('AccountKey')) {
+    const accountKey = map.get('AccountKey');
+    if (accountKey && !accountKey.endsWith('=')) {
+      console.warn('AccountKey does not end with "="; verify parsing preserves trailing "=" characters.');
+    }
+  }
   return {
     accountName: map.get('AccountName'),
     accountKey: map.get('AccountKey')

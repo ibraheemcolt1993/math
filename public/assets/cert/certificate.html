@@ -59,29 +59,31 @@
             <div id="certIdLine" class="cert-line cert-id">—</div>
           </div>
 
-          <div class="cert-meta">
-            <div class="cert-meta-item">
-              <span class="cert-meta-k">رقم البطاقة</span>
-              <span id="certMetaWeek" class="cert-meta-v">—</span>
+          <div class="cert-bottom">
+            <div class="cert-meta">
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">رقم البطاقة</span>
+                <span id="certMetaWeek" class="cert-meta-v">—</span>
+              </div>
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">النتيجة</span>
+                <span id="certMetaScore" class="cert-meta-v">—</span>
+              </div>
+              <div class="cert-meta-item">
+                <span class="cert-meta-k">تاريخ الإكمال</span>
+                <span id="certMetaDate" class="cert-meta-v">—</span>
+              </div>
             </div>
-            <div class="cert-meta-item">
-              <span class="cert-meta-k">النتيجة</span>
-              <span id="certMetaScore" class="cert-meta-v">—</span>
-            </div>
-            <div class="cert-meta-item">
-              <span class="cert-meta-k">تاريخ الإكمال</span>
-              <span id="certMetaDate" class="cert-meta-v">—</span>
-            </div>
-          </div>
 
-          <div class="cert-footer">
-            <div class="cert-sign">
-              <span class="cert-sign-k">بتوقيع</span>
-              <span class="cert-sign-v">منصة math999</span>
-            </div>
-            <div class="cert-stamp" aria-hidden="true">
-              <div class="cert-stamp-ring"></div>
-              <div class="cert-stamp-text">math999</div>
+            <div class="cert-footer">
+              <div class="cert-sign">
+                <span class="cert-sign-k">بتوقيع</span>
+                <span class="cert-sign-v">منصة math999</span>
+              </div>
+              <div class="cert-stamp" aria-hidden="true">
+                <div class="cert-stamp-ring"></div>
+                <div class="cert-stamp-text">math999</div>
+              </div>
             </div>
           </div>
         </div>
@@ -97,7 +99,7 @@
 
   <div id="certNotice" class="cert-notice hidden" role="status" aria-live="polite"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="/assets/vendor/html2canvas.min.js"></script>
   <script type="module" src="/assets/cert/certificate.js"></script>
 </body>
 </html>
