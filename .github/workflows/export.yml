@@ -1,0 +1,39 @@
+name: Export Repo To TXT
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate export.txt
+        run: |
+          OUT=export.txt
+          rm -f "$OUT"
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -path "./node_modules/*" \
+            ! -path "./dist/*" \
+            ! -path "./build/*" \
+            -print0 | sort -z | while IFS= read -r -d '' f; do
+              rel="${f#./}"
+              echo "====================" >> "$OUT"
+              echo "FILE: $rel" >> "$OUT"
+              echo "====================" >> "$OUT"
+              # If binary, mark it
+              if grep -Iq . "$f"; then
+                cat "$f" >> "$OUT"
+              else
+                echo "[BINARY FILE]" >> "$OUT"
+              fi
+              echo "" >> "$OUT"
+            done
+
+      - name: Upload export.txt artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-txt
+          path: export.txt
