@@ -64,6 +64,68 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeValidation(value) {
+  return {
+    numericOnly: Boolean(value?.numericOnly),
+    fuzzyAutocorrect: Boolean(value?.fuzzyAutocorrect)
+  };
+}
+
+function hasValidation(value) {
+  return Boolean(value?.numericOnly || value?.fuzzyAutocorrect);
+}
+
+function parseTableTokens(text) {
+  const results = [];
+  const raw = String(text ?? '');
+  const regex = /\[\[table:([^\]]+)\]\]/g;
+  let match = null;
+  while ((match = regex.exec(raw)) !== null) {
+    const body = match[1];
+    const [sizePart, ...cells] = body.split('|');
+    const [rowsRaw, colsRaw] = String(sizePart || '').toLowerCase().split('x');
+    const rows = Number(rowsRaw);
+    const cols = Number(colsRaw);
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+      continue;
+    }
+    results.push({
+      token: match[0],
+      start: match.index,
+      end: regex.lastIndex,
+      rows,
+      cols,
+      cells
+    });
+  }
+  return results;
+}
+
+function buildTableToken(rows, cols, cells) {
+  const total = rows * cols;
+  const sanitized = Array.from({ length: total }, (_, index) => cells[index] ?? '');
+  return `[[table:${rows}x${cols}|${sanitized.join('|')}]]`;
+}
+
+function replaceTableToken(text, tableIndex, nextToken) {
+  const tables = parseTableTokens(text);
+  const target = tables[tableIndex];
+  if (!target) return text;
+  return `${text.slice(0, target.start)}${nextToken}${text.slice(target.end)}`;
+}
+
+function insertTokenAtCursor(textarea, token) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  textarea.value = `${before}${token}${after}`;
+  const nextPos = start + token.length;
+  textarea.setSelectionRange(nextPos, nextPos);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function setDirty(value = true) {
   state.dirty = value;
   updateSaveStatus();
@@ -118,16 +180,39 @@ function normalizePrerequisites(rawList) {
   if (!Array.isArray(rawList)) return [];
   return rawList.map((item) => {
     if (typeof item === 'string') {
-      return { type: 'input', text: item, choices: [] };
+      return {
+        type: 'input',
+        text: item,
+        choices: [],
+        isRequired: true,
+        hints: [],
+        answer: '',
+        correctIndex: 0,
+        validation: normalizeValidation()
+      };
     }
     if (item && typeof item === 'object') {
       return {
         type: item.type === 'mcq' ? 'mcq' : 'input',
         text: item.text || '',
-        choices: Array.isArray(item.choices) ? item.choices : []
+        choices: Array.isArray(item.choices) ? item.choices : [],
+        isRequired: item.isRequired !== false,
+        hints: Array.isArray(item.hints) ? item.hints : [],
+        answer: item.answer || '',
+        correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : 0,
+        validation: normalizeValidation(item.validation)
       };
     }
-    return { type: 'input', text: '', choices: [] };
+    return {
+      type: 'input',
+      text: '',
+      choices: [],
+      isRequired: true,
+      hints: [],
+      answer: '',
+      correctIndex: 0,
+      validation: normalizeValidation()
+    };
   });
 }
 
@@ -138,7 +223,6 @@ function normalizeFlowItem(item = {}) {
   if (type === 'mistake') type = 'nonexample';
   if (['goal', 'note', 'detail'].includes(type)) type = 'explain';
   if (type === 'question') type = item.choices?.length ? 'mcq' : 'input';
-  if (type === 'ordering') type = 'input';
 
   return {
     ...item,
@@ -150,10 +234,59 @@ function normalizeFlowItem(item = {}) {
     answer: item.answer || '',
     correctIndex: item.correctIndex ?? 0,
     solution: item.solution || '',
+    isRequired: item.isRequired !== false,
+    validation: normalizeValidation(item.validation),
     details: Array.isArray(item.details) ? item.details : [],
     hints: Array.isArray(item.hints) ? item.hints : [],
     choices: Array.isArray(item.choices) ? item.choices : [],
+    items: Array.isArray(item.items) ? item.items : [],
+    blanks: Array.isArray(item.blanks) ? item.blanks : [],
+    pairs: Array.isArray(item.pairs)
+      ? item.pairs.map((pair) => ({
+        left: pair?.left || '',
+        right: pair?.right || ''
+      }))
+      : [],
     imageFiles: Array.isArray(item.imageFiles) ? item.imageFiles : []
+  };
+}
+
+function normalizeAssessmentQuestion(question = {}) {
+  const type = ['mcq', 'input', 'ordering', 'match', 'fillblank'].includes(question.type)
+    ? question.type
+    : question.choices?.length
+      ? 'mcq'
+      : 'input';
+  return {
+    ...question,
+    type,
+    text: question.text || '',
+    points: question.points ?? 1,
+    answer: question.answer || '',
+    correctIndex: question.correctIndex ?? 0,
+    choices: Array.isArray(question.choices) ? question.choices : [],
+    items: Array.isArray(question.items) ? question.items : [],
+    blanks: Array.isArray(question.blanks) ? question.blanks : [],
+    pairs: Array.isArray(question.pairs)
+      ? question.pairs.map((pair) => ({
+        left: pair?.left || '',
+        right: pair?.right || ''
+      }))
+      : [],
+    isRequired: question.isRequired !== false,
+    validation: normalizeValidation(question.validation)
+  };
+}
+
+function normalizeAssessment(assessment) {
+  if (!assessment || typeof assessment !== 'object') {
+    return { title: '', description: '', questions: [] };
+  }
+  const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
+  return {
+    title: assessment.title || '',
+    description: assessment.description || '',
+    questions: questions.map((question) => normalizeAssessmentQuestion(question))
   };
 }
 
@@ -338,6 +471,13 @@ function renderPrereqSection(sectionIndex) {
                     <label class="label">نص السؤال</label>
                     <input class="input" data-prereq-field="text" data-prereq-index="${index}" value="${escapeHtml(item.text || '')}" />
                   </div>
+                  <div class="field">
+                    <label class="label">حالة السؤال</label>
+                    <label class="toggle-row">
+                      <input type="checkbox" data-prereq-field="isRequired" data-prereq-index="${index}" ${item.isRequired !== false ? 'checked' : ''} />
+                      <span>سؤال مطلوب</span>
+                    </label>
+                  </div>
                   ${type === 'mcq'
                     ? `
                       <div class="field">
@@ -348,8 +488,39 @@ function renderPrereqSection(sectionIndex) {
                           index
                         })}
                       </div>
+                      <div class="field">
+                        <label class="label">رقم الإجابة الصحيحة</label>
+                        <input class="input ltr" data-prereq-field="correctIndex" data-prereq-index="${index}" value="${escapeHtml(item.correctIndex ?? 0)}" />
+                      </div>
                     `
                     : ''}
+                  ${type === 'input'
+                    ? `
+                      <div class="field">
+                        <label class="label">الإجابة الصحيحة</label>
+                        <input class="input" data-prereq-field="answer" data-prereq-index="${index}" value="${escapeHtml(item.answer || '')}" />
+                      </div>
+                      <div class="field">
+                        <label class="label">خيارات التحقق</label>
+                        <label class="toggle-row">
+                          <input type="checkbox" data-prereq-validation="numericOnly" data-prereq-index="${index}" ${item.validation?.numericOnly ? 'checked' : ''} />
+                          <span>أرقام فقط</span>
+                        </label>
+                        <label class="toggle-row">
+                          <input type="checkbox" data-prereq-validation="fuzzyAutocorrect" data-prereq-index="${index}" ${item.validation?.fuzzyAutocorrect ? 'checked' : ''} />
+                          <span>تصحيح تقريبي للنص</span>
+                        </label>
+                      </div>
+                    `
+                    : ''}
+                  <div class="field">
+                    <label class="label">تلميحات (حتى 3)</label>
+                    ${renderInlineList({
+                      list: item.hints || [],
+                      listType: 'prereq-hints',
+                      index
+                    })}
+                  </div>
                 </div>
                 ${renderConfirmInline({
                   id: `prereq-${index}`,
@@ -383,6 +554,9 @@ function renderGoalSection(sectionIndex, goalIndex) {
       <button type="button" data-action="add-block" data-block-type="image" data-goal-index="${goalIndex}">صورة</button>
       <button type="button" data-action="add-block" data-block-type="input" data-goal-index="${goalIndex}">سؤال تدريبي (إجابة قصيرة)</button>
       <button type="button" data-action="add-block" data-block-type="mcq" data-goal-index="${goalIndex}">سؤال تدريبي (اختيار متعدد)</button>
+      <button type="button" data-action="add-block" data-block-type="ordering" data-goal-index="${goalIndex}">سؤال تدريبي (رتّب)</button>
+      <button type="button" data-action="add-block" data-block-type="match" data-goal-index="${goalIndex}">سؤال تدريبي (توصيل)</button>
+      <button type="button" data-action="add-block" data-block-type="fillblank" data-goal-index="${goalIndex}">سؤال تدريبي (اكمل الفراغ)</button>
       <button type="button" data-action="add-block" data-block-type="hintlist" data-goal-index="${goalIndex}">قائمة تلميحات</button>
     </div>
   `;
@@ -439,15 +613,25 @@ function renderFlowBlock(item, conceptIndex, flowIndex) {
     image: 'صورة',
     input: 'سؤال تدريبي',
     mcq: 'سؤال تدريبي',
+    ordering: 'سؤال تدريبي',
+    match: 'سؤال تدريبي',
+    fillblank: 'سؤال تدريبي',
     hintlist: 'تلميحات'
   };
 
-  const questionTypeLabel = type === 'mcq' ? 'اختيار متعدد' : 'إجابة قصيرة';
+  const questionTypeLabelMap = {
+    input: 'إجابة قصيرة',
+    mcq: 'اختيار متعدد',
+    ordering: 'رتّب',
+    match: 'توصيل',
+    fillblank: 'اكمل الفراغ'
+  };
+  const questionTypeLabel = questionTypeLabelMap[type] || 'سؤال';
 
   return `
     <div class="block-card" draggable="true" data-drag-type="block" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">
       <div class="block-header">
-        <span class="block-label">${labelMap[type] || 'محتوى'}${['input', 'mcq'].includes(type) ? ` — ${questionTypeLabel}` : ''}</span>
+        <span class="block-label">${labelMap[type] || 'محتوى'}${['input', 'mcq', 'ordering', 'match', 'fillblank'].includes(type) ? ` — ${questionTypeLabel}` : ''}</span>
         <div class="block-actions">
           <span class="drag-handle" aria-hidden="true">⋮⋮</span>
           <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
@@ -518,11 +702,26 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
     `;
   }
 
-  if (type === 'input' || type === 'mcq') {
+  if (['input', 'mcq', 'ordering', 'match', 'fillblank'].includes(type)) {
+    const validation = item.validation || {};
     return `
       <div class="field">
         <label class="label">نص السؤال</label>
-        <input class="input" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.text || '')}" />
+        ${type === 'fillblank'
+          ? `
+            <textarea class="input" rows="2" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+            <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
+          `
+          : `
+            <input class="input" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.text || '')}" />
+          `}
+      </div>
+      <div class="field">
+        <label class="label">حالة السؤال</label>
+        <label class="toggle-row">
+          <input type="checkbox" data-block-field="isRequired" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${item.isRequired !== false ? 'checked' : ''} />
+          <span>سؤال مطلوب</span>
+        </label>
       </div>
       ${type === 'input'
         ? `
@@ -530,8 +729,21 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
             <label class="label">الإجابة النموذجية (اختياري)</label>
             <input class="input" data-block-field="answer" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.answer || '')}" />
           </div>
+          <div class="field">
+            <label class="label">خيارات التحقق</label>
+            <label class="toggle-row">
+              <input type="checkbox" data-block-validation="numericOnly" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${validation.numericOnly ? 'checked' : ''} />
+              <span>أرقام فقط</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" data-block-validation="fuzzyAutocorrect" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${validation.fuzzyAutocorrect ? 'checked' : ''} />
+              <span>تصحيح تقريبي للنص</span>
+            </label>
+          </div>
         `
-        : `
+        : ''}
+      ${type === 'mcq'
+        ? `
           <div class="field">
             <label class="label">الاختيارات</label>
             ${renderInlineList({
@@ -545,7 +757,53 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
             <label class="label">رقم الإجابة الصحيحة</label>
             <input class="input ltr" data-block-field="correctIndex" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.correctIndex ?? 0)}" />
           </div>
-        `}
+        `
+        : ''}
+      ${type === 'ordering'
+        ? `
+          <div class="field">
+            <label class="label">ترتيب العناصر</label>
+            ${renderInlineList({
+              list: item.items || [],
+              listType: 'flow-ordering',
+              index: flowIndex,
+              conceptIndex
+            })}
+          </div>
+        `
+        : ''}
+      ${type === 'match'
+        ? `
+          <div class="field">
+            <label class="label">أزواج التوصيل</label>
+            ${renderMatchPairsEditor({ pairs: item.pairs || [], conceptIndex, flowIndex })}
+          </div>
+        `
+        : ''}
+      ${type === 'fillblank'
+        ? `
+          <div class="field">
+            <label class="label">إجابات الفراغات</label>
+            ${renderInlineList({
+              list: item.blanks || [],
+              listType: 'flow-fillblank-answers',
+              index: flowIndex,
+              conceptIndex
+            })}
+          </div>
+          <div class="field">
+            <label class="label">خيارات التحقق</label>
+            <label class="toggle-row">
+              <input type="checkbox" data-block-validation="numericOnly" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${validation.numericOnly ? 'checked' : ''} />
+              <span>أرقام فقط</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" data-block-validation="fuzzyAutocorrect" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${validation.fuzzyAutocorrect ? 'checked' : ''} />
+              <span>تصحيح تقريبي للنص</span>
+            </label>
+          </div>
+        `
+        : ''}
       <div class="field">
         <details class="hint-panel" open>
           <summary>تلميحات السؤال</summary>
@@ -577,7 +835,12 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
   return `
     <div class="field">
       <label class="label">النص</label>
+      <div class="text-toolbar">
+        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-frac" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">كسر</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-table" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">جدول</button>
+      </div>
       <textarea class="input" rows="3" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+      ${renderTableEditors({ text: item.text || '', conceptIndex, flowIndex })}
     </div>
   `;
 }
@@ -622,8 +885,11 @@ function renderAssessmentSection(sectionIndex) {
 }
 
 function renderAssessmentQuestion(question, index) {
-  const type = question.type === 'mcq' ? 'mcq' : 'input';
+  const type = ['mcq', 'input', 'ordering', 'match', 'fillblank'].includes(question.type)
+    ? question.type
+    : 'input';
   const menuId = `assessment-menu-${index}`;
+  const validation = question.validation || {};
 
   return `
     <div class="block-card" draggable="true" data-drag-type="assessment" data-question-index="${index}">
@@ -649,15 +915,32 @@ function renderAssessmentQuestion(question, index) {
           <select class="input" data-question-field="type" data-question-index="${index}">
             <option value="mcq" ${type === 'mcq' ? 'selected' : ''}>اختيار متعدد</option>
             <option value="input" ${type === 'input' ? 'selected' : ''}>إجابة نصية</option>
+            <option value="ordering" ${type === 'ordering' ? 'selected' : ''}>رتّب</option>
+            <option value="match" ${type === 'match' ? 'selected' : ''}>توصيل</option>
+            <option value="fillblank" ${type === 'fillblank' ? 'selected' : ''}>اكمل الفراغ</option>
           </select>
         </div>
         <div class="field">
           <label class="label">نص السؤال</label>
-          <input class="input" data-question-field="text" data-question-index="${index}" value="${escapeHtml(question.text || '')}" />
+          ${type === 'fillblank'
+            ? `
+              <textarea class="input" rows="2" data-question-field="text" data-question-index="${index}">${escapeHtml(question.text || '')}</textarea>
+              <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
+            `
+            : `
+              <input class="input" data-question-field="text" data-question-index="${index}" value="${escapeHtml(question.text || '')}" />
+            `}
         </div>
         <div class="field">
           <label class="label">الدرجة</label>
           <input class="input ltr" data-question-field="points" data-question-index="${index}" value="${escapeHtml(question.points ?? 1)}" />
+        </div>
+        <div class="field">
+          <label class="label">حالة السؤال</label>
+          <label class="toggle-row">
+            <input type="checkbox" data-question-field="isRequired" data-question-index="${index}" ${question.isRequired !== false ? 'checked' : ''} />
+            <span>سؤال مطلوب</span>
+          </label>
         </div>
         ${type === 'input'
           ? `
@@ -665,8 +948,21 @@ function renderAssessmentQuestion(question, index) {
               <label class="label">الإجابة النموذجية</label>
               <input class="input" data-question-field="answer" data-question-index="${index}" value="${escapeHtml(question.answer || '')}" />
             </div>
+            <div class="field">
+              <label class="label">خيارات التحقق</label>
+              <label class="toggle-row">
+                <input type="checkbox" data-question-validation="numericOnly" data-question-index="${index}" ${validation.numericOnly ? 'checked' : ''} />
+                <span>أرقام فقط</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" data-question-validation="fuzzyAutocorrect" data-question-index="${index}" ${validation.fuzzyAutocorrect ? 'checked' : ''} />
+                <span>تصحيح تقريبي للنص</span>
+              </label>
+            </div>
           `
-          : `
+          : ''}
+        ${type === 'mcq'
+          ? `
             <div class="field">
               <label class="label">الاختيارات</label>
               ${renderInlineList({ list: question.choices || [], listType: 'assessment-choices', index })}
@@ -675,7 +971,43 @@ function renderAssessmentQuestion(question, index) {
               <label class="label">رقم الإجابة الصحيحة</label>
               <input class="input ltr" data-question-field="correctIndex" data-question-index="${index}" value="${escapeHtml(question.correctIndex ?? 0)}" />
             </div>
-          `}
+          `
+          : ''}
+        ${type === 'ordering'
+          ? `
+            <div class="field">
+              <label class="label">ترتيب العناصر</label>
+              ${renderInlineList({ list: question.items || [], listType: 'assessment-ordering', index })}
+            </div>
+          `
+          : ''}
+        ${type === 'match'
+          ? `
+            <div class="field">
+              <label class="label">أزواج التوصيل</label>
+              ${renderMatchPairsEditor({ pairs: question.pairs || [], questionIndex: index })}
+            </div>
+          `
+          : ''}
+        ${type === 'fillblank'
+          ? `
+            <div class="field">
+              <label class="label">إجابات الفراغات</label>
+              ${renderInlineList({ list: question.blanks || [], listType: 'assessment-fillblank-answers', index })}
+            </div>
+            <div class="field">
+              <label class="label">خيارات التحقق</label>
+              <label class="toggle-row">
+                <input type="checkbox" data-question-validation="numericOnly" data-question-index="${index}" ${validation.numericOnly ? 'checked' : ''} />
+                <span>أرقام فقط</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" data-question-validation="fuzzyAutocorrect" data-question-index="${index}" ${validation.fuzzyAutocorrect ? 'checked' : ''} />
+                <span>تصحيح تقريبي للنص</span>
+              </label>
+            </div>
+          `
+          : ''}
       </div>
       ${renderConfirmInline({
         id: `assessment-${index}`,
@@ -706,6 +1038,73 @@ function renderInlineList({ list, listType, index, conceptIndex }) {
       <button class="btn btn-ghost btn-sm" data-action="add-list-item" data-list-type="${listType}" data-list-index="${index}" ${
         conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
       }>إضافة</button>
+    </div>
+  `;
+}
+
+function renderTableEditors({ text, conceptIndex, flowIndex }) {
+  const tables = parseTableTokens(text);
+  if (!tables.length) return '';
+
+  return `
+    <div class="table-editor-list">
+      ${tables.map((table, tableIndex) => {
+        const total = table.rows * table.cols;
+        const cells = Array.from({ length: total }, (_, idx) => table.cells[idx] ?? '');
+        return `
+          <div class="table-editor">
+            <div class="table-editor-header">
+              <span>جدول ${table.rows}×${table.cols}</span>
+            </div>
+            <div class="table-editor-grid" style="--table-cols:${table.cols};">
+              ${cells.map((value, cellIndex) => `
+                <input
+                  class="input"
+                  data-table-index="${tableIndex}"
+                  data-table-cell-index="${cellIndex}"
+                  data-goal-index="${conceptIndex}"
+                  data-flow-index="${flowIndex}"
+                  value="${escapeHtml(value)}"
+                  placeholder="خلية"
+                />
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderMatchPairsEditor({ pairs, conceptIndex, flowIndex, questionIndex }) {
+  const rows = pairs.length ? pairs : [{ left: '', right: '' }];
+  const baseAttrs = questionIndex != null
+    ? `data-question-index="${questionIndex}"`
+    : `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`;
+  return `
+    <div class="match-pairs">
+      ${rows.map((pair, idx) => `
+        <div class="match-pair-row">
+          <input
+            class="input"
+            data-match-index="${idx}"
+            data-match-side="left"
+            ${baseAttrs}
+            value="${escapeHtml(pair.left || '')}"
+            placeholder="العمود الأول"
+          />
+          <input
+            class="input"
+            data-match-index="${idx}"
+            data-match-side="right"
+            ${baseAttrs}
+            value="${escapeHtml(pair.right || '')}"
+            placeholder="العمود الثاني"
+          />
+          <button class="btn btn-ghost btn-sm" data-action="delete-match-pair" data-match-index="${idx}" ${baseAttrs}>حذف</button>
+        </div>
+      `).join('')}
+      <button class="btn btn-ghost btn-sm" data-action="add-match-pair" ${baseAttrs}>+ إضافة زوج</button>
     </div>
   `;
 }
@@ -765,7 +1164,9 @@ function createFlowItem(type) {
       text: '',
       choices: [''],
       correctIndex: 0,
-      hints: []
+      hints: [],
+      isRequired: true,
+      validation: normalizeValidation()
     };
   }
   if (type === 'input') {
@@ -773,7 +1174,39 @@ function createFlowItem(type) {
       type: 'input',
       text: '',
       answer: '',
-      hints: []
+      hints: [],
+      isRequired: true,
+      validation: normalizeValidation()
+    };
+  }
+  if (type === 'ordering') {
+    return {
+      type: 'ordering',
+      text: '',
+      items: [''],
+      hints: [],
+      isRequired: true,
+      validation: normalizeValidation()
+    };
+  }
+  if (type === 'match') {
+    return {
+      type: 'match',
+      text: '',
+      pairs: [{ left: '', right: '' }],
+      hints: [],
+      isRequired: true,
+      validation: normalizeValidation()
+    };
+  }
+  if (type === 'fillblank') {
+    return {
+      type: 'fillblank',
+      text: '',
+      blanks: [''],
+      hints: [],
+      isRequired: true,
+      validation: normalizeValidation()
     };
   }
   if (type === 'hintlist') {
@@ -798,6 +1231,7 @@ function moveItem(list, fromIndex, direction) {
 
 function handleEditorInput(event) {
   const target = event.target;
+  const fieldValue = target.type === 'checkbox' ? target.checked : target.value;
 
   if (target.dataset.prereqField) {
     const index = Number(target.dataset.prereqIndex);
@@ -812,7 +1246,18 @@ function handleEditorInput(event) {
       renderEditor();
       return;
     }
-    state.prerequisites[index][field] = target.value;
+    state.prerequisites[index][field] = fieldValue;
+    setDirty(true);
+    return;
+  }
+
+  if (target.dataset.prereqValidation) {
+    const index = Number(target.dataset.prereqIndex);
+    const key = target.dataset.prereqValidation;
+    const prereq = state.prerequisites[index];
+    if (!prereq) return;
+    prereq.validation = prereq.validation || normalizeValidation();
+    prereq.validation[key] = Boolean(target.checked);
     setDirty(true);
     return;
   }
@@ -823,14 +1268,50 @@ function handleEditorInput(event) {
     const field = target.dataset.blockField;
     const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
     if (!item) return;
-    item[field] = target.value;
+    item[field] = fieldValue;
+    setDirty(true);
+    return;
+  }
+
+  if (target.dataset.blockValidation) {
+    const conceptIndex = Number(target.dataset.goalIndex);
+    const flowIndex = Number(target.dataset.flowIndex);
+    const key = target.dataset.blockValidation;
+    const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+    if (!item) return;
+    item.validation = item.validation || normalizeValidation();
+    item.validation[key] = Boolean(target.checked);
+    setDirty(true);
+    return;
+  }
+
+  if (target.dataset.matchIndex != null && target.dataset.matchSide) {
+    const matchIndex = Number(target.dataset.matchIndex);
+    const side = target.dataset.matchSide;
+    if (target.dataset.questionIndex != null) {
+      const questionIndex = Number(target.dataset.questionIndex);
+      const question = state.assessment.questions[questionIndex];
+      if (!question) return;
+      question.pairs = question.pairs || [];
+      if (!question.pairs[matchIndex]) question.pairs[matchIndex] = { left: '', right: '' };
+      question.pairs[matchIndex][side] = fieldValue;
+      setDirty(true);
+      return;
+    }
+    const conceptIndex = Number(target.dataset.goalIndex);
+    const flowIndex = Number(target.dataset.flowIndex);
+    const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+    if (!flowItem) return;
+    flowItem.pairs = flowItem.pairs || [];
+    if (!flowItem.pairs[matchIndex]) flowItem.pairs[matchIndex] = { left: '', right: '' };
+    flowItem.pairs[matchIndex][side] = fieldValue;
     setDirty(true);
     return;
   }
 
   if (target.dataset.assessmentField) {
     const field = target.dataset.assessmentField;
-    state.assessment[field] = target.value;
+    state.assessment[field] = fieldValue;
     setDirty(true);
     return;
   }
@@ -841,16 +1322,40 @@ function handleEditorInput(event) {
     const question = state.assessment.questions[index];
     if (!question) return;
     if (field === 'type') {
-      question.type = target.value === 'mcq' ? 'mcq' : 'input';
-      if (question.type === 'mcq' && !question.choices?.length) {
+      const nextType = target.value;
+      question.type = nextType;
+      if (nextType === 'mcq' && !question.choices?.length) {
         question.choices = [''];
+      }
+      if (nextType === 'ordering' && !question.items?.length) {
+        question.items = [''];
+      }
+      if (nextType === 'match' && !question.pairs?.length) {
+        question.pairs = [{ left: '', right: '' }];
+      }
+      if (nextType === 'fillblank' && !question.blanks?.length) {
+        question.blanks = [''];
+      }
+      if (!question.validation) {
+        question.validation = normalizeValidation();
       }
       setDirty(true);
       renderEditor();
       return;
     }
-    question[field] = target.value;
+    question[field] = fieldValue;
     setDirty(true);
+  }
+
+  if (target.dataset.questionValidation) {
+    const index = Number(target.dataset.questionIndex);
+    const key = target.dataset.questionValidation;
+    const question = state.assessment.questions[index];
+    if (!question) return;
+    question.validation = question.validation || normalizeValidation();
+    question.validation[key] = Boolean(target.checked);
+    setDirty(true);
+    return;
   }
 
   if (target.dataset.listType) {
@@ -868,11 +1373,38 @@ function handleEditorInput(event) {
       return;
     }
 
+    if (listType === 'prereq-hints') {
+      const item = state.prerequisites[listIndex];
+      if (!item) return;
+      item.hints = item.hints || [];
+      item.hints[itemIndex] = value;
+      setDirty(true);
+      return;
+    }
+
     if (listType === 'assessment-choices') {
       const question = state.assessment.questions[listIndex];
       if (!question) return;
       question.choices = question.choices || [];
       question.choices[itemIndex] = value;
+      setDirty(true);
+      return;
+    }
+
+    if (listType === 'assessment-ordering') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.items = question.items || [];
+      question.items[itemIndex] = value;
+      setDirty(true);
+      return;
+    }
+
+    if (listType === 'assessment-fillblank-answers') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.blanks = question.blanks || [];
+      question.blanks[itemIndex] = value;
       setDirty(true);
       return;
     }
@@ -883,6 +1415,12 @@ function handleEditorInput(event) {
     if (listType === 'flow-choices') {
       flowItem.choices = flowItem.choices || [];
       flowItem.choices[itemIndex] = value;
+    } else if (listType === 'flow-ordering') {
+      flowItem.items = flowItem.items || [];
+      flowItem.items[itemIndex] = value;
+    } else if (listType === 'flow-fillblank-answers') {
+      flowItem.blanks = flowItem.blanks || [];
+      flowItem.blanks[itemIndex] = value;
     } else if (listType === 'flow-hints') {
       flowItem.hints = flowItem.hints || [];
       flowItem.hints[itemIndex] = value;
@@ -893,9 +1431,28 @@ function handleEditorInput(event) {
     setDirty(true);
   }
 
+  if (target.dataset.tableIndex != null && target.dataset.tableCellIndex != null) {
+    const tableIndex = Number(target.dataset.tableIndex);
+    const cellIndex = Number(target.dataset.tableCellIndex);
+    const conceptIndex = Number(target.dataset.goalIndex);
+    const flowIndex = Number(target.dataset.flowIndex);
+    const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+    if (!item) return;
+    const tables = parseTableTokens(item.text || '');
+    const table = tables[tableIndex];
+    if (!table) return;
+    const total = table.rows * table.cols;
+    const nextCells = Array.from({ length: total }, (_, idx) => table.cells[idx] ?? '');
+    nextCells[cellIndex] = fieldValue;
+    const nextToken = buildTableToken(table.rows, table.cols, nextCells);
+    item.text = replaceTableToken(item.text || '', tableIndex, nextToken);
+    setDirty(true);
+    return;
+  }
+
   if (target.dataset.goalIndex != null && !target.dataset.blockField && !target.dataset.listType) {
     const index = Number(target.dataset.goalIndex);
-    state.goals[index] = target.value;
+    state.goals[index] = fieldValue;
     if (state.concepts[index]) {
       state.concepts[index].title = target.value || `هدف ${index + 1}`;
     }
@@ -946,6 +1503,35 @@ function handleEditorClick(event) {
     return;
   }
 
+  if (action === 'insert-frac' || action === 'insert-table') {
+    const conceptIndex = Number(button.dataset.goalIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    const textarea = elements.editorContent.querySelector(
+      `textarea[data-block-field="text"][data-goal-index="${conceptIndex}"][data-flow-index="${flowIndex}"]`
+    );
+    if (!textarea) return;
+
+    if (action === 'insert-frac') {
+      const numerator = prompt('أدخل البسط', '1');
+      if (numerator == null) return;
+      const denominator = prompt('أدخل المقام', '2');
+      if (denominator == null) return;
+      insertTokenAtCursor(textarea, `[[frac:${numerator}|${denominator}]]`);
+      return;
+    }
+
+    const rows = Number(prompt('عدد الصفوف', '2'));
+    const cols = Number(prompt('عدد الأعمدة', '2'));
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+      showToast('تنبيه', 'أدخل أرقامًا صحيحة للصفوف والأعمدة.', 'warning');
+      return;
+    }
+    const emptyCells = Array(rows * cols).fill('');
+    insertTokenAtCursor(textarea, buildTableToken(rows, cols, emptyCells));
+    renderEditor();
+    return;
+  }
+
   if (action === 'toggle-add') {
     const addId = button.dataset.addId;
     state.pendingAdd = state.pendingAdd === addId ? null : addId;
@@ -988,7 +1574,16 @@ function handleEditorClick(event) {
   }
 
   if (action === 'add-prereq') {
-    state.prerequisites.push({ type: 'input', text: '', choices: [] });
+    state.prerequisites.push({
+      type: 'input',
+      text: '',
+      choices: [],
+      isRequired: true,
+      hints: [],
+      answer: '',
+      correctIndex: 0,
+      validation: normalizeValidation()
+    });
     setDirty(true);
     renderEditor();
     return;
@@ -1002,7 +1597,16 @@ function handleEditorClick(event) {
 
   if (action === 'duplicate-prereq') {
     const index = Number(button.dataset.prereqIndex);
-    const cloned = JSON.parse(JSON.stringify(state.prerequisites[index] || { type: 'input', text: '', choices: [] }));
+    const cloned = JSON.parse(JSON.stringify(state.prerequisites[index] || {
+      type: 'input',
+      text: '',
+      choices: [],
+      isRequired: true,
+      hints: [],
+      answer: '',
+      correctIndex: 0,
+      validation: normalizeValidation()
+    }));
     state.prerequisites.splice(index + 1, 0, cloned);
     setDirty(true);
     renderEditor();
@@ -1081,7 +1685,19 @@ function handleEditorClick(event) {
   }
 
   if (action === 'add-assessment-question') {
-    state.assessment.questions.push({ type: 'mcq', text: '', points: 1, choices: [''], correctIndex: 0, answer: '' });
+    state.assessment.questions.push({
+      type: 'mcq',
+      text: '',
+      points: 1,
+      choices: [''],
+      correctIndex: 0,
+      answer: '',
+      isRequired: true,
+      validation: normalizeValidation(),
+      items: [],
+      pairs: [],
+      blanks: []
+    });
     setDirty(true);
     renderEditor();
     return;
@@ -1117,10 +1733,23 @@ function handleEditorClick(event) {
       const item = state.prerequisites[listIndex];
       item.choices = item.choices || [];
       item.choices.push('');
+    } else if (listType === 'prereq-hints') {
+      const item = state.prerequisites[listIndex];
+      item.hints = item.hints || [];
+      if (item.hints.length >= 3) return;
+      item.hints.push('');
     } else if (listType === 'assessment-choices') {
       const question = state.assessment.questions[listIndex];
       question.choices = question.choices || [];
       question.choices.push('');
+    } else if (listType === 'assessment-ordering') {
+      const question = state.assessment.questions[listIndex];
+      question.items = question.items || [];
+      question.items.push('');
+    } else if (listType === 'assessment-fillblank-answers') {
+      const question = state.assessment.questions[listIndex];
+      question.blanks = question.blanks || [];
+      question.blanks.push('');
     } else {
       const conceptIndex = Number(button.dataset.goalIndex);
       const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
@@ -1128,6 +1757,12 @@ function handleEditorClick(event) {
       if (listType === 'flow-choices') {
         flowItem.choices = flowItem.choices || [];
         flowItem.choices.push('');
+      } else if (listType === 'flow-ordering') {
+        flowItem.items = flowItem.items || [];
+        flowItem.items.push('');
+      } else if (listType === 'flow-fillblank-answers') {
+        flowItem.blanks = flowItem.blanks || [];
+        flowItem.blanks.push('');
       } else if (listType === 'flow-hints') {
         flowItem.hints = flowItem.hints || [];
         flowItem.hints.push('');
@@ -1150,15 +1785,29 @@ function handleEditorClick(event) {
       const item = state.prerequisites[listIndex];
       if (!item) return;
       item.choices.splice(itemIndex, 1);
+    } else if (listType === 'prereq-hints') {
+      const item = state.prerequisites[listIndex];
+      if (!item) return;
+      item.hints.splice(itemIndex, 1);
     } else if (listType === 'assessment-choices') {
       const question = state.assessment.questions[listIndex];
       if (!question) return;
       question.choices.splice(itemIndex, 1);
+    } else if (listType === 'assessment-ordering') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.items.splice(itemIndex, 1);
+    } else if (listType === 'assessment-fillblank-answers') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.blanks.splice(itemIndex, 1);
     } else {
       const conceptIndex = Number(button.dataset.goalIndex);
       const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
       if (!flowItem) return;
       if (listType === 'flow-choices') flowItem.choices.splice(itemIndex, 1);
+      if (listType === 'flow-ordering') flowItem.items.splice(itemIndex, 1);
+      if (listType === 'flow-fillblank-answers') flowItem.blanks.splice(itemIndex, 1);
       if (listType === 'flow-hints') flowItem.hints.splice(itemIndex, 1);
       if (listType === 'flow-detail') flowItem.details.splice(itemIndex, 1);
     }
@@ -1196,6 +1845,44 @@ function handleEditorClick(event) {
     const flowIndex = Number(button.dataset.flowIndex);
     handleImageUpload(conceptIndex, flowIndex);
     return;
+  }
+
+  if (action === 'add-match-pair') {
+    if (button.dataset.questionIndex != null) {
+      const questionIndex = Number(button.dataset.questionIndex);
+      const question = state.assessment.questions[questionIndex];
+      if (!question) return;
+      question.pairs = question.pairs || [];
+      question.pairs.push({ left: '', right: '' });
+    } else {
+      const conceptIndex = Number(button.dataset.goalIndex);
+      const flowIndex = Number(button.dataset.flowIndex);
+      const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+      if (!flowItem) return;
+      flowItem.pairs = flowItem.pairs || [];
+      flowItem.pairs.push({ left: '', right: '' });
+    }
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'delete-match-pair') {
+    const pairIndex = Number(button.dataset.matchIndex);
+    if (button.dataset.questionIndex != null) {
+      const questionIndex = Number(button.dataset.questionIndex);
+      const question = state.assessment.questions[questionIndex];
+      if (!question) return;
+      question.pairs.splice(pairIndex, 1);
+    } else {
+      const conceptIndex = Number(button.dataset.goalIndex);
+      const flowIndex = Number(button.dataset.flowIndex);
+      const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+      if (!flowItem) return;
+      flowItem.pairs.splice(pairIndex, 1);
+    }
+    setDirty(true);
+    renderEditor();
   }
 }
 
@@ -1606,7 +2293,12 @@ function buildPayload() {
     prerequisites: state.prerequisites.map((item) => ({
       type: item.type === 'mcq' ? 'mcq' : 'input',
       text: normalizeValue(item.text),
-      choices: (item.choices || []).filter((entry) => normalizeValue(entry))
+      choices: (item.choices || []).filter((entry) => normalizeValue(entry)),
+      hints: (item.hints || []).filter((entry) => normalizeValue(entry)).slice(0, 3),
+      answer: normalizeValue(item.answer),
+      correctIndex: item.correctIndex ?? 0,
+      isRequired: item.isRequired !== false,
+      validation: hasValidation(item.validation) ? item.validation : null
     })),
     concepts: state.concepts.map((concept) => ({
       title: normalizeValue(concept.title),
@@ -1619,9 +2311,19 @@ function buildPayload() {
         answer: normalizeValue(item.answer),
         correctIndex: item.correctIndex ?? 0,
         solution: normalizeValue(item.solution),
+        isRequired: item.isRequired !== false,
+        validation: hasValidation(item.validation) ? item.validation : null,
         details: (item.details || []).filter((entry) => normalizeValue(entry)),
         hints: (item.hints || []).filter((entry) => normalizeValue(entry)),
-        choices: (item.choices || []).filter((entry) => normalizeValue(entry))
+        choices: (item.choices || []).filter((entry) => normalizeValue(entry)),
+        items: (item.items || []).filter((entry) => normalizeValue(entry)),
+        blanks: (item.blanks || []).filter((entry) => normalizeValue(entry)),
+        pairs: (item.pairs || [])
+          .map((pair) => ({
+            left: normalizeValue(pair?.left),
+            right: normalizeValue(pair?.right)
+          }))
+          .filter((pair) => pair.left || pair.right)
       }))
     })),
     assessment: {
@@ -1633,7 +2335,17 @@ function buildPayload() {
         points: Number(question.points) || 1,
         answer: normalizeValue(question.answer),
         correctIndex: question.correctIndex ?? 0,
-        choices: (question.choices || []).filter((entry) => normalizeValue(entry))
+        choices: (question.choices || []).filter((entry) => normalizeValue(entry)),
+        items: (question.items || []).filter((entry) => normalizeValue(entry)),
+        blanks: (question.blanks || []).filter((entry) => normalizeValue(entry)),
+        pairs: (question.pairs || [])
+          .map((pair) => ({
+            left: normalizeValue(pair?.left),
+            right: normalizeValue(pair?.right)
+          }))
+          .filter((pair) => pair.left || pair.right),
+        isRequired: question.isRequired !== false,
+        validation: hasValidation(question.validation) ? question.validation : null
       }))
     }
   };
@@ -1825,7 +2537,7 @@ async function init() {
     state.goals = Array.isArray(data.goals) ? data.goals : [];
     state.prerequisites = normalizePrerequisites(data.prerequisites || []);
     state.concepts = Array.isArray(data.concepts) ? data.concepts : [];
-    state.assessment = data.assessment || { title: '', description: '', questions: [] };
+    state.assessment = normalizeAssessment(data.assessment);
 
     syncGoalsWithConcepts();
     setHeader();

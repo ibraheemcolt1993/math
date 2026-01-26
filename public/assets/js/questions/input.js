@@ -58,16 +58,73 @@ export function renderInputQuestion({ mountEl, question }) {
     return String(str).replace(/[٠-٩۰-۹]/g, (d) => map[d] ?? d);
   }
 
-  function numericOnly(str) {
-    return String(str).replace(/[^0-9]/g, '');
+  function filterNumericInput(str) {
+    return String(str).replace(/[^0-9/.\-+]/g, '');
+  }
+
+  function parseNumericValue(value) {
+    if (value == null) return NaN;
+    const normalized = toLatinDigits(String(value))
+      .trim()
+      .replace(',', '.')
+      .replace(/\s+/g, '');
+
+    if (/^[-+]?[\d.]+\/[-+]?[\d.]+$/.test(normalized)) {
+      const [numRaw, denRaw] = normalized.split('/');
+      const num = Number(numRaw);
+      const den = Number(denRaw);
+      if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return NaN;
+      return num / den;
+    }
+
+    if (!/^[-+]?(\d+(\.\d+)?|\.\d+)$/.test(normalized)) return NaN;
+
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : NaN;
   }
 
   function isNumericAnswer(ans) {
-    const a = numericOnly(toLatinDigits(normalizeSpaces(ans)));
-    return a.length > 0 && /^[0-9]+$/.test(a);
+    return Number.isFinite(parseNumericValue(ans));
   }
 
-  const expectsNumber = isNumericAnswer(question.answer);
+  function normalizeArabic(value) {
+    return normalizeSpaces(value)
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+      .replace(/ـ/g, '')
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/\bال/g, '')
+      .toLowerCase();
+  }
+
+  function similarity(a, b) {
+    if (!a && !b) return 1;
+    const aLen = a.length;
+    const bLen = b.length;
+    if (!aLen || !bLen) return 0;
+
+    const dp = Array.from({ length: aLen + 1 }, () => Array(bLen + 1).fill(0));
+    for (let i = 0; i <= aLen; i += 1) dp[i][0] = i;
+    for (let j = 0; j <= bLen; j += 1) dp[0][j] = j;
+
+    for (let i = 1; i <= aLen; i += 1) {
+      for (let j = 1; j <= bLen; j += 1) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + cost
+        );
+      }
+    }
+
+    const distance = dp[aLen][bLen];
+    return 1 - distance / Math.max(aLen, bLen);
+  }
+
+  const validation = question.validation || {};
+  const expectsNumber = Boolean(validation.numericOnly) || isNumericAnswer(question.answer);
 
   // Restore previous value (persisted by engine via stable question object)
   if (typeof question._value === 'string' && question._value !== '') {
@@ -83,7 +140,7 @@ export function renderInputQuestion({ mountEl, question }) {
     input.addEventListener('input', () => {
       const before = input.value;
       const latin = toLatinDigits(before);
-      const filtered = numericOnly(latin);
+      const filtered = filterNumericInput(latin);
       if (before !== filtered) input.value = filtered;
 
       // Persist
@@ -98,7 +155,7 @@ export function renderInputQuestion({ mountEl, question }) {
       ];
       if (allowed.includes(e.key)) return;
       if (e.ctrlKey || e.metaKey) return;
-      if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+      if (!/^[0-9/.\-+]$/.test(e.key)) e.preventDefault();
     });
   } else {
     // Text mode: persist as user types
@@ -200,11 +257,8 @@ export function renderInputQuestion({ mountEl, question }) {
     question._value = rawUser;
 
     if (expectsNumber) {
-      const userDigits = numericOnly(toLatinDigits(rawUser));
-      const ansDigits = numericOnly(toLatinDigits(rawAns));
-
-      const userNum = userDigits === '' ? NaN : Number(userDigits);
-      const ansNum = ansDigits === '' ? NaN : Number(ansDigits);
+      const userNum = parseNumericValue(rawUser);
+      const ansNum = parseNumericValue(rawAns);
 
       const ok = Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
 
@@ -223,9 +277,23 @@ export function renderInputQuestion({ mountEl, question }) {
     const user = normalizeSpaces(rawUser);
     const ans = normalizeSpaces(rawAns);
 
-    const ok = user !== '' && user === ans;
+    let ok = user !== '' && user === ans;
+    let corrected = false;
 
-    feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
+    if (!ok && validation.fuzzyAutocorrect && user !== '') {
+      const normalizedUser = normalizeArabic(user);
+      const normalizedAns = normalizeArabic(ans);
+      ok = normalizedUser === normalizedAns || similarity(normalizedUser, normalizedAns) >= 0.85;
+      corrected = ok;
+    }
+
+    if (ok && corrected && ans) {
+      input.value = ans;
+      question._value = ans;
+      feedback.textContent = `إجابة صحيحة ✅ (تم تصحيحها إلى: ${ans})`;
+    } else {
+      feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
+    }
     feedback.classList.toggle('ok', ok);
     feedback.classList.toggle('err', !ok);
 

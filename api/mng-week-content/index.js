@@ -17,6 +17,69 @@ function toNullableInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseJsonField(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch (error) {
+    return null;
+  }
+}
+
+function normalizeHints(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((hint) => toCleanString(hint)).filter(Boolean).slice(0, 3);
+}
+
+function toNullableJson(value) {
+  if (!value || typeof value !== 'object') return null;
+  const keys = Array.isArray(value) ? value : Object.keys(value);
+  if (!keys.length) return null;
+  return JSON.stringify(value);
+}
+
+function buildFlowData(flowItem) {
+  const data = {};
+  if (Array.isArray(flowItem.items)) {
+    data.items = flowItem.items.map((entry) => toCleanString(entry)).filter(Boolean);
+  }
+  if (Array.isArray(flowItem.blanks)) {
+    data.blanks = flowItem.blanks.map((entry) => toCleanString(entry)).filter(Boolean);
+  }
+  if (Array.isArray(flowItem.pairs)) {
+    data.pairs = flowItem.pairs
+      .map((pair) => ({
+        left: toCleanString(pair?.left),
+        right: toCleanString(pair?.right)
+      }))
+      .filter((pair) => pair.left || pair.right);
+  }
+  return data;
+}
+
+function buildQuestionData(question) {
+  const data = {};
+  if (Array.isArray(question.items)) {
+    data.items = question.items.map((entry) => toCleanString(entry)).filter(Boolean);
+  }
+  if (Array.isArray(question.blanks)) {
+    data.blanks = question.blanks.map((entry) => toCleanString(entry)).filter(Boolean);
+  }
+  if (Array.isArray(question.pairs)) {
+    data.pairs = question.pairs
+      .map((pair) => ({
+        left: toCleanString(pair?.left),
+        right: toCleanString(pair?.right)
+      }))
+      .filter((pair) => pair.left || pair.right);
+  }
+  return data;
+}
+
 function parsePrereqItem(value) {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
@@ -28,7 +91,13 @@ function parsePrereqItem(value) {
         return {
           type: parsed.type === 'mcq' ? 'mcq' : 'input',
           text: String(parsed.text),
-          choices: Array.isArray(parsed.choices) ? parsed.choices : []
+          choices: Array.isArray(parsed.choices) ? parsed.choices : [],
+          isRequired: parsed.isRequired !== false,
+          hints: normalizeHints(parsed.hints),
+          answer: parsed.answer ?? '',
+          correctIndex:
+            typeof parsed.correctIndex === 'number' ? parsed.correctIndex : 0,
+          validation: parsed.validation && typeof parsed.validation === 'object' ? parsed.validation : null
         };
       }
     } catch (error) {
@@ -48,8 +117,17 @@ function serializePrereqItem(item) {
       text,
       choices: Array.isArray(item.choices)
         ? item.choices.map((choice) => toCleanString(choice)).filter(Boolean)
-        : []
+        : [],
+      isRequired: item.isRequired !== false,
+      hints: normalizeHints(item.hints),
+      validation:
+        item.validation && typeof item.validation === 'object' ? item.validation : null
     };
+    if (payload.type === 'mcq') {
+      payload.correctIndex = toNullableInt(item.correctIndex) ?? 0;
+    } else {
+      payload.answer = toCleanString(item.answer || '');
+    }
     return JSON.stringify(payload);
   }
   return '';
@@ -98,7 +176,8 @@ async function fetchWeekContent(dbPool, weekParam) {
     });
 
     flowItemsResult = await flowRequest.query(
-      `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution
+      `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution,
+              IsRequired, DataJson, ValidationJson
        FROM dbo.FlowItems
        WHERE ConceptId IN (${inClause})
        ORDER BY ConceptId, SortOrder`
@@ -166,7 +245,8 @@ async function fetchWeekContent(dbPool, weekParam) {
     });
 
     assessmentQuestionsResult = await assessmentRequest.query(
-      `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex
+      `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex,
+              IsRequired, DataJson, ValidationJson
        FROM dbo.AssessmentQuestions
        WHERE AssessmentId IN (${assessmentClause})
        ORDER BY AssessmentId, SortOrder`
@@ -268,6 +348,8 @@ async function fetchWeekContent(dbPool, weekParam) {
     title: concept.Title,
     flow: flow.map(({ item, details, hints, choices }) => {
       const type = String(item.ItemType || '').trim().toLowerCase();
+      const dataPayload = parseJsonField(item.DataJson) || {};
+      const validationPayload = parseJsonField(item.ValidationJson);
       const mapped = {
         type,
         text: item.ItemText,
@@ -277,14 +359,25 @@ async function fetchWeekContent(dbPool, weekParam) {
         answer: item.Answer,
         correctIndex: item.CorrectIndex,
         solution: item.Solution,
+        isRequired: item.IsRequired !== false,
+        validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null,
         details: details.map((detail) => detail.DetailText),
         hints: hints.map((hint) => hint.HintText),
         choices: choices.map((choice) => choice.ChoiceText)
       };
 
+      if (dataPayload && typeof dataPayload === 'object') {
+        Object.assign(mapped, dataPayload);
+      }
+
+      if (type === 'ordering' && !Array.isArray(mapped.items) && mapped.choices?.length) {
+        mapped.items = mapped.choices;
+      }
+
       if (!mapped.details.length) delete mapped.details;
       if (!mapped.hints.length) delete mapped.hints;
       if (!mapped.choices.length) delete mapped.choices;
+      if (!mapped.validation) delete mapped.validation;
 
       return mapped;
     })
@@ -296,24 +389,36 @@ async function fetchWeekContent(dbPool, weekParam) {
     questions: questions.map(({ question, choices }) => {
       const rawType = String(question.QuestionType || '').trim().toLowerCase();
       const choiceTexts = choices.map((choice) => choice.ChoiceText);
+      const dataPayload = parseJsonField(question.DataJson) || {};
+      const validationPayload = parseJsonField(question.ValidationJson);
       let type = rawType;
-      if (!['mcq', 'input'].includes(type)) {
+      if (!['mcq', 'input', 'ordering', 'match', 'fillblank'].includes(type)) {
         type = choiceTexts.length ? 'mcq' : 'input';
       }
 
       const normalized = {
         type,
         text: question.QuestionText,
-        points: Number.isFinite(question.Points) ? question.Points : 1
+        points: Number.isFinite(question.Points) ? question.Points : 1,
+        isRequired: question.IsRequired !== false,
+        validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null
       };
+
+      if (dataPayload && typeof dataPayload === 'object') {
+        Object.assign(normalized, dataPayload);
+      }
 
       if (type === 'mcq') {
         normalized.choices = choiceTexts;
         normalized.correctIndex =
           typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
-      } else {
+      } else if (type === 'input') {
         normalized.answer = question.Answer ?? '';
+      } else if (type === 'ordering' && !Array.isArray(normalized.items) && choiceTexts.length) {
+        normalized.items = choiceTexts;
       }
+
+      if (!normalized.validation) delete normalized.validation;
 
       return normalized;
     })
@@ -447,6 +552,9 @@ async function handlePut(context, req, weekParam) {
       for (let j = 0; j < flow.length; j += 1) {
         const flowItem = flow[j] || {};
         const type = toCleanString(flowItem.type).toLowerCase();
+        const flowData = buildFlowData(flowItem);
+        const flowValidation =
+          flowItem.validation && typeof flowItem.validation === 'object' ? flowItem.validation : null;
         const itemResult = await new sql.Request(transaction)
           .input('conceptId', sql.Int, conceptId)
           .input('sortOrder', sql.Int, j + 1)
@@ -458,6 +566,13 @@ async function handlePut(context, req, weekParam) {
           .input('answer', sql.NVarChar(sql.MAX), toNullableString(flowItem.answer))
           .input('correctIndex', sql.Int, toNullableInt(flowItem.correctIndex))
           .input('solution', sql.NVarChar(sql.MAX), toNullableString(flowItem.solution))
+          .input('isRequired', sql.Bit, flowItem.isRequired === false ? 0 : 1)
+          .input('dataJson', sql.NVarChar(sql.MAX), toNullableJson(flowData))
+          .input(
+            'validationJson',
+            sql.NVarChar(sql.MAX),
+            toNullableJson(flowValidation)
+          )
           .query(
             `INSERT INTO dbo.FlowItems (
                ConceptId,
@@ -469,7 +584,10 @@ async function handlePut(context, req, weekParam) {
                ItemUrl,
                Answer,
                CorrectIndex,
-               Solution
+               Solution,
+               IsRequired,
+               DataJson,
+               ValidationJson
              )
              OUTPUT INSERTED.FlowItemId AS FlowItemId
              VALUES (
@@ -482,14 +600,20 @@ async function handlePut(context, req, weekParam) {
                @itemUrl,
                @answer,
                @correctIndex,
-               @solution
+               @solution,
+               @isRequired,
+               @dataJson,
+               @validationJson
              );`
           );
 
         const flowItemId = itemResult.recordset[0]?.FlowItemId;
         const details = Array.isArray(flowItem.details) ? flowItem.details : [];
         const hints = Array.isArray(flowItem.hints) ? flowItem.hints : [];
-        const choices = Array.isArray(flowItem.choices) ? flowItem.choices : [];
+        let choices = Array.isArray(flowItem.choices) ? flowItem.choices : [];
+        if (!choices.length && Array.isArray(flowItem.items)) {
+          choices = flowItem.items;
+        }
 
         for (let k = 0; k < details.length; k += 1) {
           const text = toCleanString(details[k]);
@@ -555,6 +679,9 @@ async function handlePut(context, req, weekParam) {
         const points = toNullableInt(question.points) ?? 1;
         const answer = questionType === 'input' ? toNullableString(question.answer) : null;
         const correctIndex = questionType === 'mcq' ? toNullableInt(question.correctIndex) : null;
+        const questionData = buildQuestionData(question);
+        const questionValidation =
+          question.validation && typeof question.validation === 'object' ? question.validation : null;
 
         const questionResult = await new sql.Request(transaction)
           .input('assessmentId', sql.Int, assessmentId)
@@ -564,6 +691,13 @@ async function handlePut(context, req, weekParam) {
           .input('answer', sql.NVarChar(sql.MAX), answer)
           .input('points', sql.Int, points)
           .input('correctIndex', sql.Int, correctIndex)
+          .input('isRequired', sql.Bit, question.isRequired === false ? 0 : 1)
+          .input('dataJson', sql.NVarChar(sql.MAX), toNullableJson(questionData))
+          .input(
+            'validationJson',
+            sql.NVarChar(sql.MAX),
+            toNullableJson(questionValidation)
+          )
           .query(
             `INSERT INTO dbo.AssessmentQuestions (
                AssessmentId,
@@ -572,7 +706,10 @@ async function handlePut(context, req, weekParam) {
                QuestionText,
                Answer,
                Points,
-               CorrectIndex
+               CorrectIndex,
+               IsRequired,
+               DataJson,
+               ValidationJson
              )
              OUTPUT INSERTED.AssessmentQuestionId AS AssessmentQuestionId
              VALUES (
@@ -582,12 +719,18 @@ async function handlePut(context, req, weekParam) {
                @questionText,
                @answer,
                @points,
-               @correctIndex
+               @correctIndex,
+               @isRequired,
+               @dataJson,
+               @validationJson
              );`
           );
 
         const questionId = questionResult.recordset[0]?.AssessmentQuestionId;
-        const choices = Array.isArray(question.choices) ? question.choices : [];
+        let choices = Array.isArray(question.choices) ? question.choices : [];
+        if (!choices.length && Array.isArray(question.items)) {
+          choices = question.items;
+        }
 
         for (let j = 0; j < choices.length; j += 1) {
           const text = toCleanString(choices[j]);

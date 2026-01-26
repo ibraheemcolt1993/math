@@ -219,6 +219,65 @@
   z-index: 10;
 }
 
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.text-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.table-editor-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.table-editor {
+  border: 1px dashed rgba(148,163,184,.6);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(248,250,252,.7);
+}
+
+.table-editor-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.table-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--table-cols), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.match-pairs {
+  display: grid;
+  gap: 10px;
+}
+
+.match-pair-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .match-pair-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .action-menu.open {
   display: grid;
   gap: 4px;
