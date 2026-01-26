@@ -316,20 +316,24 @@ async function createCertificateImage(type) {
     throw new Error('html2canvas not available');
   }
   if (!elements.paper) throw new Error('Certificate not ready');
+  const isPng = type === 'png';
+  const backgroundColor = '#ffffff';
   document.body.classList.add('cert-exporting');
   document.documentElement.classList.add('cert-exporting');
   let stage;
+  let clone;
   let canvas;
   try {
     await waitForAssetsReady();
     const exportStage = buildExportStage();
     stage = exportStage.stage;
+    clone = exportStage.clone;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    canvas = await renderCanvas(stage, {
+    canvas = await renderCanvas(clone, {
       scale: 2,
       width: EXPORT_SIZE,
       height: EXPORT_SIZE,
-      backgroundColor: null
+      backgroundColor
     });
   } finally {
     stage?.remove();
@@ -337,7 +341,6 @@ async function createCertificateImage(type) {
     document.documentElement.classList.remove('cert-exporting');
   }
 
-  const isPng = type === 'png';
   const mime = isPng ? 'image/png' : 'image/jpeg';
   const quality = isPng ? 1 : 0.92;
 
