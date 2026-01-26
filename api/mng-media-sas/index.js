@@ -1,3 +1,5 @@
+const path = require('path');
+const { randomUUID } = require('crypto');
 const {
   BlobServiceClient,
   StorageSharedKeyCredential,
@@ -7,7 +9,14 @@ const {
 const { readJson } = require('../_shared/parse');
 const { ok, badRequest, methodNotAllowed, response } = require('../_shared/http');
 
-const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
+const EXT_BY_TYPE = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif'
+};
 
 function isInvalidName(name) {
   return (
@@ -18,6 +27,14 @@ function isInvalidName(name) {
     name.startsWith('/') ||
     name.includes(':')
   );
+}
+
+function sanitizeFileName(name) {
+  const base = name.split('/').pop().split('\\').pop();
+  return base
+    .replace(/[^a-zA-Z0-9.\-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '');
 }
 
 function parseConnectionString(connectionString) {
@@ -35,6 +52,21 @@ function parseConnectionString(connectionString) {
   };
 }
 
+function buildBlobName(week, fileName, contentType) {
+  const safeName = sanitizeFileName(fileName || '') || 'image';
+  const extFromName = path.extname(safeName).toLowerCase();
+  const extension = ALLOWED_EXTENSIONS.has(extFromName)
+    ? extFromName
+    : EXT_BY_TYPE[contentType?.toLowerCase()];
+  if (!extension) {
+    return null;
+  }
+  const base = extFromName ? safeName.slice(0, -extFromName.length) : safeName;
+  const trimmedBase = base || 'image';
+  const finalName = `${trimmedBase}${extension}`;
+  return `week-${week}/${randomUUID()}-${finalName}`;
+}
+
 module.exports = async function (context, req) {
   if (req.method !== 'POST') {
     context.res = methodNotAllowed();
@@ -47,31 +79,29 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  const contentType = typeof payload.contentType === 'string' ? payload.contentType.trim() : '';
-  const extensionIndex = name.lastIndexOf('.');
-  const extension = extensionIndex >= 0 ? name.slice(extensionIndex).toLowerCase() : '';
+  const legacyName = typeof payload.name === 'string' ? payload.name.trim() : '';
+  const legacyType = typeof payload.contentType === 'string' ? payload.contentType.trim() : '';
+  const useLegacy = legacyName && legacyType && !payload.files;
 
-  if (isInvalidName(name)) {
-    context.res = badRequest('Invalid blob name.');
-    return;
-  }
+  const week = Number(payload.week);
+  const files = Array.isArray(payload.files) ? payload.files : [];
 
-  if (!ALLOWED_EXTENSIONS.includes(extension)) {
-    context.res = badRequest('Invalid file extension.');
-    return;
-  }
+  if (!useLegacy) {
+    if (!Number.isInteger(week)) {
+      context.res = badRequest('week must be a valid integer.');
+      return;
+    }
 
-  if (!contentType.startsWith('image/')) {
-    context.res = badRequest('Invalid content type.');
-    return;
+    if (!files.length) {
+      context.res = badRequest('files must be a non-empty array.');
+      return;
+    }
   }
 
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const containerName = process.env.BLOB_CONTAINER;
-  const expiresMinutes = Number(process.env.SAS_EXP_MINUTES) || 15;
+  const containerName = process.env.AZURE_STORAGE_CONTAINER || 'media';
 
-  if (!connectionString || !containerName) {
+  if (!connectionString) {
     context.res = response(500, { ok: false, error: 'Missing storage configuration.' });
     return;
   }
@@ -86,25 +116,83 @@ module.exports = async function (context, req) {
     const credential = new StorageSharedKeyCredential(accountName, accountKey);
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     const containerClient = blobServiceClient.getContainerClient(containerName);
-    const blobClient = containerClient.getBlockBlobClient(name);
+    const uploadExpiresOn = new Date(Date.now() + 10 * 60 * 1000);
+    const readExpiresOn = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
-    const expiresOn = new Date(Date.now() + expiresMinutes * 60 * 1000);
-    const sasToken = generateBlobSASQueryParameters(
-      {
-        containerName,
-        blobName: name,
-        permissions: BlobSASPermissions.parse('cw'),
-        expiresOn
-      },
-      credential
-    ).toString();
+    if (useLegacy) {
+      if (isInvalidName(legacyName)) {
+        context.res = badRequest('Invalid blob name.');
+        return;
+      }
+      if (!legacyType.startsWith('image/')) {
+        context.res = badRequest('Invalid content type.');
+        return;
+      }
+      const legacyBlobClient = containerClient.getBlockBlobClient(legacyName);
+      const uploadSas = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName: legacyName,
+          permissions: BlobSASPermissions.parse('cw'),
+          expiresOn: uploadExpiresOn
+        },
+        credential
+      ).toString();
 
-    context.res = ok({
-      ok: true,
-      uploadUrl: `${blobClient.url}?${sasToken}`,
-      publicUrl: blobClient.url,
-      blobName: name
+      context.res = ok({
+        ok: true,
+        uploadUrl: `${legacyBlobClient.url}?${uploadSas}`,
+        publicUrl: legacyBlobClient.url,
+        blobName: legacyName
+      });
+      return;
+    }
+
+    const items = files.map((file) => {
+      const name = typeof file?.name === 'string' ? file.name.trim() : '';
+      const contentType = typeof file?.type === 'string' ? file.type.trim() : '';
+
+      if (isInvalidName(name)) {
+        throw new Error('Invalid file name.');
+      }
+
+      if (!contentType.startsWith('image/')) {
+        throw new Error('Invalid content type.');
+      }
+
+      const blobName = buildBlobName(week, name, contentType);
+      if (!blobName) {
+        throw new Error('Invalid file extension.');
+      }
+
+      const blobClient = containerClient.getBlockBlobClient(blobName);
+      const uploadSas = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName,
+          permissions: BlobSASPermissions.parse('cw'),
+          expiresOn: uploadExpiresOn
+        },
+        credential
+      ).toString();
+      const readSas = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName,
+          permissions: BlobSASPermissions.parse('r'),
+          expiresOn: readExpiresOn
+        },
+        credential
+      ).toString();
+
+      return {
+        blobName,
+        uploadUrl: `${blobClient.url}?${uploadSas}`,
+        readUrl: `${blobClient.url}?${readSas}`
+      };
     });
+
+    context.res = ok({ container: containerName, items });
   } catch (error) {
     context.res = response(500, { ok: false, error: error.message });
   }
