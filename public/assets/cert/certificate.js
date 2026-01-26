@@ -141,6 +141,23 @@ function showNoticeTemporary(message, timeout = 2600) {
   }, timeout);
 }
 
+function disableExportActions(message) {
+  if (message) {
+    showNotice(message);
+  }
+  [elements.btnPng, elements.btnJpg, elements.btnShare].forEach((button) => {
+    if (!button) return;
+    button.disabled = true;
+    button.setAttribute('aria-disabled', 'true');
+  });
+}
+
+function ensureHtml2CanvasReady() {
+  if (window.html2canvas) return true;
+  disableExportActions('ميزة التصدير غير متاحة حاليًا. حدّث الصفحة أو تواصل مع الدعم.');
+  return false;
+}
+
 async function resolveCertificateData() {
   const session = readJson(LS_STUDENT_SESSION);
   const lastCertificate = readJson(LS_LAST_CERTIFICATE);
@@ -295,6 +312,9 @@ function buildExportStage() {
 }
 
 async function createCertificateImage(type) {
+  if (!ensureHtml2CanvasReady()) {
+    throw new Error('html2canvas not available');
+  }
   if (!elements.paper) throw new Error('Certificate not ready');
   let stage;
   let canvas;
@@ -327,6 +347,7 @@ async function createCertificateImage(type) {
 
 async function downloadCertificate(type) {
   hideNotice();
+  if (!ensureHtml2CanvasReady()) return;
   try {
     const { blob, file } = await createCertificateImage(type);
     showNoticeTemporary('تم تجهيز الصورة ✅');
@@ -347,6 +368,7 @@ async function downloadCertificate(type) {
 
 async function shareCertificate() {
   hideNotice();
+  if (!ensureHtml2CanvasReady()) return;
   const shareText = `شهادة إتمام للطالب/ة ${certState.fullName} - البطاقة ${certState.seq} - ${certState.certNumber}`;
   const shareUrl = window.location.href;
 
@@ -388,6 +410,7 @@ async function init() {
 
   showCertificateState();
   renderCertificate({ session: resolved.session, payload: resolved.payload });
+  ensureHtml2CanvasReady();
 }
 
 function initZoomWatcher() {
