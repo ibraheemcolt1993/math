@@ -1,20 +1,15 @@
 import { showToast } from '../ui/toast.js';
+import { initEngine } from '../lesson/engine.js';
 
 const elements = {
   cardTitle: document.getElementById('cardTitle'),
   cardSubtitle: document.getElementById('cardSubtitle'),
   saveStatus: document.getElementById('saveStatus'),
-  sectionsList: document.getElementById('sectionsList'),
-  editorContent: document.getElementById('editorContent'),
+  editorContent: document.getElementById('builderEdit'),
+  previewPanel: document.getElementById('builderPreview'),
   btnSave: document.getElementById('btnSave'),
-  btnAddConcept: document.getElementById('btnAddConcept'),
-  btnAddItem: document.getElementById('btnAddItem'),
-  btnAddImage: document.getElementById('btnAddImage'),
-  btnAddQuestion: document.getElementById('btnAddQuestion'),
-  btnPreview: document.getElementById('btnPreview'),
-  btnFab: document.getElementById('btnFab'),
-  mobileSheet: document.getElementById('mobileSheet'),
   btnBack: document.getElementById('btnBack'),
+  previewToggle: document.getElementById('previewToggle'),
   confirmLeave: document.getElementById('confirmLeave'),
   btnCloseLeave: document.getElementById('btnCloseLeave'),
   btnCancelLeave: document.getElementById('btnCancelLeave'),
@@ -24,7 +19,11 @@ const elements = {
   imageEditorThumb: document.getElementById('imageEditorThumb'),
   btnCloseImageEditor: document.getElementById('btnCloseImageEditor'),
   btnCancelImageEdit: document.getElementById('btnCancelImageEdit'),
-  btnApplyImageEdit: document.getElementById('btnApplyImageEdit')
+  btnApplyImageEdit: document.getElementById('btnApplyImageEdit'),
+  previewLessonTitle: document.getElementById('lessonTitle'),
+  previewLessonStudent: document.getElementById('lessonStudent'),
+  previewLessonWeek: document.getElementById('lessonWeek'),
+  previewLessonContent: document.getElementById('lessonContent')
 };
 
 const state = {
@@ -35,10 +34,13 @@ const state = {
   prerequisites: [],
   concepts: [],
   assessment: { title: '', description: '', questions: [] },
-  activeSection: 'goals',
   dirty: false,
   saving: false,
-  pendingNavigation: null
+  pendingNavigation: null,
+  previewEnabled: false,
+  openMenu: null,
+  pendingDelete: null,
+  pendingAdd: null
 };
 
 const imageEditorState = {
@@ -65,6 +67,7 @@ function escapeHtml(value) {
 function setDirty(value = true) {
   state.dirty = value;
   updateSaveStatus();
+  if (state.previewEnabled) schedulePreviewRender();
 }
 
 function setSaving(value = true) {
@@ -111,402 +114,716 @@ function setHeader() {
   updateSaveStatus();
 }
 
+function normalizePrerequisites(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  return rawList.map((item) => {
+    if (typeof item === 'string') {
+      return { type: 'input', text: item, choices: [] };
+    }
+    if (item && typeof item === 'object') {
+      return {
+        type: item.type === 'mcq' ? 'mcq' : 'input',
+        text: item.text || '',
+        choices: Array.isArray(item.choices) ? item.choices : []
+      };
+    }
+    return { type: 'input', text: '', choices: [] };
+  });
+}
+
+function normalizeFlowItem(item = {}) {
+  const rawType = normalizeValue(item.type).toLowerCase() || 'explain';
+  let type = rawType;
+  if (type === 'example2') type = 'example';
+  if (type === 'mistake') type = 'nonexample';
+  if (['goal', 'note', 'detail'].includes(type)) type = 'explain';
+  if (type === 'question') type = item.choices?.length ? 'mcq' : 'input';
+  if (type === 'ordering') type = 'input';
+
+  return {
+    ...item,
+    type,
+    text: item.text || '',
+    title: item.title || '',
+    description: item.description || '',
+    url: item.url || '',
+    answer: item.answer || '',
+    correctIndex: item.correctIndex ?? 0,
+    solution: item.solution || '',
+    details: Array.isArray(item.details) ? item.details : [],
+    hints: Array.isArray(item.hints) ? item.hints : [],
+    choices: Array.isArray(item.choices) ? item.choices : [],
+    imageFiles: Array.isArray(item.imageFiles) ? item.imageFiles : []
+  };
+}
+
+function syncGoalsWithConcepts() {
+  const concepts = Array.isArray(state.concepts) ? state.concepts : [];
+
+  if (concepts.length > state.goals.length) {
+    const extra = concepts.slice(state.goals.length);
+    extra.forEach((concept) => {
+      state.goals.push(concept.title || 'هدف إضافي');
+    });
+  }
+
+  if (state.goals.length > concepts.length) {
+    const needed = state.goals.length - concepts.length;
+    for (let i = 0; i < needed; i += 1) {
+      concepts.push({ title: '', flow: [] });
+    }
+  }
+
+  state.goals.forEach((goal, index) => {
+    if (!concepts[index]) concepts[index] = { title: '', flow: [] };
+    concepts[index].title = goal || `هدف ${index + 1}`;
+    concepts[index].flow = (concepts[index].flow || []).map((item) => normalizeFlowItem(item));
+  });
+
+  state.concepts = concepts;
+}
+
 function buildSections() {
   const sections = [
-    { id: 'goals', label: 'ترحيب / ماذا سنتعلم' },
-    { id: 'prerequisites', label: 'متطلب سابق' }
+    { id: 'goals', label: 'ماذا سنتعلم اليوم', index: 1 },
+    { id: 'prereq', label: 'المتطلبات السابقة', index: 2 }
   ];
 
-  state.concepts.forEach((concept, index) => {
+  state.goals.forEach((goal, idx) => {
     sections.push({
-      id: `concept-${index}`,
-      label: `المفهوم ${index + 1}: ${concept.title || 'بدون عنوان'}`
+      id: `goal-${idx}`,
+      label: goal || `هدف ${idx + 1}`,
+      index: idx + 3
     });
   });
 
-  sections.push({ id: 'assessment', label: 'التقييم النهائي' });
+  sections.push({
+    id: 'assessment',
+    label: 'اختبر نفسي',
+    index: sections.length + 1
+  });
+
   return sections;
 }
 
-function renderSidebar() {
+function renderActionMenu({ id, actions, align = 'left' }) {
+  const isOpen = state.openMenu === id;
+  return `
+    <div class="action-menu ${isOpen ? 'open' : ''}" data-menu="${id}" style="${align === 'right' ? 'right:0;left:auto;' : ''}">
+      ${actions
+        .map(
+          (action) =>
+            `<button type="button" data-action="${action.action}" ${action.data || ''}>${action.label}</button>`
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+function renderConfirmInline({ id, message }) {
+  if (!state.pendingDelete || state.pendingDelete.id !== id) return '';
+  return `
+    <div class="confirm-inline">
+      <span>${escapeHtml(message)}</span>
+      <div class="row">
+        <button class="btn btn-primary btn-sm" data-action="confirm-delete" data-target="${id}">تأكيد</button>
+        <button class="btn btn-outline btn-sm" data-action="cancel-delete">إلغاء</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderGoalsSection(sectionIndex) {
+  const goals = state.goals.length ? state.goals : [''];
+  const sectionId = 'goals-section';
+
+  return `
+    <section class="section-card" data-section="goals">
+      <div class="section-header">
+        <div class="section-title">
+          <div>
+            <span class="section-index">${sectionIndex}</span>
+            <h2>ماذا سنتعلم اليوم</h2>
+          </div>
+          <p class="section-subtitle">أضف أهداف التعلم، وسيتم إنشاء قسم تلقائي لكل هدف.</p>
+        </div>
+        <div class="section-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        </div>
+      </div>
+      <div class="section-body">
+        ${goals
+          .map((goal, index) => {
+            const menuId = `goal-menu-${index}`;
+            return `
+              <div class="goal-row" draggable="true" data-drag-type="goal" data-goal-index="${index}">
+                <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                <input class="input" data-goal-index="${index}" value="${escapeHtml(goal)}" placeholder="اكتب الهدف هنا" />
+                <div class="section-actions">
+                  <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
+                  ${renderActionMenu({
+                    id: menuId,
+                    actions: [
+                      { action: 'duplicate-goal', label: 'تكرار', data: `data-goal-index="${index}"` },
+                      { action: 'move-goal-up', label: 'تحريك للأعلى', data: `data-goal-index="${index}"` },
+                      { action: 'move-goal-down', label: 'تحريك للأسفل', data: `data-goal-index="${index}"` },
+                      { action: 'delete-goal', label: 'حذف', data: `data-goal-index="${index}"` }
+                    ]
+                  })}
+                </div>
+              </div>
+              ${renderConfirmInline({
+                id: `${sectionId}-${index}`,
+                message: 'سيتم حذف الهدف وقسمه المرتبط. هل أنت متأكد؟'
+              })}
+            `;
+          })
+          .join('')}
+      </div>
+      <div class="section-footer">
+        <button class="section-add" data-action="add-goal">+ إضافة هدف</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderPrereqSection(sectionIndex) {
+  const prereqs = state.prerequisites.length ? state.prerequisites : [];
+  return `
+    <section class="section-card" data-section="prereq">
+      <div class="section-header">
+        <div class="section-title">
+          <div>
+            <span class="section-index">${sectionIndex}</span>
+            <h2>المتطلبات السابقة</h2>
+          </div>
+          <p class="section-subtitle">أسئلة تمهيدية خفيفة لقياس المعرفة السابقة بدون تصحيح.</p>
+        </div>
+        <div class="section-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        </div>
+      </div>
+      <div class="section-body">
+        ${prereqs
+          .map((item, index) => {
+            const menuId = `prereq-menu-${index}`;
+            const type = item.type === 'mcq' ? 'mcq' : 'input';
+            return `
+              <div class="block-card" draggable="true" data-drag-type="prereq" data-prereq-index="${index}">
+                <div class="block-header">
+                  <span class="block-label">سؤال تمهيدي</span>
+                  <div class="block-actions">
+                    <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                    <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
+                    ${renderActionMenu({
+                      id: menuId,
+                      actions: [
+                        { action: 'duplicate-prereq', label: 'تكرار', data: `data-prereq-index="${index}"` },
+                        { action: 'move-prereq-up', label: 'تحريك للأعلى', data: `data-prereq-index="${index}"` },
+                        { action: 'move-prereq-down', label: 'تحريك للأسفل', data: `data-prereq-index="${index}"` },
+                        { action: 'delete-prereq', label: 'حذف', data: `data-prereq-index="${index}"` }
+                      ]
+                    })}
+                  </div>
+                </div>
+                <div class="block-body">
+                  <div class="field">
+                    <label class="label">نوع السؤال</label>
+                    <select class="input" data-prereq-field="type" data-prereq-index="${index}">
+                      <option value="input" ${type === 'input' ? 'selected' : ''}>إجابة قصيرة</option>
+                      <option value="mcq" ${type === 'mcq' ? 'selected' : ''}>اختيار متعدد</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label class="label">نص السؤال</label>
+                    <input class="input" data-prereq-field="text" data-prereq-index="${index}" value="${escapeHtml(item.text || '')}" />
+                  </div>
+                  ${type === 'mcq'
+                    ? `
+                      <div class="field">
+                        <label class="label">الاختيارات</label>
+                        ${renderInlineList({
+                          list: item.choices || [],
+                          listType: 'prereq-choices',
+                          index
+                        })}
+                      </div>
+                    `
+                    : ''}
+                </div>
+                ${renderConfirmInline({
+                  id: `prereq-${index}`,
+                  message: 'هل تريد حذف هذا السؤال التمهيدي؟'
+                })}
+              </div>
+            `;
+          })
+          .join('')}
+        ${prereqs.length ? '' : '<p class="muted">لا توجد أسئلة تمهيدية بعد.</p>'}
+      </div>
+      <div class="section-footer">
+        <button class="section-add" data-action="add-prereq">+ إضافة سؤال تمهيدي</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderGoalSection(sectionIndex, goalIndex) {
+  const goalText = state.goals[goalIndex] || `هدف ${goalIndex + 1}`;
+  const concept = state.concepts[goalIndex] || { flow: [] };
+  const flow = concept.flow || [];
+  const menuId = `goal-section-menu-${goalIndex}`;
+  const addId = `goal-section-add-${goalIndex}`;
+
+  const addOptions = `
+    <div class="section-add-options" data-add-menu="${addId}">
+      <button type="button" data-action="add-block" data-block-type="explain" data-goal-index="${goalIndex}">شرح</button>
+      <button type="button" data-action="add-block" data-block-type="example" data-goal-index="${goalIndex}">مثال</button>
+      <button type="button" data-action="add-block" data-block-type="nonexample" data-goal-index="${goalIndex}">لا مثال</button>
+      <button type="button" data-action="add-block" data-block-type="image" data-goal-index="${goalIndex}">صورة</button>
+      <button type="button" data-action="add-block" data-block-type="input" data-goal-index="${goalIndex}">سؤال تدريبي (إجابة قصيرة)</button>
+      <button type="button" data-action="add-block" data-block-type="mcq" data-goal-index="${goalIndex}">سؤال تدريبي (اختيار متعدد)</button>
+      <button type="button" data-action="add-block" data-block-type="hintlist" data-goal-index="${goalIndex}">قائمة تلميحات</button>
+    </div>
+  `;
+
+  return `
+    <section class="section-card" data-section="goal" draggable="true" data-drag-type="section" data-goal-index="${goalIndex}">
+      <div class="section-header">
+        <div class="section-title">
+          <div>
+            <span class="section-index">${sectionIndex}</span>
+            <h2 data-goal-title="${goalIndex}">${escapeHtml(goalText)}</h2>
+          </div>
+          <p class="section-subtitle">قسم مرتبط مباشرة بالهدف أعلاه ويتم تحديث عنوانه تلقائيًا.</p>
+        </div>
+        <div class="section-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+          <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
+          ${renderActionMenu({
+            id: menuId,
+            actions: [
+              { action: 'duplicate-goal-section', label: 'تكرار القسم', data: `data-goal-index="${goalIndex}"` },
+              { action: 'move-goal-section-up', label: 'تحريك للأعلى', data: `data-goal-index="${goalIndex}"` },
+              { action: 'move-goal-section-down', label: 'تحريك للأسفل', data: `data-goal-index="${goalIndex}"` },
+              { action: 'delete-goal-section', label: 'حذف القسم', data: `data-goal-index="${goalIndex}"` }
+            ]
+          })}
+        </div>
+      </div>
+      <div class="section-body" data-goal-body="${goalIndex}">
+        ${flow.length
+          ? flow.map((item, flowIndex) => renderFlowBlock(item, goalIndex, flowIndex)).join('')
+          : '<p class="muted">ابدأ بإضافة شرح أو مثال أو سؤال تدريبي.</p>'}
+      </div>
+      <div class="section-footer">
+        <button class="section-add" data-action="toggle-add" data-add-id="${addId}" data-goal-index="${goalIndex}">+ إضافة محتوى</button>
+        ${state.pendingAdd === addId ? addOptions : ''}
+      </div>
+      ${renderConfirmInline({
+        id: `goal-section-${goalIndex}`,
+        message: 'سيتم حذف الهدف وقسمه ومحتواه. هل أنت متأكد؟'
+      })}
+    </section>
+  `;
+}
+
+function renderFlowBlock(item, conceptIndex, flowIndex) {
+  const type = item.type || 'explain';
+  const menuId = `flow-menu-${conceptIndex}-${flowIndex}`;
+
+  const labelMap = {
+    explain: 'شرح',
+    example: 'مثال',
+    nonexample: 'لا مثال',
+    image: 'صورة',
+    input: 'سؤال تدريبي',
+    mcq: 'سؤال تدريبي',
+    hintlist: 'تلميحات'
+  };
+
+  const questionTypeLabel = type === 'mcq' ? 'اختيار متعدد' : 'إجابة قصيرة';
+
+  return `
+    <div class="block-card" draggable="true" data-drag-type="block" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">
+      <div class="block-header">
+        <span class="block-label">${labelMap[type] || 'محتوى'}${['input', 'mcq'].includes(type) ? ` — ${questionTypeLabel}` : ''}</span>
+        <div class="block-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+          <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
+          ${renderActionMenu({
+            id: menuId,
+            actions: [
+              { action: 'duplicate-block', label: 'تكرار', data: `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"` },
+              { action: 'move-block-up', label: 'تحريك للأعلى', data: `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"` },
+              { action: 'move-block-down', label: 'تحريك للأسفل', data: `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"` },
+              { action: 'delete-block', label: 'حذف', data: `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"` }
+            ]
+          })}
+        </div>
+      </div>
+      <div class="block-body">
+        ${renderFlowBlockBody(item, conceptIndex, flowIndex)}
+      </div>
+      ${renderConfirmInline({
+        id: `flow-${conceptIndex}-${flowIndex}`,
+        message: 'هل تريد حذف هذا المحتوى؟'
+      })}
+    </div>
+  `;
+}
+
+function renderFlowBlockBody(item, conceptIndex, flowIndex) {
+  const type = item.type || 'explain';
+
+  if (type === 'image') {
+    const isUploading = Boolean(item.uploading);
+    const imageFiles = Array.isArray(item.imageFiles) ? item.imageFiles : [];
+    const uploadStatus = item.uploadStatus;
+
+    return `
+      <div class="field">
+        <label class="label">رفع صورة</label>
+        <div class="item-row">
+          <input class="input" type="file" accept="image/*" multiple data-image-file="true" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''} />
+          <button class="btn btn-outline btn-sm" data-action="upload-image" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''}>
+            ${isUploading ? 'جاري الرفع...' : 'رفع بعد التعديل'}
+          </button>
+        </div>
+        <div class="help">سيتم فتح محرر الصور قبل الرفع. يمكن اختيار أكثر من صورة.</div>
+        ${imageFiles.length ? `
+          <div class="image-gallery">
+            ${imageFiles.map((entry) => `
+              <div class="image-thumb">
+                <img src="${escapeHtml(entry.editedUrl || entry.previewUrl || '')}" alt="معاينة" />
+                <div class="image-thumb-actions">
+                  <button class="btn btn-ghost btn-sm small-btn" data-action="edit-image" data-image-id="${entry.id}" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">تعديل</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        ${uploadStatus ? `<div class="upload-progress">${escapeHtml(uploadStatus)}</div>` : ''}
+        ${item.url ? `
+          <div class="image-preview">
+            <img src="${escapeHtml(item.url)}" alt="صورة البطاقة" loading="lazy" />
+            <button class="btn btn-ghost btn-sm small-btn" data-action="copy-image-url" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">نسخ الرابط</button>
+          </div>
+        ` : ''}
+      </div>
+      <div class="field">
+        <label class="label">وصف للصورة (اختياري)</label>
+        <textarea class="input" rows="2" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+      </div>
+    `;
+  }
+
+  if (type === 'input' || type === 'mcq') {
+    return `
+      <div class="field">
+        <label class="label">نص السؤال</label>
+        <input class="input" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.text || '')}" />
+      </div>
+      ${type === 'input'
+        ? `
+          <div class="field">
+            <label class="label">الإجابة النموذجية (اختياري)</label>
+            <input class="input" data-block-field="answer" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.answer || '')}" />
+          </div>
+        `
+        : `
+          <div class="field">
+            <label class="label">الاختيارات</label>
+            ${renderInlineList({
+              list: item.choices || [],
+              listType: 'flow-choices',
+              index: flowIndex,
+              conceptIndex
+            })}
+          </div>
+          <div class="field">
+            <label class="label">رقم الإجابة الصحيحة</label>
+            <input class="input ltr" data-block-field="correctIndex" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.correctIndex ?? 0)}" />
+          </div>
+        `}
+      <div class="field">
+        <details class="hint-panel" open>
+          <summary>تلميحات السؤال</summary>
+          ${renderInlineList({
+            list: item.hints || [],
+            listType: 'flow-hints',
+            index: flowIndex,
+            conceptIndex
+          })}
+        </details>
+      </div>
+    `;
+  }
+
+  if (type === 'hintlist') {
+    return `
+      <div class="field">
+        <label class="label">قائمة التلميحات</label>
+        ${renderInlineList({
+          list: item.details || [],
+          listType: 'flow-detail',
+          index: flowIndex,
+          conceptIndex
+        })}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="field">
+      <label class="label">النص</label>
+      <textarea class="input" rows="3" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+    </div>
+  `;
+}
+
+function renderAssessmentSection(sectionIndex) {
+  const assessment = state.assessment || { title: '', description: '', questions: [] };
+  const questions = assessment.questions.length ? assessment.questions : [];
+  const totalPoints = questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0);
+
+  return `
+    <section class="section-card" data-section="assessment">
+      <div class="section-header">
+        <div class="section-title">
+          <div>
+            <span class="section-index">${sectionIndex}</span>
+            <h2>اختبر نفسي</h2>
+          </div>
+          <p class="section-subtitle">أسئلة التقييم النهائي مع احتساب مجموع الدرجات (الإجمالي: ${totalPoints}).</p>
+        </div>
+        <div class="section-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field">
+          <label class="label">عنوان التقييم</label>
+          <input class="input" data-assessment-field="title" value="${escapeHtml(assessment.title || '')}" />
+        </div>
+        <div class="field">
+          <label class="label">الوصف</label>
+          <textarea class="input" rows="2" data-assessment-field="description">${escapeHtml(assessment.description || '')}</textarea>
+        </div>
+        ${questions.length
+          ? questions.map((question, index) => renderAssessmentQuestion(question, index)).join('')
+          : '<p class="muted">لا توجد أسئلة تقييم بعد.</p>'}
+      </div>
+      <div class="section-footer">
+        <button class="section-add" data-action="add-assessment-question">+ إضافة سؤال تقييم</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderAssessmentQuestion(question, index) {
+  const type = question.type === 'mcq' ? 'mcq' : 'input';
+  const menuId = `assessment-menu-${index}`;
+
+  return `
+    <div class="block-card" draggable="true" data-drag-type="assessment" data-question-index="${index}">
+      <div class="block-header">
+        <span class="block-label">سؤال تقييم ${index + 1}</span>
+        <div class="block-actions">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+          <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
+          ${renderActionMenu({
+            id: menuId,
+            actions: [
+              { action: 'duplicate-assessment', label: 'تكرار', data: `data-question-index="${index}"` },
+              { action: 'move-assessment-up', label: 'تحريك للأعلى', data: `data-question-index="${index}"` },
+              { action: 'move-assessment-down', label: 'تحريك للأسفل', data: `data-question-index="${index}"` },
+              { action: 'delete-assessment', label: 'حذف', data: `data-question-index="${index}"` }
+            ]
+          })}
+        </div>
+      </div>
+      <div class="block-body">
+        <div class="field">
+          <label class="label">نوع السؤال</label>
+          <select class="input" data-question-field="type" data-question-index="${index}">
+            <option value="mcq" ${type === 'mcq' ? 'selected' : ''}>اختيار متعدد</option>
+            <option value="input" ${type === 'input' ? 'selected' : ''}>إجابة نصية</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label">نص السؤال</label>
+          <input class="input" data-question-field="text" data-question-index="${index}" value="${escapeHtml(question.text || '')}" />
+        </div>
+        <div class="field">
+          <label class="label">الدرجة</label>
+          <input class="input ltr" data-question-field="points" data-question-index="${index}" value="${escapeHtml(question.points ?? 1)}" />
+        </div>
+        ${type === 'input'
+          ? `
+            <div class="field">
+              <label class="label">الإجابة النموذجية</label>
+              <input class="input" data-question-field="answer" data-question-index="${index}" value="${escapeHtml(question.answer || '')}" />
+            </div>
+          `
+          : `
+            <div class="field">
+              <label class="label">الاختيارات</label>
+              ${renderInlineList({ list: question.choices || [], listType: 'assessment-choices', index })}
+            </div>
+            <div class="field">
+              <label class="label">رقم الإجابة الصحيحة</label>
+              <input class="input ltr" data-question-field="correctIndex" data-question-index="${index}" value="${escapeHtml(question.correctIndex ?? 0)}" />
+            </div>
+          `}
+      </div>
+      ${renderConfirmInline({
+        id: `assessment-${index}`,
+        message: 'هل تريد حذف سؤال التقييم؟'
+      })}
+    </div>
+  `;
+}
+
+function renderInlineList({ list, listType, index, conceptIndex }) {
+  const items = list.length ? list : [''];
+  return `
+    <div class="inline-list">
+      ${items
+        .map(
+          (value, idx) => `
+            <div class="inline-list-row">
+              <input class="input" data-list-type="${listType}" data-list-index="${index}" data-list-item-index="${idx}" ${
+                conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
+              } value="${escapeHtml(value)}" />
+              <button class="btn btn-ghost btn-sm" data-action="delete-list-item" data-list-type="${listType}" data-list-index="${index}" data-list-item-index="${idx}" ${
+                conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
+              }>حذف</button>
+            </div>
+          `
+        )
+        .join('')}
+      <button class="btn btn-ghost btn-sm" data-action="add-list-item" data-list-type="${listType}" data-list-index="${index}" ${
+        conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
+      }>إضافة</button>
+    </div>
+  `;
+}
+
+function renderEditor() {
+  syncGoalsWithConcepts();
   const sections = buildSections();
-  elements.sectionsList.innerHTML = sections
+
+  elements.editorContent.innerHTML = sections
     .map((section) => {
-      const activeClass = section.id === state.activeSection ? 'active' : '';
-      return `<li class="sidebar-item ${activeClass}" data-section="${section.id}">${escapeHtml(section.label)}</li>`;
+      if (section.id === 'goals') return renderGoalsSection(section.index);
+      if (section.id === 'prereq') return renderPrereqSection(section.index);
+      if (section.id === 'assessment') return renderAssessmentSection(section.index);
+      if (section.id.startsWith('goal-')) {
+        const goalIndex = Number(section.id.split('-')[1]);
+        return renderGoalSection(section.index, goalIndex);
+      }
+      return '';
     })
     .join('');
 }
 
-function renderGoalsSection() {
-  const items = state.goals.length ? state.goals : [''];
-  elements.editorContent.innerHTML = `
-    <h2 class="section-title">ترحيب / ماذا سنتعلم</h2>
-    ${items
-      .map(
-        (goal, index) => `
-          <div class="item-card" data-index="${index}">
-            <label class="label">هدف ${index + 1}</label>
-            <input class="input" data-type="goal" data-index="${index}" value="${escapeHtml(goal)}" />
-            <div class="item-actions">
-              <button class="btn btn-ghost btn-sm small-btn" data-action="move-goal" data-direction="up" data-index="${index}">⬆️</button>
-              <button class="btn btn-ghost btn-sm small-btn" data-action="move-goal" data-direction="down" data-index="${index}">⬇️</button>
-              <button class="btn btn-ghost btn-sm small-btn" data-action="delete-goal" data-index="${index}">حذف</button>
-            </div>
-          </div>
-        `
-      )
-      .join('')}
-    <button class="btn btn-outline" data-action="add-goal">إضافة هدف</button>
-  `;
-}
-
-function renderPrereqSection() {
-  const items = state.prerequisites.length ? state.prerequisites : [''];
-  elements.editorContent.innerHTML = `
-    <h2 class="section-title">المتطلب السابق</h2>
-    ${items
-      .map(
-        (item, index) => `
-          <div class="item-card" data-index="${index}">
-            <label class="label">متطلب ${index + 1}</label>
-            <input class="input" data-type="prereq" data-index="${index}" value="${escapeHtml(item)}" />
-            <div class="item-actions">
-              <button class="btn btn-ghost btn-sm small-btn" data-action="move-prereq" data-direction="up" data-index="${index}">⬆️</button>
-              <button class="btn btn-ghost btn-sm small-btn" data-action="move-prereq" data-direction="down" data-index="${index}">⬇️</button>
-              <button class="btn btn-ghost btn-sm small-btn" data-action="delete-prereq" data-index="${index}">حذف</button>
-            </div>
-          </div>
-        `
-      )
-      .join('')}
-    <button class="btn btn-outline" data-action="add-prereq">إضافة متطلب</button>
-  `;
-}
-
-function renderStringList(list, listName, conceptIndex, flowIndex) {
-  const items = list.length ? list : [''];
-  return `
-    <div class="inline-input">
-      ${items
-        .map(
-          (value, index) => `
-            <div class="row" style="margin-top: 6px;">
-              <input class="input" data-list="${listName}" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" data-index="${index}" value="${escapeHtml(value)}" />
-              <button class="btn btn-ghost btn-sm small-btn" data-action="delete-list-item" data-list="${listName}" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" data-index="${index}">حذف</button>
-            </div>
-          `
-        )
-        .join('')}
-      <button class="btn btn-ghost btn-sm small-btn" data-action="add-list-item" data-list="${listName}" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">إضافة</button>
-    </div>
-  `;
-}
-
-function renderHintsList(list, conceptIndex, flowIndex) {
-  const items = Array.isArray(list) ? [...list] : [];
-  while (items.length < 3) items.push('');
-  return renderStringList(items, 'hints', conceptIndex, flowIndex);
-}
-
-function renderFlowItem(item, conceptIndex, flowIndex) {
-  const type = item.type || 'goal';
-  const showText = ['goal', 'explain', 'question', 'note', 'mcq'].includes(type);
-  const showTitle = ['explain', 'video'].includes(type);
-  const showDescription = ['explain', 'note', 'image', 'video'].includes(type);
-  const showUrl = ['image', 'video'].includes(type);
-  const showAnswer = ['question', 'mcq'].includes(type);
-  const showChoices = type === 'mcq';
-  const showHints = ['question', 'mcq', 'ordering'].includes(type);
-  const isUploading = Boolean(item.uploading);
-  const imageFiles = Array.isArray(item.imageFiles) ? item.imageFiles : [];
-  const uploadStatus = item.uploadStatus;
-
-  return `
-    <div class="item-card" data-flow-index="${flowIndex}">
-      <div class="flow-badge">${escapeHtml(type.toUpperCase())}</div>
-      <div class="field">
-        <label class="label">نوع العنصر</label>
-        <select class="input" data-field="type" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">
-          <option value="goal" ${type === 'goal' ? 'selected' : ''}>هدف</option>
-          <option value="explain" ${type === 'explain' ? 'selected' : ''}>شرح</option>
-          <option value="question" ${type === 'question' ? 'selected' : ''}>سؤال نصي</option>
-          <option value="note" ${type === 'note' ? 'selected' : ''}>ملاحظة</option>
-          <option value="image" ${type === 'image' ? 'selected' : ''}>صورة</option>
-          <option value="video" ${type === 'video' ? 'selected' : ''}>فيديو</option>
-          <option value="mcq" ${type === 'mcq' ? 'selected' : ''}>اختيار متعدد</option>
-        </select>
-      </div>
-      ${showTitle ? `
-        <div class="field">
-          <label class="label">العنوان</label>
-          <input class="input" data-field="title" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.title || '')}" />
-        </div>
-      ` : ''}
-      ${showText ? `
-        <div class="field">
-          <label class="label">النص</label>
-          <textarea class="input" rows="3" data-field="text" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
-        </div>
-      ` : ''}
-      ${showDescription ? `
-        <div class="field">
-          <label class="label">الوصف</label>
-          <textarea class="input" rows="2" data-field="description" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.description || '')}</textarea>
-        </div>
-      ` : ''}
-      ${showUrl ? `
-        <div class="field">
-          <label class="label">الرابط</label>
-          <input class="input ltr" data-field="url" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.url || '')}" />
-        </div>
-      ` : ''}
-      ${type === 'image' ? `
-        <div class="field">
-          <label class="label">رفع صورة</label>
-          <div class="item-row">
-            <input class="input" type="file" accept="image/*" multiple data-image-file="true" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''} />
-            <button class="btn btn-outline btn-sm" data-action="upload-image" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" ${isUploading ? 'disabled' : ''}>
-              ${isUploading ? 'جاري الرفع...' : 'رفع'}
-            </button>
-          </div>
-          <div class="help">يمكن اختيار أكثر من صورة في نفس المرة.</div>
-          ${imageFiles.length ? `
-            <div class="image-gallery">
-              ${imageFiles.map((entry) => `
-                <div class="image-thumb">
-                  <img src="${escapeHtml(entry.editedUrl || entry.previewUrl || '')}" alt="معاينة" />
-                  <div class="image-thumb-actions">
-                    <button class="btn btn-ghost btn-sm small-btn" data-action="edit-image" data-image-id="${entry.id}" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">تعديل</button>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-          ${uploadStatus ? `<div class="upload-progress">${escapeHtml(uploadStatus)}</div>` : ''}
-          ${item.url ? `
-            <div class="image-preview">
-              <img src="${escapeHtml(item.url)}" alt="صورة البطاقة" loading="lazy" />
-              <button class="btn btn-ghost btn-sm small-btn" data-action="copy-image-url" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">نسخ الرابط</button>
-            </div>
-          ` : ''}
-        </div>
-      ` : ''}
-      ${showAnswer ? `
-        <div class="field">
-          <label class="label">الإجابة</label>
-          <input class="input" data-field="answer" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.answer || '')}" />
-        </div>
-      ` : ''}
-      ${showChoices ? `
-        <div class="field">
-          <label class="label">الاختيارات</label>
-          ${renderStringList(item.choices || [], 'choices', conceptIndex, flowIndex)}
-        </div>
-        <div class="field">
-          <label class="label">رقم الإجابة الصحيحة</label>
-          <input class="input ltr" data-field="correctIndex" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.correctIndex ?? 0)}" />
-        </div>
-      ` : ''}
-      <div class="field">
-        <label class="label">تفاصيل إضافية</label>
-        ${renderStringList(item.details || [], 'details', conceptIndex, flowIndex)}
-      </div>
-      ${showHints ? `
-        <div class="field">
-          <details class="hint-panel">
-            <summary>تلميحات السؤال</summary>
-            ${renderHintsList(item.hints || [], conceptIndex, flowIndex)}
-          </details>
-        </div>
-      ` : ''}
-      <div class="field">
-        <label class="label">الحل</label>
-        <input class="input" data-field="solution" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.solution || '')}" />
-      </div>
-      <div class="item-actions">
-        <button class="btn btn-ghost btn-sm small-btn" data-action="move-flow" data-direction="up" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">⬆️</button>
-        <button class="btn btn-ghost btn-sm small-btn" data-action="move-flow" data-direction="down" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">⬇️</button>
-        <button class="btn btn-ghost btn-sm small-btn" data-action="delete-flow" data-concept-index="${conceptIndex}" data-flow-index="${flowIndex}">حذف</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderConceptSection(index) {
-  const concept = state.concepts[index] || { title: '', flow: [] };
-  const flowItems = concept.flow.length ? concept.flow : [];
-
-  elements.editorContent.innerHTML = `
-    <h2 class="section-title">المفهوم ${index + 1}</h2>
-    <div class="field">
-      <label class="label">عنوان المفهوم</label>
-      <input class="input" data-concept-title="true" data-concept-index="${index}" value="${escapeHtml(concept.title || '')}" />
-    </div>
-    <div>
-      ${flowItems.length
-        ? flowItems.map((item, flowIndex) => renderFlowItem(item, index, flowIndex)).join('')
-        : '<p class="muted">لا يوجد عناصر بعد. استخدم زر إضافة عنصر.</p>'}
-    </div>
-  `;
-}
-
-function renderAssessmentSection() {
-  const assessment = state.assessment || { title: '', description: '', questions: [] };
-  const questions = assessment.questions.length ? assessment.questions : [];
-
-  elements.editorContent.innerHTML = `
-    <h2 class="section-title">التقييم النهائي</h2>
-    <div class="field">
-      <label class="label">عنوان التقييم</label>
-      <input class="input" data-assessment-field="title" value="${escapeHtml(assessment.title || '')}" />
-    </div>
-    <div class="field">
-      <label class="label">الوصف</label>
-      <textarea class="input" rows="2" data-assessment-field="description">${escapeHtml(assessment.description || '')}</textarea>
-    </div>
-    <div>
-      ${questions.length
-        ? questions
-            .map(
-              (question, index) => `
-                <div class="item-card" data-question-index="${index}">
-                  <label class="label">سؤال ${index + 1}</label>
-                  <select class="input" data-question-field="type" data-question-index="${index}">
-                    <option value="mcq" ${question.type === 'mcq' ? 'selected' : ''}>اختيار متعدد</option>
-                    <option value="input" ${question.type === 'input' ? 'selected' : ''}>إجابة نصية</option>
-                  </select>
-                  <input class="input" data-question-field="text" data-question-index="${index}" value="${escapeHtml(question.text || '')}" />
-                  <div class="row" style="margin-top: 8px;">
-                    <input class="input ltr" data-question-field="points" data-question-index="${index}" value="${escapeHtml(question.points ?? 1)}" />
-                    <span class="small muted">الدرجة</span>
-                  </div>
-                  ${question.type === 'input' ? `
-                    <div class="field">
-                      <label class="label">الإجابة النموذجية</label>
-                      <input class="input" data-question-field="answer" data-question-index="${index}" value="${escapeHtml(question.answer || '')}" />
-                    </div>
-                  ` : `
-                    <div class="field">
-                      <label class="label">الاختيارات</label>
-                      ${renderAssessmentChoices(question.choices || [], index)}
-                    </div>
-                    <div class="field">
-                      <label class="label">رقم الإجابة الصحيحة</label>
-                      <input class="input ltr" data-question-field="correctIndex" data-question-index="${index}" value="${escapeHtml(question.correctIndex ?? 0)}" />
-                    </div>
-                  `}
-                  <div class="item-actions">
-                    <button class="btn btn-ghost btn-sm small-btn" data-action="move-question" data-direction="up" data-question-index="${index}">⬆️</button>
-                    <button class="btn btn-ghost btn-sm small-btn" data-action="move-question" data-direction="down" data-question-index="${index}">⬇️</button>
-                    <button class="btn btn-ghost btn-sm small-btn" data-action="delete-question" data-question-index="${index}">حذف</button>
-                  </div>
-                </div>
-              `
-            )
-            .join('')
-        : '<p class="muted">لا يوجد أسئلة بعد. استخدم زر إضافة سؤال.</p>'}
-    </div>
-  `;
-}
-
-function renderAssessmentChoices(list, questionIndex) {
-  const items = list.length ? list : [''];
-  return `
-    <div class="inline-input">
-      ${items
-        .map(
-          (value, index) => `
-            <div class="row" style="margin-top: 6px;">
-              <input class="input" data-question-choice="true" data-question-index="${questionIndex}" data-index="${index}" value="${escapeHtml(value)}" />
-              <button class="btn btn-ghost btn-sm small-btn" data-action="delete-question-choice" data-question-index="${questionIndex}" data-index="${index}">حذف</button>
-            </div>
-          `
-        )
-        .join('')}
-      <button class="btn btn-ghost btn-sm small-btn" data-action="add-question-choice" data-question-index="${questionIndex}">إضافة اختيار</button>
-    </div>
-  `;
-}
-
-function renderPanel() {
-  if (state.activeSection === 'goals') {
-    renderGoalsSection();
-  } else if (state.activeSection === 'prerequisites') {
-    renderPrereqSection();
-  } else if (state.activeSection.startsWith('concept-')) {
-    const index = Number(state.activeSection.split('-')[1]);
-    renderConceptSection(index);
-  } else if (state.activeSection === 'assessment') {
-    renderAssessmentSection();
+function closeMenus() {
+  if (state.openMenu) {
+    state.openMenu = null;
+    renderEditor();
   }
 }
 
-function renderAll() {
-  renderSidebar();
-  renderPanel();
+function toggleMenu(menuId) {
+  state.openMenu = state.openMenu === menuId ? null : menuId;
+  renderEditor();
 }
 
-function moveItem(array, fromIndex, direction) {
+function setPendingDelete(id) {
+  state.pendingDelete = { id };
+  renderEditor();
+}
+
+function clearPendingDelete() {
+  state.pendingDelete = null;
+  renderEditor();
+}
+
+function createFlowItem(type) {
+  if (type === 'image') {
+    return {
+      type: 'image',
+      text: '',
+      url: '',
+      imageFiles: []
+    };
+  }
+  if (type === 'mcq') {
+    return {
+      type: 'mcq',
+      text: '',
+      choices: [''],
+      correctIndex: 0,
+      hints: []
+    };
+  }
+  if (type === 'input') {
+    return {
+      type: 'input',
+      text: '',
+      answer: '',
+      hints: []
+    };
+  }
+  if (type === 'hintlist') {
+    return {
+      type: 'hintlist',
+      details: ['']
+    };
+  }
+
+  return {
+    type,
+    text: ''
+  };
+}
+
+function moveItem(list, fromIndex, direction) {
   const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
-  if (toIndex < 0 || toIndex >= array.length) return;
-  const item = array.splice(fromIndex, 1)[0];
-  array.splice(toIndex, 0, item);
-  setDirty(true);
-  renderAll();
-}
-
-function handleSidebarClick(event) {
-  const item = event.target.closest('.sidebar-item');
-  if (!item) return;
-  state.activeSection = item.dataset.section;
-  renderAll();
+  if (toIndex < 0 || toIndex >= list.length) return;
+  const item = list.splice(fromIndex, 1)[0];
+  list.splice(toIndex, 0, item);
 }
 
 function handleEditorInput(event) {
   const target = event.target;
-  if (target.dataset.type === 'goal') {
-    const index = Number(target.dataset.index);
-    state.goals[index] = target.value;
-    setDirty(true);
-    return;
-  }
 
-  if (target.dataset.type === 'prereq') {
-    const index = Number(target.dataset.index);
-    state.prerequisites[index] = target.value;
-    setDirty(true);
-    return;
-  }
-
-  if (target.dataset.conceptTitle) {
-    const index = Number(target.dataset.conceptIndex);
-    state.concepts[index].title = target.value;
-    setDirty(true);
-    renderSidebar();
-    return;
-  }
-
-  if (target.dataset.field) {
-    const conceptIndex = Number(target.dataset.conceptIndex);
-    const flowIndex = Number(target.dataset.flowIndex);
-    const field = target.dataset.field;
-    state.concepts[conceptIndex].flow[flowIndex][field] = target.value;
-    setDirty(true);
+  if (target.dataset.prereqField) {
+    const index = Number(target.dataset.prereqIndex);
+    const field = target.dataset.prereqField;
+    if (!state.prerequisites[index]) return;
     if (field === 'type') {
-      renderPanel();
+      state.prerequisites[index].type = target.value === 'mcq' ? 'mcq' : 'input';
+      if (state.prerequisites[index].type === 'mcq' && !state.prerequisites[index].choices?.length) {
+        state.prerequisites[index].choices = [''];
+      }
+      setDirty(true);
+      renderEditor();
+      return;
     }
+    state.prerequisites[index][field] = target.value;
+    setDirty(true);
     return;
   }
 
-  if (target.dataset.list) {
-    const conceptIndex = Number(target.dataset.conceptIndex);
+  if (target.dataset.blockField) {
+    const conceptIndex = Number(target.dataset.goalIndex);
     const flowIndex = Number(target.dataset.flowIndex);
-    const listName = target.dataset.list;
-    const index = Number(target.dataset.index);
-    const list = state.concepts[conceptIndex].flow[flowIndex][listName] || [];
-    list[index] = target.value;
-    state.concepts[conceptIndex].flow[flowIndex][listName] = list;
+    const field = target.dataset.blockField;
+    const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
+    if (!item) return;
+    item[field] = target.value;
     setDirty(true);
     return;
   }
@@ -521,18 +838,71 @@ function handleEditorInput(event) {
   if (target.dataset.questionField) {
     const index = Number(target.dataset.questionIndex);
     const field = target.dataset.questionField;
-    state.assessment.questions[index][field] = target.value;
+    const question = state.assessment.questions[index];
+    if (!question) return;
+    if (field === 'type') {
+      question.type = target.value === 'mcq' ? 'mcq' : 'input';
+      if (question.type === 'mcq' && !question.choices?.length) {
+        question.choices = [''];
+      }
+      setDirty(true);
+      renderEditor();
+      return;
+    }
+    question[field] = target.value;
     setDirty(true);
-    renderPanel();
-    return;
   }
 
-  if (target.dataset.questionChoice) {
-    const questionIndex = Number(target.dataset.questionIndex);
-    const index = Number(target.dataset.index);
-    const choices = state.assessment.questions[questionIndex].choices || [];
-    choices[index] = target.value;
-    state.assessment.questions[questionIndex].choices = choices;
+  if (target.dataset.listType) {
+    const listType = target.dataset.listType;
+    const listIndex = Number(target.dataset.listIndex);
+    const itemIndex = Number(target.dataset.listItemIndex);
+    const value = target.value;
+
+    if (listType === 'prereq-choices') {
+      const item = state.prerequisites[listIndex];
+      if (!item) return;
+      item.choices = item.choices || [];
+      item.choices[itemIndex] = value;
+      setDirty(true);
+      return;
+    }
+
+    if (listType === 'assessment-choices') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.choices = question.choices || [];
+      question.choices[itemIndex] = value;
+      setDirty(true);
+      return;
+    }
+
+    const conceptIndex = Number(target.dataset.goalIndex);
+    const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
+    if (!flowItem) return;
+    if (listType === 'flow-choices') {
+      flowItem.choices = flowItem.choices || [];
+      flowItem.choices[itemIndex] = value;
+    } else if (listType === 'flow-hints') {
+      flowItem.hints = flowItem.hints || [];
+      flowItem.hints[itemIndex] = value;
+    } else if (listType === 'flow-detail') {
+      flowItem.details = flowItem.details || [];
+      flowItem.details[itemIndex] = value;
+    }
+    setDirty(true);
+  }
+
+  if (target.dataset.goalIndex != null && !target.dataset.blockField && !target.dataset.listType) {
+    const index = Number(target.dataset.goalIndex);
+    state.goals[index] = target.value;
+    if (state.concepts[index]) {
+      state.concepts[index].title = target.value || `هدف ${index + 1}`;
+    }
+    const goalTitle = elements.editorContent.querySelector(`[data-goal-title="${index}"]`);
+    if (goalTitle) {
+      goalTitle.textContent = target.value || `هدف ${index + 1}`;
+    }
     setDirty(true);
   }
 }
@@ -540,100 +910,266 @@ function handleEditorInput(event) {
 function handleEditorChange(event) {
   const target = event.target;
   if (!target.dataset.imageFile) return;
-  const conceptIndex = Number(target.dataset.conceptIndex);
+  const conceptIndex = Number(target.dataset.goalIndex);
   const flowIndex = Number(target.dataset.flowIndex);
   const flowItem = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
   if (!flowItem) return;
   const files = Array.from(target.files || []);
   flowItem.imageFiles = files.map((file) => createImageEntry(file));
+  if (flowItem.imageFiles.length) {
+    openImageEditor(conceptIndex, flowIndex, flowItem.imageFiles[0].id);
+  }
   setDirty(true);
-  renderPanel();
+  renderEditor();
 }
 
 function handleEditorClick(event) {
-  const button = event.target.closest('button[data-action]');
+  const menuButton = event.target.closest('[data-action="toggle-menu"]');
+  if (menuButton) {
+    toggleMenu(menuButton.dataset.menuId);
+    return;
+  }
+
+  const button = event.target.closest('[data-action]');
   if (!button) return;
 
   const action = button.dataset.action;
 
+  if (action === 'cancel-delete') {
+    clearPendingDelete();
+    return;
+  }
+
+  if (action === 'confirm-delete') {
+    const targetId = button.dataset.target;
+    handleConfirmDelete(targetId);
+    return;
+  }
+
+  if (action === 'toggle-add') {
+    const addId = button.dataset.addId;
+    state.pendingAdd = state.pendingAdd === addId ? null : addId;
+    renderEditor();
+    return;
+  }
+
   if (action === 'add-goal') {
     state.goals.push('');
+    state.concepts.push({ title: '', flow: [] });
     setDirty(true);
-    renderPanel();
+    renderEditor();
     return;
   }
 
   if (action === 'delete-goal') {
-    const index = Number(button.dataset.index);
-    state.goals.splice(index, 1);
-    setDirty(true);
-    renderPanel();
+    const index = Number(button.dataset.goalIndex);
+    setPendingDelete(`goals-section-${index}`);
     return;
   }
 
-  if (action === 'move-goal') {
-    const index = Number(button.dataset.index);
-    moveItem(state.goals, index, button.dataset.direction);
+  if (action === 'duplicate-goal') {
+    const index = Number(button.dataset.goalIndex);
+    const goalText = state.goals[index] || 'هدف جديد';
+    state.goals.splice(index + 1, 0, `${goalText} (نسخة)`);
+    const conceptClone = JSON.parse(JSON.stringify(state.concepts[index] || { title: '', flow: [] }));
+    state.concepts.splice(index + 1, 0, conceptClone);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'move-goal-up' || action === 'move-goal-down') {
+    const index = Number(button.dataset.goalIndex);
+    moveItem(state.goals, index, action === 'move-goal-up' ? 'up' : 'down');
+    moveItem(state.concepts, index, action === 'move-goal-up' ? 'up' : 'down');
+    setDirty(true);
+    renderEditor();
     return;
   }
 
   if (action === 'add-prereq') {
-    state.prerequisites.push('');
+    state.prerequisites.push({ type: 'input', text: '', choices: [] });
     setDirty(true);
-    renderPanel();
+    renderEditor();
     return;
   }
 
   if (action === 'delete-prereq') {
-    const index = Number(button.dataset.index);
-    state.prerequisites.splice(index, 1);
-    setDirty(true);
-    renderPanel();
+    const index = Number(button.dataset.prereqIndex);
+    setPendingDelete(`prereq-${index}`);
     return;
   }
 
-  if (action === 'move-prereq') {
-    const index = Number(button.dataset.index);
-    moveItem(state.prerequisites, index, button.dataset.direction);
+  if (action === 'duplicate-prereq') {
+    const index = Number(button.dataset.prereqIndex);
+    const cloned = JSON.parse(JSON.stringify(state.prerequisites[index] || { type: 'input', text: '', choices: [] }));
+    state.prerequisites.splice(index + 1, 0, cloned);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'move-prereq-up' || action === 'move-prereq-down') {
+    const index = Number(button.dataset.prereqIndex);
+    moveItem(state.prerequisites, index, action === 'move-prereq-up' ? 'up' : 'down');
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'add-block') {
+    const goalIndex = Number(button.dataset.goalIndex);
+    const type = button.dataset.blockType;
+    state.concepts[goalIndex].flow.push(createFlowItem(type));
+    state.pendingAdd = null;
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'delete-goal-section') {
+    const index = Number(button.dataset.goalIndex);
+    setPendingDelete(`goal-section-${index}`);
+    return;
+  }
+
+  if (action === 'duplicate-goal-section') {
+    const index = Number(button.dataset.goalIndex);
+    const goalText = state.goals[index] || 'هدف جديد';
+    const conceptClone = JSON.parse(JSON.stringify(state.concepts[index] || { title: '', flow: [] }));
+    state.goals.splice(index + 1, 0, `${goalText} (نسخة)`);
+    state.concepts.splice(index + 1, 0, conceptClone);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'move-goal-section-up' || action === 'move-goal-section-down') {
+    const index = Number(button.dataset.goalIndex);
+    const direction = action === 'move-goal-section-up' ? 'up' : 'down';
+    moveItem(state.goals, index, direction);
+    moveItem(state.concepts, index, direction);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'delete-block') {
+    const goalIndex = Number(button.dataset.goalIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    setPendingDelete(`flow-${goalIndex}-${flowIndex}`);
+    return;
+  }
+
+  if (action === 'duplicate-block') {
+    const goalIndex = Number(button.dataset.goalIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    const cloned = JSON.parse(JSON.stringify(state.concepts[goalIndex].flow[flowIndex]));
+    state.concepts[goalIndex].flow.splice(flowIndex + 1, 0, cloned);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'move-block-up' || action === 'move-block-down') {
+    const goalIndex = Number(button.dataset.goalIndex);
+    const flowIndex = Number(button.dataset.flowIndex);
+    moveItem(state.concepts[goalIndex].flow, flowIndex, action === 'move-block-up' ? 'up' : 'down');
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'add-assessment-question') {
+    state.assessment.questions.push({ type: 'mcq', text: '', points: 1, choices: [''], correctIndex: 0, answer: '' });
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'delete-assessment') {
+    const index = Number(button.dataset.questionIndex);
+    setPendingDelete(`assessment-${index}`);
+    return;
+  }
+
+  if (action === 'duplicate-assessment') {
+    const index = Number(button.dataset.questionIndex);
+    const cloned = JSON.parse(JSON.stringify(state.assessment.questions[index]));
+    state.assessment.questions.splice(index + 1, 0, cloned);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (action === 'move-assessment-up' || action === 'move-assessment-down') {
+    const index = Number(button.dataset.questionIndex);
+    moveItem(state.assessment.questions, index, action === 'move-assessment-up' ? 'up' : 'down');
+    setDirty(true);
+    renderEditor();
     return;
   }
 
   if (action === 'add-list-item') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
-    const flowIndex = Number(button.dataset.flowIndex);
-    const listName = button.dataset.list;
-    const list = state.concepts[conceptIndex].flow[flowIndex][listName] || [];
-    list.push('');
-    state.concepts[conceptIndex].flow[flowIndex][listName] = list;
+    const listType = button.dataset.listType;
+    const listIndex = Number(button.dataset.listIndex);
+    if (listType === 'prereq-choices') {
+      const item = state.prerequisites[listIndex];
+      item.choices = item.choices || [];
+      item.choices.push('');
+    } else if (listType === 'assessment-choices') {
+      const question = state.assessment.questions[listIndex];
+      question.choices = question.choices || [];
+      question.choices.push('');
+    } else {
+      const conceptIndex = Number(button.dataset.goalIndex);
+      const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
+      if (!flowItem) return;
+      if (listType === 'flow-choices') {
+        flowItem.choices = flowItem.choices || [];
+        flowItem.choices.push('');
+      } else if (listType === 'flow-hints') {
+        flowItem.hints = flowItem.hints || [];
+        flowItem.hints.push('');
+      } else if (listType === 'flow-detail') {
+        flowItem.details = flowItem.details || [];
+        flowItem.details.push('');
+      }
+    }
     setDirty(true);
-    renderPanel();
+    renderEditor();
     return;
   }
 
   if (action === 'delete-list-item') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
-    const flowIndex = Number(button.dataset.flowIndex);
-    const listName = button.dataset.list;
-    const index = Number(button.dataset.index);
-    const list = state.concepts[conceptIndex].flow[flowIndex][listName] || [];
-    list.splice(index, 1);
-    state.concepts[conceptIndex].flow[flowIndex][listName] = list;
-    setDirty(true);
-    renderPanel();
-    return;
-  }
+    const listType = button.dataset.listType;
+    const listIndex = Number(button.dataset.listIndex);
+    const itemIndex = Number(button.dataset.listItemIndex);
 
-  if (action === 'delete-flow') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
-    const flowIndex = Number(button.dataset.flowIndex);
-    state.concepts[conceptIndex].flow.splice(flowIndex, 1);
+    if (listType === 'prereq-choices') {
+      const item = state.prerequisites[listIndex];
+      if (!item) return;
+      item.choices.splice(itemIndex, 1);
+    } else if (listType === 'assessment-choices') {
+      const question = state.assessment.questions[listIndex];
+      if (!question) return;
+      question.choices.splice(itemIndex, 1);
+    } else {
+      const conceptIndex = Number(button.dataset.goalIndex);
+      const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
+      if (!flowItem) return;
+      if (listType === 'flow-choices') flowItem.choices.splice(itemIndex, 1);
+      if (listType === 'flow-hints') flowItem.hints.splice(itemIndex, 1);
+      if (listType === 'flow-detail') flowItem.details.splice(itemIndex, 1);
+    }
+
     setDirty(true);
-    renderPanel();
+    renderEditor();
     return;
   }
 
   if (action === 'copy-image-url') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
+    const conceptIndex = Number(button.dataset.goalIndex);
     const flowIndex = Number(button.dataset.flowIndex);
     const url = state.concepts?.[conceptIndex]?.flow?.[flowIndex]?.url;
     if (!url) {
@@ -648,7 +1184,7 @@ function handleEditorClick(event) {
   }
 
   if (action === 'edit-image') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
+    const conceptIndex = Number(button.dataset.goalIndex);
     const flowIndex = Number(button.dataset.flowIndex);
     const imageId = button.dataset.imageId;
     openImageEditor(conceptIndex, flowIndex, imageId);
@@ -656,94 +1192,143 @@ function handleEditorClick(event) {
   }
 
   if (action === 'upload-image') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
+    const conceptIndex = Number(button.dataset.goalIndex);
     const flowIndex = Number(button.dataset.flowIndex);
     handleImageUpload(conceptIndex, flowIndex);
     return;
   }
+}
 
-  if (action === 'move-flow') {
-    const conceptIndex = Number(button.dataset.conceptIndex);
-    const flowIndex = Number(button.dataset.flowIndex);
-    moveItem(state.concepts[conceptIndex].flow, flowIndex, button.dataset.direction);
-    return;
-  }
-
-  if (action === 'delete-question') {
-    const index = Number(button.dataset.questionIndex);
+function handleConfirmDelete(targetId) {
+  if (targetId.startsWith('goals-section-')) {
+    const index = Number(targetId.split('-').pop());
+    state.goals.splice(index, 1);
+    state.concepts.splice(index, 1);
+  } else if (targetId.startsWith('goal-section-')) {
+    const index = Number(targetId.split('-').pop());
+    state.goals.splice(index, 1);
+    state.concepts.splice(index, 1);
+  } else if (targetId.startsWith('prereq-')) {
+    const index = Number(targetId.split('-').pop());
+    state.prerequisites.splice(index, 1);
+  } else if (targetId.startsWith('flow-')) {
+    const [, conceptIndex, flowIndex] = targetId.split('-');
+    state.concepts[Number(conceptIndex)].flow.splice(Number(flowIndex), 1);
+  } else if (targetId.startsWith('assessment-')) {
+    const index = Number(targetId.split('-').pop());
     state.assessment.questions.splice(index, 1);
-    setDirty(true);
-    renderPanel();
-    return;
   }
 
-  if (action === 'move-question') {
-    const index = Number(button.dataset.questionIndex);
-    moveItem(state.assessment.questions, index, button.dataset.direction);
-    return;
-  }
-
-  if (action === 'add-question-choice') {
-    const questionIndex = Number(button.dataset.questionIndex);
-    const choices = state.assessment.questions[questionIndex].choices || [];
-    choices.push('');
-    state.assessment.questions[questionIndex].choices = choices;
-    setDirty(true);
-    renderPanel();
-    return;
-  }
-
-  if (action === 'delete-question-choice') {
-    const questionIndex = Number(button.dataset.questionIndex);
-    const index = Number(button.dataset.index);
-    const choices = state.assessment.questions[questionIndex].choices || [];
-    choices.splice(index, 1);
-    state.assessment.questions[questionIndex].choices = choices;
-    setDirty(true);
-    renderPanel();
-  }
+  state.pendingDelete = null;
+  setDirty(true);
+  renderEditor();
 }
 
-function addConcept() {
-  state.concepts.push({ title: '', flow: [] });
-  state.activeSection = `concept-${state.concepts.length - 1}`;
-  setDirty(true);
-  renderAll();
+function handleDragStart(event) {
+  const draggable = event.target.closest('[draggable="true"]');
+  if (!draggable) return;
+  const dragType = draggable.dataset.dragType;
+  const payload = {
+    type: dragType,
+    goalIndex: draggable.dataset.goalIndex,
+    flowIndex: draggable.dataset.flowIndex,
+    prereqIndex: draggable.dataset.prereqIndex,
+    questionIndex: draggable.dataset.questionIndex
+  };
+  event.dataTransfer.setData('text/plain', JSON.stringify(payload));
+  event.dataTransfer.effectAllowed = 'move';
 }
 
-function addFlowItem(type = 'question') {
-  if (!state.activeSection.startsWith('concept-')) {
-    showToast('تنبيه', 'اختر مفهومًا لإضافة عنصر.', 'warning');
-    return;
-  }
-  const index = Number(state.activeSection.split('-')[1]);
-  state.concepts[index].flow.push({ type, text: '', title: '', description: '', url: '', answer: '', correctIndex: 0, solution: '', details: [], hints: [], choices: [] });
-  setDirty(true);
-  renderPanel();
+function handleDragOver(event) {
+  const target = event.target.closest('[draggable="true"]');
+  if (!target) return;
+  event.preventDefault();
+  target.classList.add('drag-over');
 }
 
-function addImageItem() {
-  if (!state.activeSection.startsWith('concept-')) {
-    showToast('تنبيه', 'اختر مفهومًا لإضافة صورة.', 'warning');
+function handleDragLeave(event) {
+  const target = event.target.closest('[draggable="true"]');
+  if (!target) return;
+  target.classList.remove('drag-over');
+}
+
+function handleDrop(event) {
+  const target = event.target.closest('[draggable="true"]');
+  if (!target) return;
+  event.preventDefault();
+  target.classList.remove('drag-over');
+
+  let payload;
+  try {
+    payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+  } catch (error) {
     return;
   }
-  const index = Number(state.activeSection.split('-')[1]);
-  state.concepts[index].flow.push({
-    type: 'image',
-    text: '',
-    title: '',
-    description: '',
-    url: '',
-    answer: '',
-    correctIndex: 0,
-    solution: '',
-    details: [],
-    hints: [],
-    choices: [],
-    imageFiles: []
-  });
-  setDirty(true);
-  renderPanel();
+
+  if (!payload || !payload.type) return;
+
+  if (payload.type === 'goal' && target.dataset.dragType === 'goal') {
+    const from = Number(payload.goalIndex);
+    const to = Number(target.dataset.goalIndex);
+    if (from === to) return;
+    const [goal] = state.goals.splice(from, 1);
+    const [concept] = state.concepts.splice(from, 1);
+    state.goals.splice(to, 0, goal);
+    state.concepts.splice(to, 0, concept);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (payload.type === 'section' && target.dataset.dragType === 'section') {
+    const from = Number(payload.goalIndex);
+    const to = Number(target.dataset.goalIndex);
+    if (from === to) return;
+    const [goal] = state.goals.splice(from, 1);
+    const [concept] = state.concepts.splice(from, 1);
+    state.goals.splice(to, 0, goal);
+    state.concepts.splice(to, 0, concept);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (payload.type === 'block' && target.dataset.dragType === 'block') {
+    const fromGoal = Number(payload.goalIndex);
+    const fromIndex = Number(payload.flowIndex);
+    const toGoal = Number(target.dataset.goalIndex);
+    const toIndex = Number(target.dataset.flowIndex);
+
+    if (fromGoal !== toGoal) return;
+    if (fromIndex === toIndex) return;
+    const list = state.concepts[fromGoal].flow;
+    const [item] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, item);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (payload.type === 'prereq' && target.dataset.dragType === 'prereq') {
+    const from = Number(payload.prereqIndex);
+    const to = Number(target.dataset.prereqIndex);
+    if (from === to) return;
+    const [item] = state.prerequisites.splice(from, 1);
+    state.prerequisites.splice(to, 0, item);
+    setDirty(true);
+    renderEditor();
+    return;
+  }
+
+  if (payload.type === 'assessment' && target.dataset.dragType === 'assessment') {
+    const from = Number(payload.questionIndex);
+    const to = Number(target.dataset.questionIndex);
+    if (from === to) return;
+    const [item] = state.assessment.questions.splice(from, 1);
+    state.assessment.questions.splice(to, 0, item);
+    setDirty(true);
+    renderEditor();
+  }
 }
 
 function createImageEntry(file) {
@@ -845,12 +1430,17 @@ async function handleImageUpload(conceptIndex, flowIndex) {
     return;
   }
 
+  const needsEdit = images.find((entry) => !entry.editedBlob && !entry.editedUrl);
+  if (needsEdit) {
+    showToast('تنبيه', 'رجاءً عدّل جميع الصور قبل الرفع.', 'warning');
+    openImageEditor(conceptIndex, flowIndex, needsEdit.id);
+    return;
+  }
+
   flowItem.uploading = true;
   flowItem.uploadStatus = 'جارٍ تجهيز الصور...';
-  renderPanel();
+  renderEditor();
 
-  // ملاحظة: يجب تفعيل CORS في Azure Storage للسماح بـ PUT/GET/HEAD/OPTIONS
-  // مع headers: x-ms-blob-type, content-type للـ origin الخاص بالتطبيق.
   const successes = [];
   const uploadEntries = images.map((entry) => {
     const blob = entry.editedBlob || entry.file;
@@ -873,7 +1463,7 @@ async function handleImageUpload(conceptIndex, flowIndex) {
       const entry = uploadEntries[i];
       const sasItem = items[i];
       flowItem.uploadStatus = `جارٍ رفع ${i + 1} من ${uploadEntries.length}...`;
-      renderPanel();
+      renderEditor();
       try {
         await uploadFileToBlob(sasItem.uploadUrl, entry.blob);
         successes.push(sasItem.readUrl);
@@ -897,15 +1487,7 @@ async function handleImageUpload(conceptIndex, flowIndex) {
       const newItems = rest.map((url) => ({
         type: 'image',
         text: '',
-        title: '',
-        description: '',
-        url,
-        answer: '',
-        correctIndex: 0,
-        solution: '',
-        details: [],
-        hints: [],
-        choices: []
+        url
       }));
       state.concepts[conceptIndex].flow.splice(insertIndex, 0, ...newItems);
     }
@@ -913,7 +1495,7 @@ async function handleImageUpload(conceptIndex, flowIndex) {
     showToast('نجاح', rest.length ? 'تم رفع الصور.' : 'تم رفع الصورة.', 'success');
   }
 
-  renderPanel();
+  renderEditor();
 }
 
 function openImageEditor(conceptIndex, flowIndex, imageId) {
@@ -1001,31 +1583,23 @@ function applyImageEdit() {
     entry.aspect = imageEditorState.aspect;
     setDirty(true);
     closeImageEditor();
-    renderPanel();
+    renderEditor();
     showToast('نجاح', 'تم تحديث الصورة.', 'success');
   }, outputType, quality);
 }
 
-function addQuestion() {
-  if (state.activeSection === 'assessment') {
-    const questions = state.assessment.questions || [];
-    questions.push({ type: 'mcq', text: '', points: 1, choices: [''], correctIndex: 0, answer: '' });
-    state.assessment.questions = questions;
-    setDirty(true);
-    renderPanel();
-    return;
-  }
-
-  addFlowItem('question');
-}
-
-async function saveContent() {
-  const payload = {
+function buildPayload() {
+  syncGoalsWithConcepts();
+  return {
     week: state.week,
     seq: state.seq,
     title: state.title,
     goals: state.goals.filter((goal) => normalizeValue(goal)),
-    prerequisites: state.prerequisites.filter((item) => normalizeValue(item)),
+    prerequisites: state.prerequisites.map((item) => ({
+      type: item.type === 'mcq' ? 'mcq' : 'input',
+      text: normalizeValue(item.text),
+      choices: (item.choices || []).filter((entry) => normalizeValue(entry))
+    })),
     concepts: state.concepts.map((concept) => ({
       title: normalizeValue(concept.title),
       flow: (concept.flow || []).map((item) => ({
@@ -1055,6 +1629,10 @@ async function saveContent() {
       }))
     }
   };
+}
+
+async function saveContent() {
+  const payload = buildPayload();
 
   try {
     setSaving(true);
@@ -1092,18 +1670,6 @@ function closeLeaveModal() {
   state.pendingNavigation = null;
 }
 
-function openMobileSheet() {
-  if (!elements.mobileSheet) return;
-  elements.mobileSheet.classList.remove('hidden');
-  elements.mobileSheet.setAttribute('aria-hidden', 'false');
-}
-
-function closeMobileSheet() {
-  if (!elements.mobileSheet) return;
-  elements.mobileSheet.classList.add('hidden');
-  elements.mobileSheet.setAttribute('aria-hidden', 'true');
-}
-
 function handleBackClick(event) {
   if (!state.dirty) return;
   event.preventDefault();
@@ -1112,23 +1678,51 @@ function handleBackClick(event) {
   });
 }
 
+let previewTimeout = null;
+function schedulePreviewRender() {
+  clearTimeout(previewTimeout);
+  previewTimeout = setTimeout(renderPreview, 200);
+}
+
+function renderPreview() {
+  if (!state.previewEnabled) return;
+  const data = buildPayload();
+  elements.previewLessonTitle.textContent = data.title || `بطاقة الأسبوع ${state.week}`;
+  elements.previewLessonStudent.textContent = 'طالب معاينة';
+  elements.previewLessonWeek.textContent = `week ${state.week}`;
+
+  initEngine({
+    week: state.week,
+    studentId: 'preview',
+    data,
+    mountEl: elements.previewLessonContent,
+    preview: true
+  });
+}
+
+function togglePreview(value) {
+  state.previewEnabled = value;
+  elements.previewPanel.classList.toggle('hidden', !value);
+  elements.previewPanel.setAttribute('aria-hidden', value ? 'false' : 'true');
+  elements.editorContent.classList.toggle('hidden', value);
+  if (value) {
+    renderPreview();
+  }
+}
+
 function bindEvents() {
-  elements.sectionsList.addEventListener('click', handleSidebarClick);
   elements.editorContent.addEventListener('input', handleEditorInput);
   elements.editorContent.addEventListener('change', handleEditorChange);
   elements.editorContent.addEventListener('click', handleEditorClick);
-  elements.btnAddConcept.addEventListener('click', addConcept);
-  elements.btnAddItem.addEventListener('click', () => addFlowItem('question'));
-  elements.btnAddImage.addEventListener('click', addImageItem);
-  elements.btnAddQuestion.addEventListener('click', addQuestion);
+  elements.editorContent.addEventListener('dragstart', handleDragStart);
+  elements.editorContent.addEventListener('dragover', handleDragOver);
+  elements.editorContent.addEventListener('dragleave', handleDragLeave);
+  elements.editorContent.addEventListener('drop', handleDrop);
+
   elements.btnSave.addEventListener('click', saveContent);
-  elements.btnPreview?.addEventListener('click', () => {
-    if (!state.week) return;
-    window.open(`/lesson.html?week=${encodeURIComponent(state.week)}`, '_blank');
-    showToast('تنبيه', 'تأكد من تسجيل طالب قبل المعاينة.', 'warning');
-  });
-  elements.btnFab?.addEventListener('click', () => openMobileSheet());
   elements.btnBack.addEventListener('click', handleBackClick);
+  elements.previewToggle?.addEventListener('change', (event) => togglePreview(event.target.checked));
+
   elements.btnCloseLeave.addEventListener('click', closeLeaveModal);
   elements.btnCancelLeave.addEventListener('click', closeLeaveModal);
   elements.confirmLeave.addEventListener('click', (event) => {
@@ -1140,20 +1734,6 @@ function bindEvents() {
       closeLeaveModal();
       next();
     }
-  });
-
-  elements.mobileSheet?.addEventListener('click', (event) => {
-    const action = event.target.closest('[data-sheet-action]')?.dataset?.sheetAction;
-    if (event.target.dataset?.close) {
-      closeMobileSheet();
-      return;
-    }
-    if (!action) return;
-    closeMobileSheet();
-    if (action === 'add-question') addFlowItem('question');
-    if (action === 'add-image') addImageItem();
-    if (action === 'add-section') addConcept();
-    if (action === 'add-item') addFlowItem('goal');
   });
 
   elements.imageEditor?.addEventListener('click', (event) => {
@@ -1196,6 +1776,18 @@ function bindEvents() {
   elements.btnCancelImageEdit?.addEventListener('click', closeImageEditor);
   elements.btnApplyImageEdit?.addEventListener('click', applyImageEdit);
 
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.action-menu') && !event.target.closest('[data-action="toggle-menu"]')) {
+      closeMenus();
+    }
+    if (!event.target.closest('[data-add-menu]') && !event.target.closest('[data-action="toggle-add"]')) {
+      if (state.pendingAdd) {
+        state.pendingAdd = null;
+        renderEditor();
+      }
+    }
+  });
+
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return;
     event.preventDefault();
@@ -1223,12 +1815,13 @@ async function init() {
     state.seq = data.seq;
     state.title = data.title || '';
     state.goals = Array.isArray(data.goals) ? data.goals : [];
-    state.prerequisites = Array.isArray(data.prerequisites) ? data.prerequisites : [];
+    state.prerequisites = normalizePrerequisites(data.prerequisites || []);
     state.concepts = Array.isArray(data.concepts) ? data.concepts : [];
     state.assessment = data.assessment || { title: '', description: '', questions: [] };
 
+    syncGoalsWithConcepts();
     setHeader();
-    renderAll();
+    renderEditor();
   } catch (error) {
     elements.editorContent.textContent = 'تعذر تحميل المحتوى.';
     showToast('خطأ', error.message || 'تعذر تحميل المحتوى.', 'error');

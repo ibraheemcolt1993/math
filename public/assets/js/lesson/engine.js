@@ -35,7 +35,7 @@ const STAGES = {
   ASSESSMENT: 'assessment',
 };
 
-export function initEngine({ week, studentId, data, mountEl }) {
+export function initEngine({ week, studentId, data, mountEl, preview = false }) {
   mountEl.innerHTML = '';
 
   let stage = STAGES.GOALS;
@@ -242,6 +242,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function saveProgress() {
+    if (preview) return;
     setStudentProgress(studentId, week, {
       stage,
       conceptIndex,
@@ -270,6 +271,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function applyResumeIfAvailable() {
+    if (preview) return;
     if (isCardDone(studentId, week)) return;
 
     const saved = getStudentProgress(studentId, week)?.progress;
@@ -308,6 +310,16 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function finishCard() {
+    if (preview) {
+      const completeEl = document.getElementById('lessonComplete');
+      if (completeEl) {
+        completeEl.classList.remove('hidden');
+        completeEl.removeAttribute('hidden');
+        completeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+
     // Persist completion
     markCardDone(studentId, week);
 
@@ -408,27 +420,48 @@ export function initEngine({ week, studentId, data, mountEl }) {
     `;
 
     const body = card.querySelector('.stage-body');
-    const list = document.createElement('ul');
-    list.className = 'goal-list prereq-list';
 
     if (prereqList.length) {
+      const list = document.createElement('div');
+      list.className = 'prereq-stack';
+
       prereqList.forEach((req, idx) => {
-        const item = document.createElement('li');
+        if (req.type === 'input' || req.type === 'mcq') {
+          const wrap = document.createElement('div');
+          wrap.className = 'question-wrap';
+          wrap.innerHTML = `<p class="question-title">${escapeHtml(req.text || `سؤال ${idx + 1}`)}</p>`;
+
+          const mount = document.createElement('div');
+          wrap.appendChild(mount);
+          list.appendChild(wrap);
+
+          try {
+            renderQuestion({ mountEl: mount, question: req });
+          } catch (error) {
+            const err = document.createElement('div');
+            err.className = 'solution';
+            err.innerHTML = '<p class="solution-title">تعذر عرض السؤال</p>';
+            wrap.appendChild(err);
+          }
+          return;
+        }
+
+        const item = document.createElement('div');
         item.className = 'goal-item';
         item.innerHTML = `
           <span class="goal-index">${idx + 1}</span>
-          <span class="goal-text">${escapeHtml(req)}</span>
+          <span class="goal-text">${escapeHtml(req.text || req)}</span>
         `;
         list.appendChild(item);
       });
+
+      body.appendChild(list);
     } else {
       const empty = document.createElement('div');
       empty.className = 'stage-empty';
       empty.textContent = 'لا توجد متطلبات سابقة لهذه البطاقة.';
       body.appendChild(empty);
     }
-
-    body.appendChild(list);
 
     const nav = document.createElement('div');
     nav.className = 'lesson-nav';
@@ -677,8 +710,10 @@ export function initEngine({ week, studentId, data, mountEl }) {
       example:  { title: 'مثال محلول', cls: 'example' },
       example2: { title: 'مثال إضافي', cls: 'example' },
       mistake:  { title: 'خطأ شائع', cls: 'warning' },
+      nonexample: { title: 'لا مثال', cls: 'warning' },
       note:     { title: 'ملاحظة', cls: 'note' },
       detail:   { title: 'تفصيل إضافي', cls: 'detail' },
+      hintlist: { title: 'تلميحات', cls: 'detail' },
     };
 
     const cfg = map[item.type] || { title: 'محتوى', cls: '' };
@@ -767,7 +802,7 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function isQuestionItem(item) {
-    return item?.type === 'question' || item?.type === 'ordering';
+    return ['question', 'ordering', 'mcq', 'input'].includes(item?.type);
   }
 
   function renderQuestionItem(item, idx) {
@@ -1164,17 +1199,30 @@ export function initEngine({ week, studentId, data, mountEl }) {
   }
 
   function getPrereqList(dataObj) {
-    if (Array.isArray(dataObj?.prerequisites)) {
-      return dataObj.prerequisites.filter((item) => String(item).trim() !== '')
-        .map((item) => String(item));
-    }
+    const raw = Array.isArray(dataObj?.prerequisites)
+      ? dataObj.prerequisites
+      : Array.isArray(dataObj?.prereq)
+        ? dataObj.prereq
+        : [];
 
-    if (Array.isArray(dataObj?.prereq)) {
-      return dataObj.prereq.filter((item) => String(item).trim() !== '')
-        .map((item) => String(item));
-    }
-
-    return [];
+    return raw.map((item) => {
+      if (typeof item === 'string') {
+        const text = item.trim();
+        if (!text) return null;
+        return { type: 'text', text };
+      }
+      if (item && typeof item === 'object') {
+        const type = item.type === 'mcq' ? 'mcq' : 'input';
+        const text = String(item.text || '').trim();
+        if (!text) return null;
+        return {
+          type,
+          text,
+          choices: Array.isArray(item.choices) ? item.choices : []
+        };
+      }
+      return null;
+    }).filter(Boolean);
   }
 
   // Apply resume (if any) before first render
