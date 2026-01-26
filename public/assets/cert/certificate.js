@@ -316,29 +316,55 @@ async function createCertificateImage(type) {
     throw new Error('html2canvas not available');
   }
   if (!elements.paper) throw new Error('Certificate not ready');
+  const isPng = type === 'png';
+  const backgroundColor = '#ffffff';
+  document.body.classList.add('cert-exporting');
+  document.documentElement.classList.add('cert-exporting');
   let stage;
+  let clone;
   let canvas;
   try {
     await waitForAssetsReady();
     const exportStage = buildExportStage();
     stage = exportStage.stage;
+    clone = exportStage.clone;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    canvas = await renderCanvas(stage, {
+    canvas = await renderCanvas(clone, {
       scale: 2,
       width: EXPORT_SIZE,
       height: EXPORT_SIZE,
-      backgroundColor: null
+      backgroundColor
     });
   } finally {
     stage?.remove();
+    document.body.classList.remove('cert-exporting');
+    document.documentElement.classList.remove('cert-exporting');
   }
 
-  const isPng = type === 'png';
   const mime = isPng ? 'image/png' : 'image/jpeg';
   const quality = isPng ? 1 : 0.92;
 
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
-  if (!blob) throw new Error('تعذر إنشاء الصورة');
+  const blob = await new Promise((resolve) => {
+    if (!canvas.toBlob) {
+      resolve(null);
+      return;
+    }
+    canvas.toBlob(resolve, mime, quality);
+  });
+  if (!blob) {
+    const dataUrl = canvas.toDataURL(mime, quality);
+    const [header, data] = dataUrl.split(',');
+    const mimeMatch = header?.match(/data:(.*?);/);
+    const byteString = atob(data || '');
+    const bytes = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i += 1) {
+      bytes[i] = byteString.charCodeAt(i);
+    }
+    const fallbackBlob = new Blob([bytes], { type: mimeMatch?.[1] || mime });
+    const fileName = `certificate-${certState.certNumber || certState.seq || 'week'}.${isPng ? 'png' : 'jpg'}`;
+    const file = new File([fallbackBlob], fileName, { type: mime });
+    return { blob: fallbackBlob, file };
+  }
 
   const fileName = `certificate-${certState.certNumber || certState.seq || 'week'}.${isPng ? 'png' : 'jpg'}`;
   const file = new File([blob], fileName, { type: mime });
