@@ -23,7 +23,7 @@
   position: relative;
   background: #fff;
   border-radius: 16px;
-  padding: 38px 36px 34px;
+  padding: 28px 30px 26px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
   border: 2px solid rgba(37, 99, 235, 0.15);
   aspect-ratio: 1 / 1;
@@ -31,7 +31,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 22px;
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -73,26 +73,27 @@
 .cert-head {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .cert-badge {
-  font-size: 48px;
+  font-size: 42px;
   line-height: 1;
 }
 
 .cert-title {
-  font-size: 36px;
+  font-size: 30px;
   margin: 0;
   letter-spacing: 0 !important;
 }
 
 .cert-sub {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: #64748b;
   letter-spacing: 0 !important;
+  font-size: 13px;
 }
 
 .cert-brand {
@@ -107,14 +108,14 @@
 }
 
 .cert-line {
-  margin: 12px 0 6px;
+  margin: 8px 0 4px;
   color: #475569;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0 !important;
 }
 
 .cert-name {
-  font-size: 40px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: 0 !important;
   color: #0f172a;
@@ -122,7 +123,7 @@
 }
 
 .cert-card {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: #1e293b;
   padding: 4px 0 10px;
@@ -139,7 +140,7 @@
 .cert-meta {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 10px;
   margin-top: 0;
 }
 
@@ -147,13 +148,13 @@
   background: #f8fafc;
   border: 1px dashed #e5e7eb;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   text-align: center;
 }
 
 .cert-meta-k {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   color: #64748b;
 }
 
@@ -162,14 +163,14 @@
   margin-top: 4px;
   font-weight: 700;
   color: #0f172a;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 /* Footer */
 .cert-footer {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
   margin-top: 0;
 }
@@ -192,8 +193,8 @@
 /* Stamp */
 .cert-stamp {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
 }
 
 .cert-stamp-ring {
@@ -218,7 +219,7 @@
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 /* Actions */
@@ -337,10 +338,10 @@ html.cert-exporting body {
   .cert-paper {
     width: min(94vw, 420px);
     max-height: calc(100vh - 140px);
-    padding: 18px 16px 14px;
+    padding: 16px 14px 12px;
     box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
     overflow: hidden;
-    gap: 14px;
+    gap: 12px;
   }
 
   .cert-bg {
@@ -359,56 +360,56 @@ html.cert-exporting body {
   }
 
   .cert-title {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .cert-sub {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .cert-line {
-    margin: 8px 0 4px;
-    font-size: 12px;
+    margin: 6px 0 4px;
+    font-size: 11px;
   }
 
   .cert-name {
-    font-size: 24px;
+    font-size: 22px;
     padding: 2px 0 2px;
   }
 
   .cert-card {
-    font-size: 16px;
+    font-size: 14px;
     padding: 2px 0 6px;
   }
 
   .cert-meta {
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 6px;
     margin-top: 0;
   }
 
   .cert-meta-item {
-    padding: 8px 8px;
+    padding: 6px 6px;
     border-radius: 10px;
   }
 
   .cert-meta-k {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .cert-meta-v {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .cert-footer {
     margin-top: 0;
     grid-template-columns: 1fr auto;
-    gap: 10px;
+    gap: 8px;
   }
 
   .cert-stamp {
-    width: 68px;
-    height: 68px;
+    width: 62px;
+    height: 62px;
   }
 
   .cert-stamp-ring {
@@ -416,15 +417,15 @@ html.cert-exporting body {
   }
 
   .cert-sign-k {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .cert-sign-v {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .cert-bottom {
-    gap: 12px;
+    gap: 10px;
   }
 
   html.is-zoomed,
