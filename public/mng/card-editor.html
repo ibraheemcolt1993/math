@@ -7,6 +7,8 @@
   <title>math — محرر محتوى البطاقة</title>
 
   <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/lesson.css" />
+  <link rel="stylesheet" href="/assets/css/questions.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
@@ -23,6 +25,11 @@
           <p class="editor-subtitle" id="cardSubtitle">تحميل البيانات...</p>
         </div>
         <div class="header-actions">
+          <label class="preview-toggle" for="previewToggle">
+            <span>👁 معاينة الطالب</span>
+            <input id="previewToggle" type="checkbox" />
+            <span class="toggle-track" aria-hidden="true"></span>
+          </label>
           <div id="saveStatus" class="save-status">تم الحفظ</div>
           <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
         </div>
@@ -30,55 +37,48 @@
     </header>
 
     <main class="container editor-layout">
-      <aside class="editor-sidebar">
-        <div class="sidebar-title">الأقسام</div>
-        <ul id="sectionsList" class="sidebar-list"></ul>
-      </aside>
+      <section id="builderEdit" class="editor-panel"></section>
 
-      <section class="editor-panel">
-        <div id="editorContent">تحميل المحتوى...</div>
+      <section id="builderPreview" class="preview-panel hidden" aria-hidden="true">
+        <div class="preview-shell">
+          <section class="lesson-header preview-header">
+            <div class="lesson-title">
+              <h1 id="lessonTitle" class="h1">معاينة البطاقة</h1>
+              <div class="lesson-meta">
+                <span id="lessonStudent" class="lesson-student">طالب تجريبي</span>
+                <span id="lessonWeek" class="badge primary">week</span>
+              </div>
+            </div>
+            <div class="progress-wrap">
+              <div class="progress-label">
+                <span>مستوى الفهم</span>
+                <span id="progressPercent">0%</span>
+              </div>
+              <div class="progress">
+                <i id="progressBar"></i>
+              </div>
+            </div>
+          </section>
+
+          <section id="lessonContent" class="stack" aria-live="polite"></section>
+
+          <section id="lessonComplete" class="lesson-complete hidden" hidden>
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="h2">أحسنت 🎉</h2>
+                  <p class="p">أنهيت البطاقة بنجاح.</p>
+                </div>
+                <span class="badge done">منجزة</span>
+              </div>
+              <div class="card-body">
+                <p class="p">هذه معاينة فقط — لن يتم حفظ أي تقدّم.</p>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
-
-    <aside class="editor-toolbar" aria-label="أدوات سريعة">
-      <button id="btnAddItem" class="toolbar-btn" type="button">
-        <span class="toolbar-icon">+</span>
-        <span class="toolbar-label">سؤال</span>
-      </button>
-      <button id="btnAddImage" class="toolbar-btn" type="button">
-        <span class="toolbar-icon">🖼️</span>
-        <span class="toolbar-label">صورة</span>
-      </button>
-      <button id="btnAddConcept" class="toolbar-btn" type="button">
-        <span class="toolbar-icon">⎘</span>
-        <span class="toolbar-label">قسم</span>
-      </button>
-      <button id="btnPreview" class="toolbar-btn" type="button">
-        <span class="toolbar-icon">👁️</span>
-        <span class="toolbar-label">معاينة</span>
-      </button>
-      <button id="btnAddQuestion" class="toolbar-btn" type="button">
-        <span class="toolbar-icon">❓</span>
-        <span class="toolbar-label">تقييم</span>
-      </button>
-    </aside>
-
-    <button id="btnFab" class="fab" type="button" aria-label="إضافة">+</button>
-    <div id="mobileSheet" class="bottom-sheet hidden" aria-hidden="true">
-      <div class="bottom-sheet-backdrop" data-close="true"></div>
-      <div class="bottom-sheet-card" role="dialog" aria-modal="true">
-        <div class="bottom-sheet-header">
-          <h3 class="h3">إضافة عنصر</h3>
-          <button class="btn btn-ghost btn-sm" data-close="true" type="button">إغلاق</button>
-        </div>
-        <div class="bottom-sheet-body">
-          <button class="sheet-btn" data-sheet-action="add-question" type="button">سؤال</button>
-          <button class="sheet-btn" data-sheet-action="add-image" type="button">صورة</button>
-          <button class="sheet-btn" data-sheet-action="add-section" type="button">قسم/مفهوم</button>
-          <button class="sheet-btn" data-sheet-action="add-item" type="button">عنصر عام</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <div id="imageEditor" class="modal hidden" aria-hidden="true">

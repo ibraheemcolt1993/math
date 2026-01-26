@@ -1,6 +1,27 @@
 const { getPool, sql } = require('../_shared/db');
 const { DEFAULT_HEADERS } = require('../_shared/http');
 
+function parsePrereqItem(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && parsed.text) {
+        return {
+          type: parsed.type === 'mcq' ? 'mcq' : 'input',
+          text: String(parsed.text),
+          choices: Array.isArray(parsed.choices) ? parsed.choices : []
+        };
+      }
+    } catch (error) {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
 module.exports = async function (context, req) {
   try {
     const weekParam = Number(req.params.week);
@@ -234,7 +255,7 @@ module.exports = async function (context, req) {
     const weekData = weekResult.recordset[0];
     const goals = goalsResult.recordset.map((goal) => goal.GoalText);
     const prerequisites = prerequisitesResult.recordset.map(
-      (prereq) => prereq.PrerequisiteText
+      (prereq) => parsePrereqItem(prereq.PrerequisiteText)
     );
 
     const normalizedConcepts = concepts.map(({ concept, flow }) => ({

@@ -17,6 +17,44 @@ function toNullableInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parsePrereqItem(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && parsed.text) {
+        return {
+          type: parsed.type === 'mcq' ? 'mcq' : 'input',
+          text: String(parsed.text),
+          choices: Array.isArray(parsed.choices) ? parsed.choices : []
+        };
+      }
+    } catch (error) {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+function serializePrereqItem(item) {
+  if (typeof item === 'string') return toCleanString(item);
+  if (item && typeof item === 'object') {
+    const text = toCleanString(item.text || item.question || '');
+    if (!text) return '';
+    const payload = {
+      type: item.type === 'mcq' ? 'mcq' : 'input',
+      text,
+      choices: Array.isArray(item.choices)
+        ? item.choices.map((choice) => toCleanString(choice)).filter(Boolean)
+        : []
+    };
+    return JSON.stringify(payload);
+  }
+  return '';
+}
+
 async function fetchWeekContent(dbPool, weekParam) {
   const weekResult = await dbPool
     .request()
@@ -223,7 +261,7 @@ async function fetchWeekContent(dbPool, weekParam) {
   const weekData = weekResult.recordset[0];
   const goals = goalsResult.recordset.map((goal) => goal.GoalText);
   const prerequisites = prerequisitesResult.recordset.map(
-    (prereq) => prereq.PrerequisiteText
+    (prereq) => parsePrereqItem(prereq.PrerequisiteText)
   );
 
   const normalizedConcepts = concepts.map(({ concept, flow }) => ({
@@ -378,7 +416,7 @@ async function handlePut(context, req, weekParam) {
     }
 
     for (let i = 0; i < prerequisites.length; i += 1) {
-      const text = toCleanString(prerequisites[i]);
+      const text = serializePrereqItem(prerequisites[i]);
       if (!text) continue;
       await new sql.Request(transaction)
         .input('week', sql.Int, weekParam)
