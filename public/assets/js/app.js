@@ -287,9 +287,6 @@ async function loadStudentData(student, { silent = false } = {}) {
     const session = normalizeStoredStudent(getStudentSession()) || normalizeStoredStudent(student);
     const gradeValue = session?.grade ?? session?.Grade ?? '';
     const hasGrade = isNumericValue(gradeValue);
-    if (!hasGrade) {
-      console.debug('Skip cards warmup: missing grade');
-    }
     const cardsUrl = buildCardsUrl(session || student);
     const [progress, cards] = await Promise.all([
       fetchJson(`${API_PATHS.PROGRESS_COMPLETED}?studentId=${encodeURIComponent(student.id)}`, { noStore: true }),
@@ -352,7 +349,7 @@ function parseStudentClass(value) {
   if (match) {
     return { grade: match[1], className: match[2] };
   }
-  return { grade: raw, className: raw };
+  return { grade: raw, className: '' };
 }
 
 function isLegacyClassString(value) {
@@ -365,24 +362,39 @@ function isNumericValue(value) {
   return raw !== '' && /^\\d+$/.test(raw);
 }
 
-function buildCardsUrl(student) {
+function buildCardsUrl(student = {}) {
   const params = new URLSearchParams();
-  const gradeValue = student?.grade ?? student?.Grade ?? '';
-  const classValue = student?.class ?? student?.Class ?? '';
+  const rawGrade = student?.grade ?? student?.Grade ?? '';
+  const rawClass = student?.class ?? student?.Class ?? student?.className ?? '';
+  let gradeValue = normalizeDigits(String(rawGrade ?? '')).trim();
+  let classValue = normalizeDigits(String(rawClass ?? '')).trim();
+  const rawClassString = String(rawClass ?? '').trim();
+  const isAllClasses = rawClassString.toUpperCase() === 'ALL_CLASSES';
 
-  if (isNumericValue(gradeValue) && isNumericValue(classValue)) {
-    params.set('grade', normalizeDigits(String(gradeValue)).trim());
-    params.set('class', normalizeDigits(String(classValue)).trim());
-    return `${API_PATHS.CARDS}?${params.toString()}`;
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawClass)) {
+    const { grade, className } = parseStudentClass(rawClass);
+    gradeValue = grade;
+    classValue = className;
   }
 
-  const legacyValue = student?.class ?? student?.grade;
-  if (isLegacyClassString(legacyValue)) {
-    const { grade, className } = parseStudentClass(legacyValue);
-    if (grade) params.set('grade', grade);
-    if (className) params.set('class', className);
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawGrade)) {
+    const { grade, className } = parseStudentClass(rawGrade);
+    gradeValue = grade;
+    classValue = className;
   }
-  return `${API_PATHS.CARDS}?${params.toString()}`;
+
+  if (isNumericValue(gradeValue)) {
+    params.set('grade', gradeValue);
+  }
+
+  if (isAllClasses) {
+    params.set('class', 'ALL_CLASSES');
+  } else if (isNumericValue(classValue)) {
+    params.set('class', classValue);
+  }
+
+  const query = params.toString();
+  return query ? `${API_PATHS.CARDS}?${query}` : API_PATHS.CARDS;
 }
 
 /* ---------- UI: Birth Year input injection ---------- */

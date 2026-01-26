@@ -1181,21 +1181,34 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
   }
 
   function getGoalsList(dataObj) {
-    if (Array.isArray(dataObj?.goals) && dataObj.goals.length) {
-      return dataObj.goals.map((goal) => ({
-        text: typeof goal === 'string' ? goal : String(goal?.text || ''),
-      })).filter((goal) => goal.text.trim() !== '');
+    const rawGoals = Array.isArray(dataObj?.goals) ? dataObj.goals : [];
+    const concepts = Array.isArray(dataObj?.concepts) ? dataObj.concepts : [];
+
+    const normalizeGoalText = (value) => {
+      if (value == null) return '';
+      if (typeof value === 'string') return value.trim();
+      if (typeof value === 'object') return String(value.text || '').trim();
+      return String(value).trim();
+    };
+
+    if (!concepts.length && rawGoals.length) {
+      return rawGoals.map((goal, idx) => ({
+        text: normalizeGoalText(goal) || `هدف ${idx + 1}`,
+      }));
     }
 
-    const goals = [];
-    (dataObj?.concepts || []).forEach((concept) => {
+    return concepts.map((concept, idx) => {
+      const rawGoal = rawGoals[idx];
       const flow = Array.isArray(concept?.flow) ? concept.flow : [];
-      const goalItem = flow.find((item) => item?.type === 'goal');
-      const text = goalItem?.text || concept?.title || 'هدف';
-      goals.push({ text: String(text) });
-    });
+      const flowGoal = flow.find((item) => item?.type === 'goal');
+      const resolvedGoal =
+        normalizeGoalText(rawGoal) ||
+        normalizeGoalText(flowGoal?.text) ||
+        normalizeGoalText(concept?.title) ||
+        `هدف ${idx + 1}`;
 
-    return goals;
+      return { text: resolvedGoal };
+    });
   }
 
   function getPrereqList(dataObj) {

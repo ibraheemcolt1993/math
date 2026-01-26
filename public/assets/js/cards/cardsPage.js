@@ -16,6 +16,7 @@ import {
   getStudentSession,
   isCardDone,
   setCachedCards,
+  setLastStudentId,
   setStudentSession,
   syncCardCompletions,
 } from '../core/storage.js';
@@ -24,27 +25,33 @@ import { showToast } from '../ui/toast.js';
 
 export async function initCardsPage(options = {}) {
   const { didRefresh = false } = options;
-  const studentId = getLastStudentId();
-  if (!studentId) return;
+  const session = getStudentSession();
+  const lastStudentId = getLastStudentId();
+  const studentId = lastStudentId || session?.id;
+
+  if (!lastStudentId && session?.id) {
+    setLastStudentId(session.id);
+  }
+
+  if (!studentId) {
+    showToast('تنبيه', 'يرجى تسجيل الدخول لعرض البطاقات.', 'warning');
+    return;
+  }
 
   const listEl = document.getElementById('cardsList');
   const studentNameEl = document.getElementById('cardsStudentName');
   let readyWeeks = null;
 
-  let student = getStudentSession();
-  if (!student?.grade && !didRefresh && student?.id && student?.birthYear) {
+  let student = session;
+  const { gradeValue, classValue, hasGrade, hasClass } = resolveStudentGradeClass(student);
+  if ((!hasGrade || !hasClass) && !didRefresh && student?.id && student?.birthYear) {
     const refreshed = await refreshStudentSession(student);
     if (refreshed) {
       return initCardsPage({ didRefresh: true });
     }
   }
 
-  const gradeValue = normalizeDigits(student?.grade ?? '');
-  const hasGrade = gradeValue !== '' && /^\\d+$/.test(gradeValue);
-  const classInfo = {
-    grade: gradeValue,
-    className: normalizeDigits(student?.class ?? ''),
-  };
+  const normalizedStudent = normalizeSessionStudent(student);
   const displayName =
     (student?.firstName && String(student.firstName).trim()) ||
     (student?.fullName && String(student.fullName).trim()) ||
@@ -62,11 +69,11 @@ export async function initCardsPage(options = {}) {
     syncCardCompletions(studentId, progress);
 
     if (!hasGrade) {
-      console.debug('Skip cards fetch: missing grade');
+      showToast('تنبيه', 'لم يتم العثور على الصف الدراسي لهذا الطالب.', 'warning');
       return;
     }
 
-    const cardsUrl = buildCardsUrl(classInfo);
+    const cardsUrl = buildCardsUrl(normalizedStudent || student);
     const [cards, weeks] = await Promise.all([
       fetchJson(cardsUrl, { noStore: true }),
       fetchJson(API_PATHS.WEEKS, { noStore: true }),
@@ -111,7 +118,7 @@ function parseStudentClass(value) {
   if (match) {
     return { grade: match[1], className: match[2] };
   }
-  return { grade: raw, className: raw };
+  return { grade: raw, className: '' };
 }
 
 function normalizeSessionStudent(student) {
@@ -151,11 +158,76 @@ function isLegacyClassString(value) {
   return /^(\d+)\s*[/\\-]\s*(\d+)$/.test(raw);
 }
 
-function buildCardsUrl({ grade, className }) {
+function isNumericValue(value) {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  return raw !== '' && /^(\d+)$/.test(raw);
+}
+
+function resolveStudentGradeClass(student) {
+  if (!student) {
+    return {
+      gradeValue: '',
+      classValue: '',
+      hasGrade: false,
+      hasClass: false,
+    };
+  }
+
+  const rawGrade = student.grade ?? student.Grade ?? '';
+  const rawClass = student.class ?? student.Class ?? '';
+  let gradeValue = normalizeDigits(String(rawGrade ?? '')).trim();
+  let classValue = normalizeDigits(String(rawClass ?? '')).trim();
+
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawClass)) {
+    const parsed = parseStudentClass(rawClass);
+    gradeValue = parsed.grade;
+    classValue = parsed.className;
+  }
+
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawGrade)) {
+    const parsed = parseStudentClass(rawGrade);
+    gradeValue = parsed.grade;
+    classValue = parsed.className;
+  }
+
+  return {
+    gradeValue,
+    classValue,
+    hasGrade: isNumericValue(gradeValue),
+    hasClass: isNumericValue(classValue),
+  };
+}
+
+function buildCardsUrl(studentOrInfo = {}) {
   const params = new URLSearchParams();
-  if (grade) params.set('grade', grade);
-  if (className) params.set('class', className);
-  return `${API_PATHS.CARDS}?${params.toString()}`;
+  const rawGrade = studentOrInfo.grade ?? studentOrInfo.Grade ?? '';
+  const rawClass = studentOrInfo.class ?? studentOrInfo.Class ?? studentOrInfo.className ?? '';
+  let gradeValue = normalizeDigits(String(rawGrade ?? '')).trim();
+  let classValue = normalizeDigits(String(rawClass ?? '')).trim();
+  const rawClassString = String(rawClass ?? '').trim();
+  const isAllClasses = rawClassString.toUpperCase() === 'ALL_CLASSES';
+
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawClass)) {
+    const parsed = parseStudentClass(rawClass);
+    gradeValue = parsed.grade;
+    classValue = parsed.className;
+  }
+
+  if ((!gradeValue || !isNumericValue(gradeValue)) && isLegacyClassString(rawGrade)) {
+    const parsed = parseStudentClass(rawGrade);
+    gradeValue = parsed.grade;
+    classValue = parsed.className;
+  }
+
+  if (isNumericValue(gradeValue)) params.set('grade', gradeValue);
+  if (isAllClasses) {
+    params.set('class', 'ALL_CLASSES');
+  } else if (isNumericValue(classValue)) {
+    params.set('class', classValue);
+  }
+
+  const query = params.toString();
+  return query ? `${API_PATHS.CARDS}?${query}` : API_PATHS.CARDS;
 }
 
 function normalizeReadyWeeks(weeks) {
