@@ -80,6 +80,10 @@ function setCompletionsLoading(message) {
   `;
 }
 
+function fetchWithCredentials(url, options) {
+  return fetch(url, { credentials: 'include', ...(options || {}) });
+}
+
 function normalizeValue(value) {
   return value == null ? '' : String(value).trim();
 }
@@ -192,7 +196,7 @@ async function fetchCards() {
   if (q) params.set('q', q);
 
   try {
-    const response = await fetch(`${API_BASE}?${params.toString()}`);
+    const response = await fetchWithCredentials(`${API_BASE}?${params.toString()}`);
     const data = await response.json();
     if (!response.ok || !data.ok) {
       throw new Error(data?.error || 'تعذر تحميل البيانات.');
@@ -363,7 +367,7 @@ async function updatePrereqOptions(grade, currentWeek, selectedWeek) {
     params.set('grade', grade);
     params.set('class', 'ALL_CLASSES');
 
-    const response = await fetch(`${API_BASE}?${params.toString()}`);
+    const response = await fetchWithCredentials(`${API_BASE}?${params.toString()}`);
     const data = await response.json();
     if (!response.ok || !data.ok) {
       throw new Error(data?.error || 'تعذر تحميل المتطلبات السابقة.');
@@ -460,7 +464,7 @@ async function fetchCompletions(card) {
   if (className) params.set('class', className);
 
   try {
-    const response = await fetch(`${API_BASE}/${encodeURIComponent(card.week)}/completions?${params.toString()}`);
+    const response = await fetchWithCredentials(`${API_BASE}/${encodeURIComponent(card.week)}/completions?${params.toString()}`);
     const data = await response.json();
     if (!response.ok || !data.ok) {
       throw new Error(data?.error || 'تعذر تحميل البيانات.');
@@ -557,7 +561,7 @@ async function handleSubmit(event) {
   const method = isEdit ? 'PUT' : 'POST';
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithCredentials(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -587,7 +591,7 @@ function handleDelete(week) {
     title: 'تأكيد الحذف',
     message: 'هل أنت متأكد من حذف البطاقة؟',
     onConfirm: async () => {
-      const response = await fetch(`${API_BASE}/${encodeURIComponent(week)}`, {
+      const response = await fetchWithCredentials(`${API_BASE}/${encodeURIComponent(week)}`, {
         method: 'DELETE'
       });
       const data = await response.json();
@@ -610,7 +614,7 @@ function handleBulkDelete() {
     onConfirm: async () => {
       const results = await Promise.all(
         selected.map((week) =>
-          fetch(`${API_BASE}/${encodeURIComponent(week)}`, { method: 'DELETE' })
+          fetchWithCredentials(`${API_BASE}/${encodeURIComponent(week)}`, { method: 'DELETE' })
             .then((response) => response.json().then((data) => ({ response, data })))
         )
       );

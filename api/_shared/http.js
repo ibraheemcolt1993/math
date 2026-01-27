@@ -35,8 +35,8 @@ function methodNotAllowed(message = 'Method not allowed.') {
   return response(405, { ok: false, error: message });
 }
 
-function serverError(error) {
-  return response(500, { ok: false, error: 'SERVER_ERROR', detail: error?.message });
+function serverError() {
+  return response(500, { ok: false, error: 'SERVER_ERROR' });
 }
 
 module.exports = {

@@ -1,10 +1,10 @@
 const { readJson } = require('../_shared/parse');
-const { ok, badRequest, unauthorized, response } = require('../_shared/http');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
 const { getPool, sql } = require('../_shared/db');
 const { requireAin, verifyPassword, hashPassword } = require('../_shared/ain-auth');
 
 module.exports = async function (context, req) {
-  const session = await requireAin(context, req);
+  const session = await requireAin(req, context);
   if (!session) {
     return;
   }
@@ -37,14 +37,14 @@ module.exports = async function (context, req) {
       );
 
     if (!userResult.recordset.length) {
-      context.res = unauthorized('INVALID_CREDENTIALS');
+      context.res = unauthorized();
       return;
     }
 
     const user = userResult.recordset[0];
     const match = await verifyPassword(currentPassword, user.PasswordHash);
     if (!match) {
-      context.res = unauthorized('INVALID_CREDENTIALS');
+      context.res = unauthorized();
       return;
     }
 
@@ -59,9 +59,18 @@ module.exports = async function (context, req) {
          WHERE AdminId = @adminId;`
       );
 
+    await dbPool
+      .request()
+      .input('adminId', sql.Int, session.adminId)
+      .query(
+        `UPDATE dbo.AdminAuthSessions
+         SET RevokedAt = SYSUTCDATETIME()
+         WHERE AdminId = @adminId AND RevokedAt IS NULL;`
+      );
+
     context.res = ok({ ok: true });
   } catch (error) {
     context.log('AIN password change failed', error);
-    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
+    context.res = serverError();
   }
 };

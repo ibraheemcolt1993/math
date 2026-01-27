@@ -1,9 +1,9 @@
 const { readJson } = require('../_shared/parse');
-const { ok, badRequest, unauthorized, response } = require('../_shared/http');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
 const { getPool, sql } = require('../_shared/db');
 const {
   getSessionConfig,
-  buildSessionCookie,
+  buildSetCookie,
   createSession,
   verifyPassword
 } = require('../_shared/ain-auth');
@@ -27,38 +27,73 @@ module.exports = async function (context, req) {
     const dbPool = await getPool();
     const result = await dbPool
       .request()
-      .input('username', sql.NVarChar(120), username)
+      .input('username', sql.NVarChar(64), username)
       .query(
         `SELECT TOP (1)
            AdminId,
            Username,
            PasswordHash,
-           IsActive
+           IsActive,
+           FailedCount,
+           LockoutUntil
          FROM dbo.AdminAuthUsers
          WHERE Username = @username`
       );
 
     if (!result.recordset.length) {
-      context.res = unauthorized('INVALID_CREDENTIALS');
+      context.res = unauthorized();
       return;
     }
 
     const user = result.recordset[0];
     if (user.IsActive === false || user.IsActive === 0) {
-      context.res = unauthorized('ACCOUNT_DISABLED');
+      context.res = unauthorized();
+      return;
+    }
+
+    const now = new Date();
+    if (user.LockoutUntil && new Date(user.LockoutUntil) > now) {
+      context.res = unauthorized();
       return;
     }
 
     const match = await verifyPassword(password, user.PasswordHash);
     if (!match) {
-      context.res = unauthorized('INVALID_CREDENTIALS');
+      const nextFailed = (user.FailedCount ?? 0) + 1;
+      const lockoutUntil = nextFailed >= 5
+        ? new Date(Date.now() + 15 * 60 * 1000)
+        : null;
+
+      await dbPool
+        .request()
+        .input('adminId', sql.Int, user.AdminId)
+        .input('failedCount', sql.Int, nextFailed)
+        .input('lockoutUntil', sql.DateTime2, lockoutUntil)
+        .query(
+          `UPDATE dbo.AdminAuthUsers
+           SET FailedCount = @failedCount,
+               LockoutUntil = @lockoutUntil
+           WHERE AdminId = @adminId;`
+        );
+
+      context.res = unauthorized();
       return;
     }
 
-    const { token } = await createSession(user.AdminId);
-    const { sessionHours, cookieName } = getSessionConfig();
+    const { sessionHours } = getSessionConfig();
+    const { token } = await createSession(user.AdminId, sessionHours);
     const maxAgeSeconds = sessionHours * 60 * 60;
-    const cookie = buildSessionCookie(cookieName, token, maxAgeSeconds);
+    const cookie = buildSetCookie(token, maxAgeSeconds);
+
+    await dbPool
+      .request()
+      .input('adminId', sql.Int, user.AdminId)
+      .query(
+        `UPDATE dbo.AdminAuthUsers
+         SET FailedCount = 0,
+             LockoutUntil = NULL
+         WHERE AdminId = @adminId;`
+      );
 
     context.res = ok(
       { ok: true, user: { id: user.AdminId, username: user.Username } },
@@ -66,6 +101,6 @@ module.exports = async function (context, req) {
     );
   } catch (error) {
     context.log('AIN sign-in failed', error);
-    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
+    context.res = serverError();
   }
 };

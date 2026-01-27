@@ -2399,6 +2399,7 @@ async function requestUploadSasBatch(week, files) {
   const response = await fetch('/api/mng/media/sas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
       week,
       files: files.map((file) => ({ name: file.name, type: file.type }))
@@ -2682,6 +2683,7 @@ async function saveContent() {
     const response = await fetch(`/api/mng/weeks/${encodeURIComponent(state.week)}/content`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(payload)
     });
 
@@ -2854,7 +2856,10 @@ async function init() {
   bindEvents();
 
   try {
-    const response = await fetch(`/api/mng/weeks/${encodeURIComponent(week)}/content`, { cache: 'no-store' });
+    const response = await fetch(`/api/mng/weeks/${encodeURIComponent(week)}/content`, {
+      cache: 'no-store',
+      credentials: 'include'
+    });
     const data = await response.json();
     if (!response.ok || data?.ok === false) {
       throw new Error(data?.error || 'تعذر تحميل المحتوى.');

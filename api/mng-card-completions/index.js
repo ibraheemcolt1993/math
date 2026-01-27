@@ -20,7 +20,7 @@ function toCleanString(value) {
 
 module.exports = async function (context, req) {
   try {
-    const session = await requireAin(context, req);
+    const session = await requireAin(req, context);
     if (!session) {
       return;
     }

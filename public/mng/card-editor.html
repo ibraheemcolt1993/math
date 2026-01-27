@@ -13,19 +13,7 @@
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
-
-  <script>
-    (async () => {
-      try {
-        const res = await fetch('/api/ain/me', { credentials: 'include' });
-        if (res.status === 401) {
-          window.location.replace('/ain/lin.html');
-        }
-      } catch (error) {
-        window.location.replace('/ain/lin.html');
-      }
-    })();
-  </script>
+  <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
 <body>
@@ -43,6 +31,8 @@
             <input id="previewToggle" type="checkbox" />
             <span class="toggle-track" aria-hidden="true"></span>
           </label>
+          <span id="ainUserLabel" class="badge primary">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
           <div id="saveStatus" class="save-status">تم الحفظ</div>
           <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
         </div>
