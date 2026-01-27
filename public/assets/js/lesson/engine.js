@@ -1029,7 +1029,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
   function compareAnswer(userValue, answerValue, validation = {}) {
     const user = normalizeSpaces(userValue);
-    const ans = normalizeSpaces(answerValue);
+    const ans = normalizeSpaces(extractAnswerValue(answerValue));
 
     if (validation.numericOnly || isNumericAnswer(ans)) {
       const userNum = parseNumericValue(user);
@@ -1044,10 +1044,20 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       const normalizedUser = normalizeArabic(user);
       const normalizedAns = normalizeArabic(ans);
       if (normalizedUser === normalizedAns) return true;
+      if (stripLeadingAl(normalizedUser) === stripLeadingAl(normalizedAns)) return true;
       return similarity(normalizedUser, normalizedAns) >= 0.85;
     }
 
     return false;
+  }
+
+  function extractAnswerValue(value) {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    if (typeof value === 'object') {
+      return String(value.answer ?? value.text ?? value.value ?? '');
+    }
+    return String(value);
   }
 
   function normalizeSpaces(s) {
@@ -1095,10 +1105,15 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
       .replace(/ـ/g, '')
       .replace(/[إأآا]/g, 'ا')
-      .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
-      .replace(/\bال/g, '')
       .toLowerCase();
+  }
+
+  function stripLeadingAl(value) {
+    return normalizeSpaces(value)
+      .split(' ')
+      .map((word) => (word.startsWith('ال') ? word.slice(2) : word))
+      .join(' ');
   }
 
   function similarity(a, b) {
@@ -1172,9 +1187,10 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
   function isFillBlankCorrect(question) {
     const blanks = Array.isArray(question.blanks) ? question.blanks : [];
     const values = Array.isArray(question._blanks) ? question._blanks : [];
+    const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
     if (!blanks.length) return true;
     if (values.length < blanks.length) return false;
-    return blanks.every((ans, index) => compareAnswer(values[index] ?? '', ans ?? '', question.validation));
+    return blanks.every((ans, index) => compareAnswer(values[index] ?? '', ans ?? '', validation));
   }
 
   function getYouTubeId(url) {
@@ -1368,7 +1384,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
   function buildTokenFragment(text) {
     const fragment = document.createDocumentFragment();
     const raw = String(text ?? '');
-    const regex = /\[\[(frac|table):([^\]]+)\]\]/g;
+    const regex = /\[\[(frac|table|sqrt|cbrt):([^\]]+)\]\]/g;
     let lastIndex = 0;
     let match = null;
 
@@ -1424,6 +1440,18 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         } else {
           fragment.appendChild(document.createTextNode(match[0]));
         }
+      } else if (type === 'sqrt' || type === 'cbrt') {
+        const root = document.createElement('span');
+        root.className = 'token-root';
+        const symbol = document.createElement('span');
+        symbol.className = 'token-root-symbol';
+        symbol.textContent = type === 'sqrt' ? '√' : '∛';
+        const value = document.createElement('span');
+        value.className = 'token-root-value';
+        value.textContent = body ?? '';
+        root.appendChild(symbol);
+        root.appendChild(value);
+        fragment.appendChild(root);
       } else {
         fragment.appendChild(document.createTextNode(match[0]));
       }

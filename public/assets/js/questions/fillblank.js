@@ -52,7 +52,7 @@ export function renderFillBlankQuestion({ mountEl, question }) {
 
   parts.forEach((part, index) => {
     if (part) {
-      sentence.appendChild(document.createTextNode(part));
+      sentence.appendChild(buildTokenFragment(part));
     }
     if (index < parts.length - 1) {
       const input = document.createElement('input');
@@ -70,6 +70,91 @@ export function renderFillBlankQuestion({ mountEl, question }) {
       sentence.appendChild(input);
     }
   });
+
+  function buildTokenFragment(text) {
+    const fragment = document.createDocumentFragment();
+    const raw = String(text ?? '');
+    const regex = /\[\[(frac|table|sqrt|cbrt):([^\]]+)\]\]/g;
+    let lastIndex = 0;
+    let match = null;
+
+    while ((match = regex.exec(raw)) !== null) {
+      if (match.index > lastIndex) {
+        fragment.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
+      }
+
+      const type = match[1];
+      const body = match[2];
+
+      if (type === 'frac') {
+        const [top, bottom] = body.split('|');
+        const frac = document.createElement('span');
+        frac.className = 'token-frac';
+
+        const numerator = document.createElement('span');
+        numerator.className = 'token-frac-top';
+        numerator.textContent = top ?? '';
+
+        const denominator = document.createElement('span');
+        denominator.className = 'token-frac-bottom';
+        denominator.textContent = bottom ?? '';
+
+        frac.appendChild(numerator);
+        frac.appendChild(denominator);
+        fragment.appendChild(frac);
+      } else if (type === 'table') {
+        const [sizePart, ...cells] = body.split('|');
+        const [rowsRaw, colsRaw] = String(sizePart || '').toLowerCase().split('x');
+        const rows = Number(rowsRaw);
+        const cols = Number(colsRaw);
+
+        if (Number.isInteger(rows) && Number.isInteger(cols) && rows > 0 && cols > 0) {
+          const table = document.createElement('table');
+          table.className = 'token-table';
+          const tbody = document.createElement('tbody');
+          let cellIndex = 0;
+
+          for (let r = 0; r < rows; r += 1) {
+            const tr = document.createElement('tr');
+            for (let c = 0; c < cols; c += 1) {
+              const td = document.createElement('td');
+              td.textContent = cells[cellIndex] ?? '';
+              tr.appendChild(td);
+              cellIndex += 1;
+            }
+            tbody.appendChild(tr);
+          }
+
+          table.appendChild(tbody);
+          fragment.appendChild(table);
+        } else {
+          fragment.appendChild(document.createTextNode(match[0]));
+        }
+      } else if (type === 'sqrt' || type === 'cbrt') {
+        const root = document.createElement('span');
+        root.className = 'token-root';
+        const symbol = document.createElement('span');
+        symbol.className = 'token-root-symbol';
+        symbol.textContent = type === 'sqrt' ? '√' : '∛';
+        const value = document.createElement('span');
+        value.className = 'token-root-value';
+        value.textContent = body ?? '';
+        root.appendChild(symbol);
+        root.appendChild(value);
+        fragment.appendChild(root);
+      } else {
+        fragment.appendChild(document.createTextNode(match[0]));
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < raw.length) {
+      fragment.appendChild(document.createTextNode(raw.slice(lastIndex)));
+    }
+
+    return fragment;
+  }
 
   function normalizeSpaces(s) {
     if (s == null) return '';
@@ -111,10 +196,15 @@ export function renderFillBlankQuestion({ mountEl, question }) {
       .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
       .replace(/ـ/g, '')
       .replace(/[إأآا]/g, 'ا')
-      .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
-      .replace(/\bال/g, '')
       .toLowerCase();
+  }
+
+  function stripLeadingAl(value) {
+    return normalizeSpaces(value)
+      .split(' ')
+      .map((word) => (word.startsWith('ال') ? word.slice(2) : word))
+      .join(' ');
   }
 
   function similarity(a, b) {
@@ -144,26 +234,42 @@ export function renderFillBlankQuestion({ mountEl, question }) {
 
   function compareAnswer(userValue, answerValue) {
     const user = normalizeSpaces(userValue);
-    const ans = normalizeSpaces(answerValue);
-    const validation = question.validation || {};
+    const ans = normalizeSpaces(extractAnswerValue(answerValue));
+    const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
 
     if (validation.numericOnly || Number.isFinite(parseNumericValue(ans))) {
       const userNum = parseNumericValue(user);
       const ansNum = parseNumericValue(ans);
-      return Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
+      return {
+        ok: Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum,
+        shouldAutocorrect: false
+      };
     }
 
-    if (user !== '' && user === ans) return true;
+    if (user !== '' && user === ans) return { ok: true, shouldAutocorrect: false };
 
     if (validation.fuzzyAutocorrect) {
       const normalizedUser = normalizeArabic(user);
       const normalizedAns = normalizeArabic(ans);
-      if (normalizedUser === normalizedAns) return true;
-
-      return similarity(normalizedUser, normalizedAns) >= 0.85;
+      if (normalizedUser === normalizedAns) {
+        return { ok: true, shouldAutocorrect: true };
+      }
+      if (stripLeadingAl(normalizedUser) === stripLeadingAl(normalizedAns)) {
+        return { ok: true, shouldAutocorrect: true };
+      }
+      return { ok: similarity(normalizedUser, normalizedAns) >= 0.85, shouldAutocorrect: false };
     }
 
-    return false;
+    return { ok: false, shouldAutocorrect: false };
+  }
+
+  function extractAnswerValue(value) {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    if (typeof value === 'object') {
+      return String(value.answer ?? value.text ?? value.value ?? '');
+    }
+    return String(value);
   }
 
   function check() {
@@ -181,6 +287,14 @@ export function renderFillBlankQuestion({ mountEl, question }) {
     }
 
     const userValues = question._blanks || [];
+    const isRequired = question.isRequired !== false;
+
+    if (!isRequired && userValues.every((value) => !normalizeSpaces(value))) {
+      feedback.textContent = '';
+      feedback.classList.remove('ok', 'err');
+      return true;
+    }
+
     if (userValues.some((value) => !normalizeSpaces(value))) {
       feedback.textContent = 'أكمل جميع الفراغات أولًا.';
       feedback.classList.remove('ok');
@@ -188,7 +302,24 @@ export function renderFillBlankQuestion({ mountEl, question }) {
       return false;
     }
 
-    const ok = blanks.every((ans, index) => compareAnswer(userValues[index] ?? '', ans ?? ''));
+    let ok = true;
+    blanks.forEach((ans, index) => {
+      if (!ok) return;
+      const result = compareAnswer(userValues[index] ?? '', ans ?? '');
+      if (!result.ok) {
+        ok = false;
+        return;
+      }
+      if (result.shouldAutocorrect) {
+        const resolvedAnswer = extractAnswerValue(ans ?? '');
+        if (resolvedAnswer) {
+          question._blanks[index] = resolvedAnswer;
+          if (inputs[index]) {
+            inputs[index].value = resolvedAnswer;
+          }
+        }
+      }
+    });
 
     feedback.textContent = ok
       ? 'إجابات صحيحة ✅'

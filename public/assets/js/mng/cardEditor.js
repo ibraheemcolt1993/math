@@ -23,7 +23,18 @@ const elements = {
   previewLessonTitle: document.getElementById('lessonTitle'),
   previewLessonStudent: document.getElementById('lessonStudent'),
   previewLessonWeek: document.getElementById('lessonWeek'),
-  previewLessonContent: document.getElementById('lessonContent')
+  previewLessonContent: document.getElementById('lessonContent'),
+  mathEditor: document.getElementById('mathEditor'),
+  btnCloseMathEditor: document.getElementById('btnCloseMathEditor'),
+  btnMathEditorCancel: document.getElementById('btnMathEditorCancel'),
+  btnMathEditorInsert: document.getElementById('btnMathEditorInsert'),
+  mathFracNumerator: document.getElementById('mathFracNumerator'),
+  mathFracDenominator: document.getElementById('mathFracDenominator'),
+  mathRootExpr: document.getElementById('mathRootExpr'),
+  mathCbrtExpr: document.getElementById('mathCbrtExpr'),
+  mathTableRows: document.getElementById('mathTableRows'),
+  mathTableCols: document.getElementById('mathTableCols'),
+  mathTableGrid: document.getElementById('mathTableGrid')
 };
 
 const state = {
@@ -51,6 +62,14 @@ const imageEditorState = {
   flip: 1
 };
 
+const mathEditorState = {
+  activeTab: 'frac',
+  targetInput: null,
+  tableRows: 2,
+  tableCols: 2,
+  tableCells: []
+};
+
 function normalizeValue(value) {
   return value == null ? '' : String(value).trim();
 }
@@ -73,6 +92,87 @@ function normalizeValidation(value) {
 
 function hasValidation(value) {
   return Boolean(value?.numericOnly || value?.fuzzyAutocorrect);
+}
+
+function buildMathTargetId(...parts) {
+  return `math-${parts.join('-')}`;
+}
+
+function getBlankDisplayValue(value) {
+  if (value && typeof value === 'object') {
+    return value.answer ?? value.text ?? value.value ?? '';
+  }
+  return value ?? '';
+}
+
+function setBlankValue(list, index, nextValue) {
+  if (!Array.isArray(list)) return;
+  const current = list[index];
+  if (current && typeof current === 'object') {
+    list[index] = { ...current, answer: nextValue };
+  } else {
+    list[index] = nextValue;
+  }
+}
+
+function normalizeBlankEntry(entry) {
+  if (entry && typeof entry === 'object') {
+    return {
+      ...entry,
+      answer: normalizeValue(entry.answer ?? entry.text ?? entry.value ?? '')
+    };
+  }
+  return normalizeValue(entry);
+}
+
+function isBlankEntryFilled(entry) {
+  if (entry && typeof entry === 'object') {
+    return Boolean(normalizeValue(entry.answer ?? entry.text ?? entry.value ?? ''));
+  }
+  return Boolean(normalizeValue(entry));
+}
+
+function countBlankTokens(text) {
+  const raw = String(text ?? '');
+  if (!raw.includes('[[blank]]')) return 0;
+  return raw.split('[[blank]]').length - 1;
+}
+
+function syncBlanksWithText(item, text) {
+  if (!item || item.type !== 'fillblank') return false;
+  const count = countBlankTokens(text);
+  const list = Array.isArray(item.blanks) ? item.blanks : [];
+  const usesObject = list.some((entry) => entry && typeof entry === 'object');
+  if (list.length === count) return false;
+  if (list.length < count) {
+    const additions = Array.from({ length: count - list.length }, () => (usesObject ? { answer: '' } : ''));
+    item.blanks = [...list, ...additions];
+  } else {
+    item.blanks = list.slice(0, count);
+  }
+  return true;
+}
+
+function createBlankEntry(list) {
+  return Array.isArray(list) && list.some((entry) => entry && typeof entry === 'object')
+    ? { answer: '' }
+    : '';
+}
+
+function renderMathField({ id, tag = 'input', value = '', attrs = '', className = 'input', rows = 2, actions = '' }) {
+  const control = tag === 'textarea'
+    ? `<textarea id="${id}" class="${className}" rows="${rows}" ${attrs}>${escapeHtml(value)}</textarea>`
+    : `<input id="${id}" class="${className}" ${attrs} value="${escapeHtml(value)}" />`;
+
+  return `
+    <div class="input-with-actions">
+      ${control}
+      <div class="input-actions">
+        ${actions}
+        <button type="button" class="btn btn-ghost btn-sm math-btn" data-action="open-math" data-target-id="${id}">M</button>
+      </div>
+    </div>
+  `;
 }
 
 function parseTableTokens(text) {
@@ -124,6 +224,96 @@ function insertTokenAtCursor(textarea, token) {
   const nextPos = start + token.length;
   textarea.setSelectionRange(nextPos, nextPos);
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function openMathEditor(targetInput, preferredTab) {
+  if (!elements.mathEditor) return;
+  mathEditorState.targetInput = targetInput || null;
+  if (preferredTab) {
+    setMathEditorTab(preferredTab);
+  } else {
+    setMathEditorTab(mathEditorState.activeTab || 'frac');
+  }
+  if (elements.mathTableRows) elements.mathTableRows.value = mathEditorState.tableRows;
+  if (elements.mathTableCols) elements.mathTableCols.value = mathEditorState.tableCols;
+  updateMathTableGrid();
+  elements.mathEditor.classList.remove('hidden');
+  elements.mathEditor.setAttribute('aria-hidden', 'false');
+}
+
+function closeMathEditor() {
+  if (!elements.mathEditor) return;
+  elements.mathEditor.classList.add('hidden');
+  elements.mathEditor.setAttribute('aria-hidden', 'true');
+  mathEditorState.targetInput = null;
+}
+
+function setMathEditorTab(tab) {
+  mathEditorState.activeTab = tab;
+  if (!elements.mathEditor) return;
+  const tabs = elements.mathEditor.querySelectorAll('[data-math-tab]');
+  const panels = elements.mathEditor.querySelectorAll('[data-math-panel]');
+  tabs.forEach((node) => node.classList.toggle('active', node.dataset.mathTab === tab));
+  panels.forEach((node) => node.classList.toggle('active', node.dataset.mathPanel === tab));
+}
+
+function updateMathTableGrid() {
+  if (!elements.mathTableGrid) return;
+  const rows = Math.max(1, Number(elements.mathTableRows?.value) || mathEditorState.tableRows || 2);
+  const cols = Math.max(1, Number(elements.mathTableCols?.value) || mathEditorState.tableCols || 2);
+  mathEditorState.tableRows = rows;
+  mathEditorState.tableCols = cols;
+  const total = rows * cols;
+  if (!Array.isArray(mathEditorState.tableCells) || mathEditorState.tableCells.length !== total) {
+    mathEditorState.tableCells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
+  }
+  elements.mathTableGrid.style.setProperty('--table-cols', cols);
+  elements.mathTableGrid.innerHTML = mathEditorState.tableCells
+    .map(
+      (value, index) => `
+        <input
+          class="input"
+          data-math-cell-index="${index}"
+          value="${escapeHtml(value ?? '')}"
+          placeholder="خلية"
+        />
+      `
+    )
+    .join('');
+}
+
+function insertMathToken() {
+  const target = mathEditorState.targetInput;
+  if (!target) {
+    showToast('تنبيه', 'اختر حقل إدخال أولاً.', 'warning');
+    return;
+  }
+  const tab = mathEditorState.activeTab;
+  if (tab === 'frac') {
+    const numerator = elements.mathFracNumerator?.value ?? '';
+    const denominator = elements.mathFracDenominator?.value ?? '';
+    insertTokenAtCursor(target, `[[frac:${numerator}|${denominator}]]`);
+  } else if (tab === 'table') {
+    const rows = Math.max(1, Number(elements.mathTableRows?.value) || 2);
+    const cols = Math.max(1, Number(elements.mathTableCols?.value) || 2);
+    if (!Number.isInteger(rows) || !Number.isInteger(cols)) {
+      showToast('تنبيه', 'أدخل أرقامًا صحيحة للصفوف والأعمدة.', 'warning');
+      return;
+    }
+    const total = rows * cols;
+    const cells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
+    insertTokenAtCursor(target, buildTableToken(rows, cols, cells));
+  } else if (tab === 'sqrt') {
+    const expr = elements.mathRootExpr?.value ?? '';
+    insertTokenAtCursor(target, `[[sqrt:${expr}]]`);
+  } else if (tab === 'cbrt') {
+    const expr = elements.mathCbrtExpr?.value ?? '';
+    insertTokenAtCursor(target, `[[cbrt:${expr}]]`);
+  }
+  if (String(target.value || '').includes('[[table:')) {
+    renderEditor();
+  }
+  closeMathEditor();
 }
 
 function setDirty(value = true) {
@@ -224,7 +414,7 @@ function normalizeFlowItem(item = {}) {
   if (['goal', 'note', 'detail'].includes(type)) type = 'explain';
   if (type === 'question') type = item.choices?.length ? 'mcq' : 'input';
 
-  return {
+  const normalized = {
     ...item,
     type,
     text: item.text || '',
@@ -249,6 +439,15 @@ function normalizeFlowItem(item = {}) {
       : [],
     imageFiles: Array.isArray(item.imageFiles) ? item.imageFiles : []
   };
+
+  if (normalized.type === 'fillblank') {
+    normalized.validation = normalized.validation || normalizeValidation();
+    if (normalized.validation.fuzzyAutocorrect == null) {
+      normalized.validation.fuzzyAutocorrect = true;
+    }
+  }
+
+  return normalized;
 }
 
 function normalizeAssessmentQuestion(question = {}) {
@@ -257,7 +456,7 @@ function normalizeAssessmentQuestion(question = {}) {
     : question.choices?.length
       ? 'mcq'
       : 'input';
-  return {
+  const normalized = {
     ...question,
     type,
     text: question.text || '',
@@ -276,6 +475,15 @@ function normalizeAssessmentQuestion(question = {}) {
     isRequired: question.isRequired !== false,
     validation: normalizeValidation(question.validation)
   };
+
+  if (normalized.type === 'fillblank') {
+    normalized.validation = normalized.validation || normalizeValidation();
+    if (normalized.validation.fuzzyAutocorrect == null) {
+      normalized.validation.fuzzyAutocorrect = true;
+    }
+  }
+
+  return normalized;
 }
 
 function normalizeAssessment(assessment) {
@@ -391,7 +599,11 @@ function renderGoalsSection(sectionIndex) {
             return `
               <div class="goal-row" draggable="true" data-drag-type="goal" data-goal-index="${index}">
                 <span class="drag-handle" aria-hidden="true">⋮⋮</span>
-                <input class="input" data-goal-index="${index}" value="${escapeHtml(goal)}" placeholder="اكتب الهدف هنا" />
+                ${renderMathField({
+                  id: buildMathTargetId('goal', index),
+                  value: goal,
+                  attrs: `data-goal-index="${index}" placeholder="اكتب الهدف هنا"`
+                })}
                 <div class="section-actions">
                   <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
                   ${renderActionMenu({
@@ -469,13 +681,18 @@ function renderPrereqSection(sectionIndex) {
                   </div>
                   <div class="field">
                     <label class="label">نص السؤال</label>
-                    <input class="input" data-prereq-field="text" data-prereq-index="${index}" value="${escapeHtml(item.text || '')}" />
+                    ${renderMathField({
+                      id: buildMathTargetId('prereq', index, 'text'),
+                      value: item.text || '',
+                      attrs: `data-prereq-field="text" data-prereq-index="${index}"`
+                    })}
                   </div>
                   <div class="field">
                     <label class="label">حالة السؤال</label>
                     <label class="toggle-row">
                       <input type="checkbox" data-prereq-field="isRequired" data-prereq-index="${index}" ${item.isRequired !== false ? 'checked' : ''} />
-                      <span>سؤال مطلوب</span>
+                      <span>مطلوب</span>
+                      <span class="muted">مش مطلوب</span>
                     </label>
                   </div>
                   ${type === 'mcq'
@@ -498,7 +715,11 @@ function renderPrereqSection(sectionIndex) {
                     ? `
                       <div class="field">
                         <label class="label">الإجابة الصحيحة</label>
-                        <input class="input" data-prereq-field="answer" data-prereq-index="${index}" value="${escapeHtml(item.answer || '')}" />
+                        ${renderMathField({
+                          id: buildMathTargetId('prereq', index, 'answer'),
+                          value: item.answer || '',
+                          attrs: `data-prereq-field="answer" data-prereq-index="${index}"`
+                        })}
                       </div>
                       <div class="field">
                         <label class="label">خيارات التحقق</label>
@@ -697,37 +918,60 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
       </div>
       <div class="field">
         <label class="label">وصف للصورة (اختياري)</label>
-        <textarea class="input" rows="2" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+        ${renderMathField({
+          id: buildMathTargetId('flow', conceptIndex, flowIndex, 'image-text'),
+          tag: 'textarea',
+          rows: 2,
+          value: item.text || '',
+          attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+        })}
       </div>
     `;
   }
 
   if (['input', 'mcq', 'ordering', 'match', 'fillblank'].includes(type)) {
     const validation = item.validation || {};
+    const textFieldId = buildMathTargetId('flow', conceptIndex, flowIndex, 'text');
     return `
       <div class="field">
         <label class="label">نص السؤال</label>
         ${type === 'fillblank'
           ? `
-            <textarea class="input" rows="2" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+            ${renderMathField({
+              id: textFieldId,
+              tag: 'textarea',
+              rows: 2,
+              value: item.text || '',
+              actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${textFieldId}">إدراج فراغ</button>`,
+              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+            })}
             <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
           `
           : `
-            <input class="input" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.text || '')}" />
+            ${renderMathField({
+              id: textFieldId,
+              value: item.text || '',
+              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+            })}
           `}
       </div>
       <div class="field">
         <label class="label">حالة السؤال</label>
         <label class="toggle-row">
           <input type="checkbox" data-block-field="isRequired" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" ${item.isRequired !== false ? 'checked' : ''} />
-          <span>سؤال مطلوب</span>
+          <span>مطلوب</span>
+          <span class="muted">مش مطلوب</span>
         </label>
       </div>
       ${type === 'input'
         ? `
           <div class="field">
             <label class="label">الإجابة النموذجية (اختياري)</label>
-            <input class="input" data-block-field="answer" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" value="${escapeHtml(item.answer || '')}" />
+            ${renderMathField({
+              id: buildMathTargetId('flow', conceptIndex, flowIndex, 'answer'),
+              value: item.answer || '',
+              attrs: `data-block-field="answer" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+            })}
           </div>
           <div class="field">
             <label class="label">خيارات التحقق</label>
@@ -836,10 +1080,16 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
     <div class="field">
       <label class="label">النص</label>
       <div class="text-toolbar">
-        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-frac" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">كسر</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-table" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">جدول</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-frac" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${buildMathTargetId('flow', conceptIndex, flowIndex, 'text')}">كسر</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-table" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${buildMathTargetId('flow', conceptIndex, flowIndex, 'text')}">جدول</button>
       </div>
-      <textarea class="input" rows="3" data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}">${escapeHtml(item.text || '')}</textarea>
+      ${renderMathField({
+        id: buildMathTargetId('flow', conceptIndex, flowIndex, 'text'),
+        tag: 'textarea',
+        rows: 3,
+        value: item.text || '',
+        attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+      })}
       ${renderTableEditors({ text: item.text || '', conceptIndex, flowIndex })}
     </div>
   `;
@@ -867,11 +1117,21 @@ function renderAssessmentSection(sectionIndex) {
       <div class="section-body">
         <div class="field">
           <label class="label">عنوان التقييم</label>
-          <input class="input" data-assessment-field="title" value="${escapeHtml(assessment.title || '')}" />
+          ${renderMathField({
+            id: buildMathTargetId('assessment', 'title'),
+            value: assessment.title || '',
+            attrs: 'data-assessment-field="title"'
+          })}
         </div>
         <div class="field">
           <label class="label">الوصف</label>
-          <textarea class="input" rows="2" data-assessment-field="description">${escapeHtml(assessment.description || '')}</textarea>
+          ${renderMathField({
+            id: buildMathTargetId('assessment', 'description'),
+            tag: 'textarea',
+            rows: 2,
+            value: assessment.description || '',
+            attrs: 'data-assessment-field="description"'
+          })}
         </div>
         ${questions.length
           ? questions.map((question, index) => renderAssessmentQuestion(question, index)).join('')
@@ -890,6 +1150,7 @@ function renderAssessmentQuestion(question, index) {
     : 'input';
   const menuId = `assessment-menu-${index}`;
   const validation = question.validation || {};
+  const textFieldId = buildMathTargetId('assessment', index, 'text');
 
   return `
     <div class="block-card" draggable="true" data-drag-type="assessment" data-question-index="${index}">
@@ -924,11 +1185,22 @@ function renderAssessmentQuestion(question, index) {
           <label class="label">نص السؤال</label>
           ${type === 'fillblank'
             ? `
-              <textarea class="input" rows="2" data-question-field="text" data-question-index="${index}">${escapeHtml(question.text || '')}</textarea>
+              ${renderMathField({
+                id: textFieldId,
+                tag: 'textarea',
+                rows: 2,
+                value: question.text || '',
+                actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-question-index="${index}" data-target-id="${textFieldId}">إدراج فراغ</button>`,
+                attrs: `data-question-field="text" data-question-index="${index}"`
+              })}
               <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
             `
             : `
-              <input class="input" data-question-field="text" data-question-index="${index}" value="${escapeHtml(question.text || '')}" />
+              ${renderMathField({
+                id: textFieldId,
+                value: question.text || '',
+                attrs: `data-question-field="text" data-question-index="${index}"`
+              })}
             `}
         </div>
         <div class="field">
@@ -939,14 +1211,19 @@ function renderAssessmentQuestion(question, index) {
           <label class="label">حالة السؤال</label>
           <label class="toggle-row">
             <input type="checkbox" data-question-field="isRequired" data-question-index="${index}" ${question.isRequired !== false ? 'checked' : ''} />
-            <span>سؤال مطلوب</span>
+            <span>مطلوب</span>
+            <span class="muted">مش مطلوب</span>
           </label>
         </div>
         ${type === 'input'
           ? `
             <div class="field">
               <label class="label">الإجابة النموذجية</label>
-              <input class="input" data-question-field="answer" data-question-index="${index}" value="${escapeHtml(question.answer || '')}" />
+              ${renderMathField({
+                id: buildMathTargetId('assessment', index, 'answer'),
+                value: question.answer || '',
+                attrs: `data-question-field="answer" data-question-index="${index}"`
+              })}
             </div>
             <div class="field">
               <label class="label">خيارات التحقق</label>
@@ -1019,20 +1296,29 @@ function renderAssessmentQuestion(question, index) {
 
 function renderInlineList({ list, listType, index, conceptIndex }) {
   const items = list.length ? list : [''];
+  const scopeKey = conceptIndex != null ? `flow-${conceptIndex}` : 'assessment';
   return `
     <div class="inline-list">
       ${items
         .map(
-          (value, idx) => `
+          (value, idx) => {
+            const displayValue = getBlankDisplayValue(value);
+            const inputId = buildMathTargetId(scopeKey, listType, index, idx);
+            return `
             <div class="inline-list-row">
-              <input class="input" data-list-type="${listType}" data-list-index="${index}" data-list-item-index="${idx}" ${
-                conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
-              } value="${escapeHtml(value)}" />
+              ${renderMathField({
+                id: inputId,
+                value: displayValue,
+                attrs: `data-list-type="${listType}" data-list-index="${index}" data-list-item-index="${idx}" ${
+                  conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
+                }`
+              })}
               <button class="btn btn-ghost btn-sm" data-action="delete-list-item" data-list-type="${listType}" data-list-index="${index}" data-list-item-index="${idx}" ${
                 conceptIndex != null ? `data-goal-index="${conceptIndex}"` : ''
               }>حذف</button>
             </div>
-          `
+          `;
+          }
         )
         .join('')}
       <button class="btn btn-ghost btn-sm" data-action="add-list-item" data-list-type="${listType}" data-list-index="${index}" ${
@@ -1081,26 +1367,23 @@ function renderMatchPairsEditor({ pairs, conceptIndex, flowIndex, questionIndex 
   const baseAttrs = questionIndex != null
     ? `data-question-index="${questionIndex}"`
     : `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`;
+  const scopeKey = questionIndex != null
+    ? `assessment-${questionIndex}`
+    : `flow-${conceptIndex}-${flowIndex}`;
   return `
     <div class="match-pairs">
       ${rows.map((pair, idx) => `
         <div class="match-pair-row">
-          <input
-            class="input"
-            data-match-index="${idx}"
-            data-match-side="left"
-            ${baseAttrs}
-            value="${escapeHtml(pair.left || '')}"
-            placeholder="العمود الأول"
-          />
-          <input
-            class="input"
-            data-match-index="${idx}"
-            data-match-side="right"
-            ${baseAttrs}
-            value="${escapeHtml(pair.right || '')}"
-            placeholder="العمود الثاني"
-          />
+          ${renderMathField({
+            id: buildMathTargetId('match', scopeKey, idx, 'left'),
+            value: pair.left || '',
+            attrs: `data-match-index="${idx}" data-match-side="left" ${baseAttrs} placeholder="العمود الأول"`
+          })}
+          ${renderMathField({
+            id: buildMathTargetId('match', scopeKey, idx, 'right'),
+            value: pair.right || '',
+            attrs: `data-match-index="${idx}" data-match-side="right" ${baseAttrs} placeholder="العمود الثاني"`
+          })}
           <button class="btn btn-ghost btn-sm" data-action="delete-match-pair" data-match-index="${idx}" ${baseAttrs}>حذف</button>
         </div>
       `).join('')}
@@ -1206,7 +1489,7 @@ function createFlowItem(type) {
       blanks: [''],
       hints: [],
       isRequired: true,
-      validation: normalizeValidation()
+      validation: { ...normalizeValidation(), fuzzyAutocorrect: true }
     };
   }
   if (type === 'hintlist') {
@@ -1269,6 +1552,14 @@ function handleEditorInput(event) {
     const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
     if (!item) return;
     item[field] = fieldValue;
+    if (field === 'text' && item.type === 'fillblank') {
+      const synced = syncBlanksWithText(item, fieldValue);
+      setDirty(true);
+      if (synced) {
+        renderEditor();
+      }
+      return;
+    }
     setDirty(true);
     return;
   }
@@ -1334,16 +1625,25 @@ function handleEditorInput(event) {
         question.pairs = [{ left: '', right: '' }];
       }
       if (nextType === 'fillblank' && !question.blanks?.length) {
-        question.blanks = [''];
+        question.blanks = [createBlankEntry(question.blanks)];
       }
-      if (!question.validation) {
-        question.validation = normalizeValidation();
+      question.validation = question.validation || normalizeValidation();
+      if (nextType === 'fillblank' && question.validation.fuzzyAutocorrect == null) {
+        question.validation.fuzzyAutocorrect = true;
       }
       setDirty(true);
       renderEditor();
       return;
     }
     question[field] = fieldValue;
+    if (field === 'text' && question.type === 'fillblank') {
+      const synced = syncBlanksWithText(question, fieldValue);
+      setDirty(true);
+      if (synced) {
+        renderEditor();
+      }
+      return;
+    }
     setDirty(true);
   }
 
@@ -1404,7 +1704,7 @@ function handleEditorInput(event) {
       const question = state.assessment.questions[listIndex];
       if (!question) return;
       question.blanks = question.blanks || [];
-      question.blanks[itemIndex] = value;
+      setBlankValue(question.blanks, itemIndex, value);
       setDirty(true);
       return;
     }
@@ -1420,7 +1720,7 @@ function handleEditorInput(event) {
       flowItem.items[itemIndex] = value;
     } else if (listType === 'flow-fillblank-answers') {
       flowItem.blanks = flowItem.blanks || [];
-      flowItem.blanks[itemIndex] = value;
+      setBlankValue(flowItem.blanks, itemIndex, value);
     } else if (listType === 'flow-hints') {
       flowItem.hints = flowItem.hints || [];
       flowItem.hints[itemIndex] = value;
@@ -1504,31 +1804,24 @@ function handleEditorClick(event) {
   }
 
   if (action === 'insert-frac' || action === 'insert-table') {
-    const conceptIndex = Number(button.dataset.goalIndex);
-    const flowIndex = Number(button.dataset.flowIndex);
-    const textarea = elements.editorContent.querySelector(
-      `textarea[data-block-field="text"][data-goal-index="${conceptIndex}"][data-flow-index="${flowIndex}"]`
-    );
-    if (!textarea) return;
+    const targetId = button.dataset.targetId;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    openMathEditor(targetInput, action === 'insert-frac' ? 'frac' : 'table');
+    return;
+  }
 
-    if (action === 'insert-frac') {
-      const numerator = prompt('أدخل البسط', '1');
-      if (numerator == null) return;
-      const denominator = prompt('أدخل المقام', '2');
-      if (denominator == null) return;
-      insertTokenAtCursor(textarea, `[[frac:${numerator}|${denominator}]]`);
-      return;
-    }
+  if (action === 'open-math') {
+    const targetId = button.dataset.targetId;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    openMathEditor(targetInput);
+    return;
+  }
 
-    const rows = Number(prompt('عدد الصفوف', '2'));
-    const cols = Number(prompt('عدد الأعمدة', '2'));
-    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
-      showToast('تنبيه', 'أدخل أرقامًا صحيحة للصفوف والأعمدة.', 'warning');
-      return;
-    }
-    const emptyCells = Array(rows * cols).fill('');
-    insertTokenAtCursor(textarea, buildTableToken(rows, cols, emptyCells));
-    renderEditor();
+  if (action === 'insert-blank') {
+    const targetId = button.dataset.targetId;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    if (!targetInput) return;
+    insertTokenAtCursor(targetInput, '[[blank]]');
     return;
   }
 
@@ -1749,7 +2042,7 @@ function handleEditorClick(event) {
     } else if (listType === 'assessment-fillblank-answers') {
       const question = state.assessment.questions[listIndex];
       question.blanks = question.blanks || [];
-      question.blanks.push('');
+      question.blanks.push(createBlankEntry(question.blanks));
     } else {
       const conceptIndex = Number(button.dataset.goalIndex);
       const flowItem = state.concepts?.[conceptIndex]?.flow?.[listIndex];
@@ -1762,7 +2055,7 @@ function handleEditorClick(event) {
         flowItem.items.push('');
       } else if (listType === 'flow-fillblank-answers') {
         flowItem.blanks = flowItem.blanks || [];
-        flowItem.blanks.push('');
+        flowItem.blanks.push(createBlankEntry(flowItem.blanks));
       } else if (listType === 'flow-hints') {
         flowItem.hints = flowItem.hints || [];
         flowItem.hints.push('');
@@ -1883,6 +2176,31 @@ function handleEditorClick(event) {
     }
     setDirty(true);
     renderEditor();
+  }
+}
+
+function handleMathEditorClick(event) {
+  const tabButton = event.target.closest('[data-math-tab]');
+  if (tabButton) {
+    setMathEditorTab(tabButton.dataset.mathTab);
+    if (tabButton.dataset.mathTab === 'table') {
+      updateMathTableGrid();
+    }
+    return;
+  }
+  if (event.target.dataset?.close) {
+    closeMathEditor();
+  }
+}
+
+function handleMathEditorInput(event) {
+  if (event.target === elements.mathTableRows || event.target === elements.mathTableCols) {
+    updateMathTableGrid();
+    return;
+  }
+  if (event.target.dataset?.mathCellIndex != null) {
+    const idx = Number(event.target.dataset.mathCellIndex);
+    mathEditorState.tableCells[idx] = event.target.value;
   }
 }
 
@@ -2317,7 +2635,9 @@ function buildPayload() {
         hints: (item.hints || []).filter((entry) => normalizeValue(entry)),
         choices: (item.choices || []).filter((entry) => normalizeValue(entry)),
         items: (item.items || []).filter((entry) => normalizeValue(entry)),
-        blanks: (item.blanks || []).filter((entry) => normalizeValue(entry)),
+        blanks: (item.blanks || [])
+          .map((entry) => normalizeBlankEntry(entry))
+          .filter((entry) => isBlankEntryFilled(entry)),
         pairs: (item.pairs || [])
           .map((pair) => ({
             left: normalizeValue(pair?.left),
@@ -2337,7 +2657,9 @@ function buildPayload() {
         correctIndex: question.correctIndex ?? 0,
         choices: (question.choices || []).filter((entry) => normalizeValue(entry)),
         items: (question.items || []).filter((entry) => normalizeValue(entry)),
-        blanks: (question.blanks || []).filter((entry) => normalizeValue(entry)),
+        blanks: (question.blanks || [])
+          .map((entry) => normalizeBlankEntry(entry))
+          .filter((entry) => isBlankEntryFilled(entry)),
         pairs: (question.pairs || [])
           .map((pair) => ({
             left: normalizeValue(pair?.left),
@@ -2495,6 +2817,12 @@ function bindEvents() {
   elements.btnCloseImageEditor?.addEventListener('click', closeImageEditor);
   elements.btnCancelImageEdit?.addEventListener('click', closeImageEditor);
   elements.btnApplyImageEdit?.addEventListener('click', applyImageEdit);
+
+  elements.mathEditor?.addEventListener('click', handleMathEditorClick);
+  elements.mathEditor?.addEventListener('input', handleMathEditorInput);
+  elements.btnCloseMathEditor?.addEventListener('click', closeMathEditor);
+  elements.btnMathEditorCancel?.addEventListener('click', closeMathEditor);
+  elements.btnMathEditorInsert?.addEventListener('click', insertMathToken);
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.action-menu') && !event.target.closest('[data-action="toggle-menu"]')) {

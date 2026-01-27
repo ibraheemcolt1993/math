@@ -186,16 +186,19 @@
   gap: 12px;
 }
 .fillblank-sentence{
-  display:flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: inline;
   font-size: 15px;
   line-height: 1.8;
+  word-break: break-word;
 }
 .fillblank-input{
+  display: inline-block;
   min-width: 90px;
+  max-width: 220px;
   text-align: center;
   font-weight: 700;
+  margin: 0 6px;
+  vertical-align: middle;
 }
 
 /* ---------- Feedback ---------- */

@@ -136,6 +136,65 @@
     </div>
   </div>
 
+  <div id="mathEditor" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-md math-editor" role="dialog" aria-modal="true" aria-labelledby="mathEditorTitle">
+      <div class="modal-header">
+        <h2 id="mathEditorTitle" class="h2">إدراج صيغة رياضية</h2>
+        <button id="btnCloseMathEditor" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="math-editor-tabs" role="tablist" aria-label="أدوات الرياضيات">
+          <button type="button" class="math-tab active" data-math-tab="frac">كسر</button>
+          <button type="button" class="math-tab" data-math-tab="table">جدول</button>
+          <button type="button" class="math-tab" data-math-tab="sqrt">√ جذر تربيعي</button>
+          <button type="button" class="math-tab" data-math-tab="cbrt">∛ جذر تكعيبي</button>
+        </div>
+        <div class="math-editor-panels">
+          <div class="math-editor-panel active" data-math-panel="frac">
+            <div class="field">
+              <label class="label">البسط</label>
+              <input id="mathFracNumerator" class="input" type="text" placeholder="مثال: س + 1" />
+            </div>
+            <div class="field">
+              <label class="label">المقام</label>
+              <input id="mathFracDenominator" class="input" type="text" placeholder="مثال: 2س" />
+            </div>
+          </div>
+          <div class="math-editor-panel" data-math-panel="table">
+            <div class="math-table-settings">
+              <div class="field">
+                <label class="label">عدد الصفوف</label>
+                <input id="mathTableRows" class="input ltr" type="number" min="1" value="2" />
+              </div>
+              <div class="field">
+                <label class="label">عدد الأعمدة</label>
+                <input id="mathTableCols" class="input ltr" type="number" min="1" value="2" />
+              </div>
+            </div>
+            <div id="mathTableGrid" class="math-table-grid" aria-label="خلايا الجدول"></div>
+          </div>
+          <div class="math-editor-panel" data-math-panel="sqrt">
+            <div class="field">
+              <label class="label">داخل الجذر</label>
+              <input id="mathRootExpr" class="input" type="text" placeholder="مثال: س^2 + 4" />
+            </div>
+          </div>
+          <div class="math-editor-panel" data-math-panel="cbrt">
+            <div class="field">
+              <label class="label">داخل الجذر التكعيبي</label>
+              <input id="mathCbrtExpr" class="input" type="text" placeholder="مثال: س^3 + 1" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button id="btnMathEditorCancel" class="btn btn-outline" type="button">إلغاء</button>
+        <button id="btnMathEditorInsert" class="btn btn-primary" type="button">إدراج</button>
+      </div>
+    </div>
+  </div>
+
   <div id="confirmLeave" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmLeaveTitle">
