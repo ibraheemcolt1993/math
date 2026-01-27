@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../_shared/db');
 const { readJson } = require('../_shared/parse');
 const { ok, badRequest, notFound, methodNotAllowed, response } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
 
 function toCleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -751,11 +752,17 @@ async function handlePut(context, req, weekParam) {
     context.res = ok({ ok: true });
   } catch (error) {
     await transaction.rollback();
-    context.res = response(500, { ok: false, error: error.message });
+    context.log('mng-week-content update failed', error);
+    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
   }
 }
 
 module.exports = async function (context, req) {
+  const session = await requireAin(context, req);
+  if (!session) {
+    return;
+  }
+
   const weekParam = Number(req.params.week);
   if (!Number.isInteger(weekParam)) {
     context.res = badRequest('Invalid week parameter.');
@@ -774,6 +781,7 @@ module.exports = async function (context, req) {
         context.res = methodNotAllowed();
     }
   } catch (error) {
-    context.res = response(500, { ok: false, error: error.message });
+    context.log('mng-week-content request failed', error);
+    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
   }
 };

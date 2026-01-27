@@ -8,6 +8,7 @@ const {
 } = require('@azure/storage-blob');
 const { readJson } = require('../_shared/parse');
 const { ok, badRequest, methodNotAllowed, response } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
 
 const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const EXT_BY_TYPE = {
@@ -78,6 +79,11 @@ function buildBlobName(week, fileName, contentType) {
 }
 
 module.exports = async function (context, req) {
+  const session = await requireAin(context, req);
+  if (!session) {
+    return;
+  }
+
   if (req.method !== 'POST') {
     context.res = methodNotAllowed();
     return;
@@ -204,6 +210,7 @@ module.exports = async function (context, req) {
 
     context.res = ok({ container: containerName, items });
   } catch (error) {
-    context.res = response(500, { ok: false, error: error.message });
+    context.log('mng-media-sas failed', error);
+    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
   }
 };

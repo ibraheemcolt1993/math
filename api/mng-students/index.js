@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../_shared/db');
 const { readJson, getQuery } = require('../_shared/parse');
-const { ok, badRequest, notFound, methodNotAllowed, serverError } = require('../_shared/http');
+const { ok, badRequest, notFound, methodNotAllowed, response } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
 
 function normalizeDigits(value) {
   const map = {
@@ -268,6 +269,11 @@ async function handleDelete(context, req) {
 
 module.exports = async function (context, req) {
   try {
+    const session = await requireAin(context, req);
+    if (!session) {
+      return;
+    }
+
     switch (req.method) {
       case 'GET':
         await handleGet(context, req);
@@ -285,6 +291,7 @@ module.exports = async function (context, req) {
         context.res = methodNotAllowed();
     }
   } catch (error) {
-    context.res = serverError(error);
+    context.log('mng-students request failed', error);
+    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
   }
 };

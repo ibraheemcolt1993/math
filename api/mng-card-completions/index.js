@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../_shared/db');
 const { getQuery } = require('../_shared/parse');
 const { ok, badRequest, notFound, response } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
 
 function normalizeDigits(value) {
   const map = {
@@ -19,6 +20,11 @@ function toCleanString(value) {
 
 module.exports = async function (context, req) {
   try {
+    const session = await requireAin(context, req);
+    if (!session) {
+      return;
+    }
+
     const weekParam = Number(req.params.week);
     if (!Number.isInteger(weekParam)) {
       context.res = badRequest('week must be a valid integer.');
@@ -66,6 +72,7 @@ module.exports = async function (context, req) {
 
     context.res = ok({ ok: true, students: result.recordset });
   } catch (error) {
-    context.res = response(500, { ok: false, error: error.message });
+    context.log('mng-card-completions failed', error);
+    context.res = response(500, { ok: false, error: 'SERVER_ERROR' });
   }
 };
