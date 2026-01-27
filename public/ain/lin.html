@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — دخول المشرف</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+
+  <style>
+    .lin-card {
+      max-width: 420px;
+      margin: 10vh auto 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>بوابة المشرف</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <section class="card manager-card lin-card">
+        <div class="card-header">
+          <div>
+            <h1 class="h1">الدخول الآمن</h1>
+            <p class="p">استخدم بيانات المشرف للدخول إلى صفحات الإدارة.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <form id="linForm" class="field">
+            <div class="field">
+              <label class="label" for="usernameInput">اسم المستخدم</label>
+              <input id="usernameInput" class="input" autocomplete="username" required />
+            </div>
+            <div class="field">
+              <label class="label" for="passwordInput">كلمة السر</label>
+              <input id="passwordInput" type="password" class="input" autocomplete="current-password" required />
+            </div>
+            <div class="row">
+              <button class="btn btn-primary" type="submit">دخول</button>
+            </div>
+            <p id="errorText" class="muted" role="alert" style="min-height: 1.5em;"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById('linForm');
+    const errorText = document.getElementById('errorText');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorText.textContent = '';
+
+      const username = document.getElementById('usernameInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
+
+      if (!username || !password) {
+        errorText.textContent = 'الرجاء إدخال اسم المستخدم وكلمة السر.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/ain/lin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = data?.error === 'INVALID_CREDENTIALS'
+            ? 'البيانات غير صحيحة.'
+            : 'تعذر تسجيل الدخول. حاول مجددًا.';
+          errorText.textContent = message;
+          return;
+        }
+
+        window.location.replace('/mng/students.html');
+      } catch (error) {
+        errorText.textContent = 'تعذر الاتصال بالخادم.';
+      }
+    });
+  </script>
+</body>
+</html>

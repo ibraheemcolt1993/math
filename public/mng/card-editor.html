@@ -13,6 +13,19 @@
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
+
+  <script>
+    (async () => {
+      try {
+        const res = await fetch('/api/ain/me', { credentials: 'include' });
+        if (res.status === 401) {
+          window.location.replace('/ain/lin.html');
+        }
+      } catch (error) {
+        window.location.replace('/ain/lin.html');
+      }
+    })();
+  </script>
 </head>
 
 <body>

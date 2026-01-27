@@ -9,6 +9,19 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+
+  <script>
+    (async () => {
+      try {
+        const res = await fetch('/api/ain/me', { credentials: 'include' });
+        if (res.status === 401) {
+          window.location.replace('/ain/lin.html');
+        }
+      } catch (error) {
+        window.location.replace('/ain/lin.html');
+      }
+    })();
+  </script>
 </head>
 
 <body>

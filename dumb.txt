@@ -1,3 +1,23 @@
+UPDATED FILES SUMMARY
+- api/_shared/ain-auth.js: helpers for session cookies, hashing, and guard logic.
+- api/ain-lin/function.json: HTTP trigger for AIN sign-in endpoint.
+- api/ain-lin/index.js: sign-in handler that validates credentials and sets session cookie.
+- api/ain-me/function.json: HTTP trigger for AIN session check endpoint.
+- api/ain-me/index.js: returns current AIN session identity.
+- api/ain-out/function.json: HTTP trigger for AIN sign-out endpoint.
+- api/ain-out/index.js: revokes session and clears cookie.
+- api/ain-pass/function.json: HTTP trigger for AIN password change endpoint.
+- api/ain-pass/index.js: verifies current password and updates hash.
+- api/mng-card-completions/index.js: require AIN session and sanitize errors.
+- api/mng-cards/index.js: require AIN session and sanitize errors.
+- api/mng-media-sas/index.js: require AIN session and sanitize errors.
+- api/mng-students/index.js: require AIN session and sanitize errors.
+- api/mng-week-content/index.js: require AIN session and sanitize errors.
+- public/ain/lin.html: new AIN sign-in page.
+- public/mng/students.html: guard to check AIN session before showing page.
+- public/mng/cards.html: guard to check AIN session before showing page.
+- public/mng/card-editor.html: guard to check AIN session before showing page.
+
 math/.github/workflows/azure-static-web-apps-mango-smoke-0ebe00210.yml
 name: Azure Static Web Apps CI/CD
 
