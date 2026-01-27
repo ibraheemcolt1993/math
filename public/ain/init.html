@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — تهيئة أول مستخدم</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+
+  <style>
+    .init-card {
+      max-width: 460px;
+      margin: 10vh auto 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>تهيئة أول مستخدم</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <section class="card manager-card init-card">
+        <div class="card-header">
+          <div>
+            <h1 class="h1">إنشاء حساب أولي</h1>
+            <p class="p">استخدم صفحة التهيئة مرة واحدة فقط ثم احذفها.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <form id="initForm" class="field">
+            <div class="field">
+              <label class="label" for="bootKeyInput">مفتاح التهيئة</label>
+              <input id="bootKeyInput" type="password" class="input" autocomplete="off" required />
+            </div>
+            <div class="field">
+              <label class="label" for="usernameInput">اسم المستخدم</label>
+              <input id="usernameInput" class="input" autocomplete="username" required />
+            </div>
+            <div class="field">
+              <label class="label" for="passwordInput">كلمة السر</label>
+              <input id="passwordInput" type="password" class="input" autocomplete="new-password" required />
+              <div class="help">الحد الأدنى 10 أحرف.</div>
+            </div>
+            <div class="field">
+              <label class="label" for="confirmInput">تأكيد كلمة السر</label>
+              <input id="confirmInput" type="password" class="input" autocomplete="new-password" required />
+            </div>
+            <div class="row">
+              <button class="btn btn-primary" type="submit">إنشاء</button>
+            </div>
+            <p id="errorText" class="muted" role="alert" style="min-height: 1.5em;"></p>
+            <p id="successText" class="p" role="status" style="min-height: 1.5em;"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById('initForm');
+    const errorText = document.getElementById('errorText');
+    const successText = document.getElementById('successText');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorText.textContent = '';
+      successText.textContent = '';
+
+      const bootKey = document.getElementById('bootKeyInput').value.trim();
+      const username = document.getElementById('usernameInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
+      const confirmPassword = document.getElementById('confirmInput').value;
+
+      if (!bootKey || !username || !password || !confirmPassword) {
+        errorText.textContent = 'الرجاء تعبئة جميع الحقول.';
+        return;
+      }
+
+      if (password.length < 10) {
+        errorText.textContent = 'كلمة السر يجب أن تكون 10 أحرف على الأقل.';
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        errorText.textContent = 'كلمتا السر غير متطابقتين.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/ain/seed', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-boot-key': bootKey
+          },
+          body: JSON.stringify({ username, password, confirmPassword })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = res.status === 401
+            ? 'مفتاح التهيئة غير صحيح.'
+            : res.status === 409
+              ? 'تم تعطيل التهيئة. يوجد مستخدم بالفعل.'
+              : 'تعذر إنشاء المستخدم. حاول مجددًا.';
+          errorText.textContent = message;
+          return;
+        }
+
+        if (data?.ok) {
+          successText.textContent = 'تم إنشاء الأدمن. احذف صفحة التهيئة والـ endpoint، واحذف AIN_BOOT_KEY من إعدادات Azure.';
+          form.reset();
+        } else {
+          errorText.textContent = 'تعذر إنشاء المستخدم.';
+        }
+      } catch (error) {
+        errorText.textContent = 'تعذر الاتصال بالخادم.';
+      }
+    });
+  </script>
+</body>
+</html>
