@@ -84,15 +84,15 @@
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const message = data?.error === 'INVALID_CREDENTIALS'
-            ? 'البيانات غير صحيحة.'
-            : 'تعذر تسجيل الدخول. حاول مجددًا.';
-          errorText.textContent = message;
+        if (!res.ok || data?.ok === false) {
+          errorText.textContent = 'تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مجددًا.';
           return;
         }
 
-        window.location.replace('/mng/students.html');
+        const params = new URLSearchParams(window.location.search);
+        const next = params.get('next');
+        const safeNext = next && next.startsWith('/') ? next : '/mng/students.html';
+        window.location.replace(safeNext);
       } catch (error) {
         errorText.textContent = 'تعذر الاتصال بالخادم.';
       }

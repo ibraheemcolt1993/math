@@ -9,19 +9,7 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
-
-  <script>
-    (async () => {
-      try {
-        const res = await fetch('/api/ain/me', { credentials: 'include' });
-        if (res.status === 401) {
-          window.location.replace('/ain/lin.html');
-        }
-      } catch (error) {
-        window.location.replace('/ain/lin.html');
-      }
-    })();
-  </script>
+  <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
 <body>
@@ -37,6 +25,8 @@
         </div>
 
         <div class="row">
+          <span id="ainUserLabel" class="badge primary">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
           <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
@@ -55,7 +45,7 @@
             <h1 class="h1">Cards Manager</h1>
             <p class="p">إدارة بطاقات الأسابيع (عرض، إضافة، تعديل، حذف).</p>
           </div>
-          <span class="badge primary">بدون تسجيل دخول</span>
+          <span id="ainStatusBadge" class="badge primary">محمي</span>
         </div>
 
         <div class="card-body">

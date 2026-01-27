@@ -29,9 +29,10 @@ function getCookie(req, name) {
   return cookies[name] || '';
 }
 
-function buildSessionCookie(name, token, maxAgeSeconds) {
+function buildSetCookie(token, maxAgeSeconds) {
+  const { cookieName } = getSessionConfig();
   const parts = [
-    `${name}=${encodeURIComponent(token)}`,
+    `${cookieName}=${encodeURIComponent(token)}`,
     'HttpOnly',
     'Secure',
     'SameSite=Lax',
@@ -45,21 +46,23 @@ function buildSessionCookie(name, token, maxAgeSeconds) {
   return parts.join('; ');
 }
 
-function buildClearCookie(name) {
-  return `${name}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+function buildClearCookie() {
+  const { cookieName } = getSessionConfig();
+  return `${cookieName}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
 function hashToken(token) {
-  return crypto.createHash('sha256').update(token, 'utf8').digest();
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
 function generateToken() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
-async function createSession(adminId) {
+async function createSession(adminId, hours) {
   const { sessionHours } = getSessionConfig();
-  const expiresAt = new Date(Date.now() + sessionHours * 60 * 60 * 1000);
+  const effectiveHours = Number.isFinite(hours) && hours > 0 ? hours : sessionHours;
+  const expiresAt = new Date(Date.now() + effectiveHours * 60 * 60 * 1000);
   const token = generateToken();
   const tokenHash = hashToken(token);
 
@@ -67,8 +70,8 @@ async function createSession(adminId) {
   await dbPool
     .request()
     .input('adminId', sql.Int, adminId)
-    .input('tokenHash', sql.VarBinary(32), tokenHash)
-    .input('expiresAt', sql.DateTime, expiresAt)
+    .input('tokenHash', sql.Char(64), tokenHash)
+    .input('expiresAt', sql.DateTime2, expiresAt)
     .query(
       `INSERT INTO dbo.AdminAuthSessions (AdminId, TokenHash, ExpiresAt)
        VALUES (@adminId, @tokenHash, @expiresAt);`
@@ -77,7 +80,7 @@ async function createSession(adminId) {
   return { token, expiresAt };
 }
 
-async function requireAin(context, req) {
+async function requireAin(req, context) {
   const { cookieName } = getSessionConfig();
   const token = getCookie(req, cookieName);
   if (!token) {
@@ -90,18 +93,18 @@ async function requireAin(context, req) {
     const tokenHash = hashToken(token);
     const result = await dbPool
       .request()
-      .input('tokenHash', sql.VarBinary(32), tokenHash)
+      .input('tokenHash', sql.Char(64), tokenHash)
       .query(
         `SELECT TOP (1)
            s.SessionId,
            s.AdminId,
-           s.ExpiresAt,
-           s.RevokedAt,
            u.Username,
            u.IsActive
          FROM dbo.AdminAuthSessions s
          JOIN dbo.AdminAuthUsers u ON u.AdminId = s.AdminId
-         WHERE s.TokenHash = @tokenHash`
+         WHERE s.TokenHash = @tokenHash
+           AND s.RevokedAt IS NULL
+           AND s.ExpiresAt > SYSUTCDATETIME()`
       );
 
     if (!result.recordset.length) {
@@ -110,19 +113,17 @@ async function requireAin(context, req) {
     }
 
     const session = result.recordset[0];
-    const expired = session.ExpiresAt && new Date(session.ExpiresAt) <= new Date();
-    const revoked = session.RevokedAt != null;
     const inactive = session.IsActive === false || session.IsActive === 0;
 
-    if (expired || revoked || inactive) {
+    if (inactive) {
       context.res = unauthorized();
       return null;
     }
 
     return {
-      sessionId: session.SessionId,
       adminId: session.AdminId,
-      username: session.Username
+      username: session.Username,
+      tokenHash
     };
   } catch (error) {
     context.log('AIN session check failed', error);
@@ -144,7 +145,7 @@ async function hashPassword(plain) {
 module.exports = {
   getSessionConfig,
   getCookie,
-  buildSessionCookie,
+  buildSetCookie,
   buildClearCookie,
   createSession,
   requireAin,

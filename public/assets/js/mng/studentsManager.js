@@ -477,7 +477,7 @@ function initializeWheels() {
 }
 
 async function fetchJson(url, options) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { credentials: 'include', ...(options || {}) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = data?.error || data?.message || 'تعذر تنفيذ الطلب.';
