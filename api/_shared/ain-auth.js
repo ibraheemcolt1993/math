@@ -98,8 +98,10 @@ async function requireAin(req, context) {
         `SELECT TOP (1)
            s.SessionId,
            s.AdminId,
-           u.Username,
-           u.IsActive
+         u.Username,
+         u.Role,
+         u.SchoolId,
+         u.IsActive
          FROM dbo.AdminAuthSessions s
          JOIN dbo.AdminAuthUsers u ON u.AdminId = s.AdminId
          WHERE s.TokenHash = @tokenHash
@@ -123,6 +125,8 @@ async function requireAin(req, context) {
     return {
       adminId: session.AdminId,
       username: session.Username,
+      role: session.Role,
+      schoolId: session.SchoolId,
       tokenHash
     };
   } catch (error) {
