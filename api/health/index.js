@@ -7,6 +7,6 @@ module.exports = async function (context) {
     await dbPool.request().query('SELECT 1 AS ok');
     context.res = ok({ ok: true, db: true });
   } catch (error) {
-    context.res = response(200, { ok: false, db: false, error: error.message });
+    context.res = response(500, { ok: false, db: false, error: error.message });
   }
 };
