@@ -52,7 +52,7 @@ function buildClearCookie() {
 }
 
 function hashToken(token) {
-  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+  return crypto.createHash('sha256').update(token).digest();
 }
 
 function generateToken() {
@@ -70,7 +70,7 @@ async function createSession(adminId, hours) {
   await dbPool
     .request()
     .input('adminId', sql.Int, adminId)
-    .input('tokenHash', sql.Char(64), tokenHash)
+    .input('tokenHash', sql.VarBinary(32), tokenHash)
     .input('expiresAt', sql.DateTime2, expiresAt)
     .query(
       `INSERT INTO dbo.AdminAuthSessions (AdminId, TokenHash, ExpiresAt)
@@ -93,7 +93,7 @@ async function requireAin(req, context) {
     const tokenHash = hashToken(token);
     const result = await dbPool
       .request()
-      .input('tokenHash', sql.Char(64), tokenHash)
+      .input('tokenHash', sql.VarBinary(32), tokenHash)
       .query(
         `SELECT TOP (1)
            s.SessionId,

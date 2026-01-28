@@ -12,7 +12,7 @@ module.exports = async function (context, req) {
     const dbPool = await getPool();
     await dbPool
       .request()
-      .input('tokenHash', sql.Char(64), session.tokenHash)
+      .input('tokenHash', sql.VarBinary(32), session.tokenHash)
       .query(
         `UPDATE dbo.AdminAuthSessions
          SET RevokedAt = SYSUTCDATETIME()
