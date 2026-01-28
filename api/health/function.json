@@ -5,8 +5,7 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["get"],
-      "route": "health"
+      "methods": ["get"]
     },
     {
       "type": "http",
