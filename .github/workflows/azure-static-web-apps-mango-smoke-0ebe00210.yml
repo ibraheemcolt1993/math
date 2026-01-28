@@ -30,7 +30,6 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "public"
           api_location: "api"
-          output_location: ""
 
           ###### End of Repository/Build Configurations ######
 
@@ -45,5 +44,6 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MANGO_SMOKE_0EBE00210 }}
           action: "close"
+
 
 
