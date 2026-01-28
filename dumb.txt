@@ -291,6 +291,8 @@ async function requireAin(req, context) {
            s.SessionId,
            s.AdminId,
            u.Username,
+           u.Role,
+           u.SchoolId,
            u.IsActive
          FROM dbo.AdminAuthSessions s
          JOIN dbo.AdminAuthUsers u ON u.AdminId = s.AdminId
@@ -315,6 +317,8 @@ async function requireAin(req, context) {
     return {
       adminId: session.AdminId,
       username: session.Username,
+      role: session.Role,
+      schoolId: session.SchoolId,
       tokenHash
     };
   } catch (error) {
@@ -627,7 +631,14 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = ok({ ok: true, user: { id: session.adminId, username: session.username } });
+  context.res = ok({
+    ok: true,
+    user: {
+      username: session.username,
+      role: session.role,
+      schoolId: session.schoolId
+    }
+  });
 };
 
 ====================
@@ -910,6 +921,1448 @@ module.exports = async function (context, req) {
     context.res = ok(cards);
   } catch (error) {
     context.res = response(500, { ok: false, error: error.message });
+  }
+};
+
+====================
+FILE: api/ain-super-teachers/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post"],
+      "route": "ain/super/teachers"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin, hashPassword } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function handleList(context, session) {
+  const dbPool = await getPool();
+  const result = await dbPool
+    .request()
+    .input('schoolId', sql.Int, session.schoolId)
+    .query(
+      `SELECT AdminId, Username, Role, IsActive
+       FROM dbo.AdminAuthUsers
+       WHERE SchoolId = @schoolId
+       ORDER BY AdminId`
+    );
+
+  context.res = ok({ ok: true, users: result.recordset });
+}
+
+async function handleCreate(context, req, session) {
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const username = toCleanString(payload.username);
+  const password = toCleanString(payload.password);
+  const requestedRole = toInt(payload.role);
+  const role = requestedRole === 1 || requestedRole === 2 ? requestedRole : 2;
+
+  if (!username) {
+    context.res = badRequest('username is required.');
+    return;
+  }
+
+  if (!password) {
+    context.res = badRequest('password is required.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existing = await dbPool
+    .request()
+    .input('username', sql.NVarChar(64), username)
+    .query('SELECT AdminId FROM dbo.AdminAuthUsers WHERE Username = @username');
+
+  if (existing.recordset.length) {
+    context.res = badRequest('username already exists.');
+    return;
+  }
+
+  const passwordHash = await hashPassword(password);
+  const insertResult = await dbPool
+    .request()
+    .input('username', sql.NVarChar(64), username)
+    .input('passwordHash', sql.NVarChar(200), passwordHash)
+    .input('role', sql.TinyInt, role)
+    .input('schoolId', sql.Int, session.schoolId)
+    .query(
+      `INSERT INTO dbo.AdminAuthUsers (Username, PasswordHash, Role, SchoolId)
+       VALUES (@username, @passwordHash, @role, @schoolId);
+       SELECT AdminId, Username, Role, IsActive
+       FROM dbo.AdminAuthUsers
+       WHERE Username = @username;`
+    );
+
+  context.res = ok({ ok: true, user: insertResult.recordset[0] });
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  try {
+    if (req.method === 'GET') {
+      await handleList(context, session);
+      return;
+    }
+
+    if (req.method === 'POST') {
+      await handleCreate(context, req, session);
+      return;
+    }
+
+    context.res = badRequest('Unsupported method.');
+  } catch (error) {
+    context.log('Super teacher endpoint failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-teachers-active/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "put"],
+      "route": "ain/super/teachers/active"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers-active/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBool(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const adminId = toInt(payload.adminId);
+  const isActive = toBool(payload.isActive);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  if (isActive === null) {
+    context.res = badRequest('isActive must be true or false.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const updateResult = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('isActive', sql.Bit, isActive)
+      .input('schoolId', sql.Int, session.schoolId)
+      .query(
+        `UPDATE dbo.AdminAuthUsers
+         SET IsActive = @isActive
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;
+         SELECT AdminId, Username, Role, IsActive
+         FROM dbo.AdminAuthUsers
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;`
+      );
+
+    if (!updateResult.recordset.length) {
+      context.res = badRequest('User not found.');
+      return;
+    }
+
+    context.res = ok({ ok: true, user: updateResult.recordset[0] });
+  } catch (error) {
+    context.log('Teacher active update failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-teachers-role/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "put"],
+      "route": "ain/super/teachers/role"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers-role/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const adminId = toInt(payload.adminId);
+  const role = toInt(payload.role);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  if (role !== 1 && role !== 2) {
+    context.res = badRequest('role must be 1 or 2.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const updateResult = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('role', sql.TinyInt, role)
+      .input('schoolId', sql.Int, session.schoolId)
+      .query(
+        `UPDATE dbo.AdminAuthUsers
+         SET Role = @role
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;
+         SELECT AdminId, Username, Role, IsActive
+         FROM dbo.AdminAuthUsers
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;`
+      );
+
+    if (!updateResult.recordset.length) {
+      context.res = badRequest('User not found.');
+      return;
+    }
+
+    context.res = ok({ ok: true, user: updateResult.recordset[0] });
+  } catch (error) {
+    context.log('Teacher role update failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post"],
+      "route": "ain/super/student-links"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const studentId = toCleanString(payload.studentId);
+  const adminId = toInt(payload.adminId);
+  const subject = toCleanString(payload.subject) || null;
+  const permLevelInput = toInt(payload.permLevel);
+  const permLevel = permLevelInput && permLevelInput > 0 ? permLevelInput : 1;
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const studentCheck = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId AND SchoolId = @schoolId');
+
+    if (!studentCheck.recordset.length) {
+      context.res = badRequest('Student not found.');
+      return;
+    }
+
+    const adminCheck = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query('SELECT AdminId FROM dbo.AdminAuthUsers WHERE AdminId = @adminId AND SchoolId = @schoolId');
+
+    if (!adminCheck.recordset.length) {
+      context.res = badRequest('Teacher not found.');
+      return;
+    }
+
+    const existing = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId`
+      );
+
+    if (existing.recordset.length) {
+      context.res = ok({ ok: true, link: existing.recordset[0] });
+      return;
+    }
+
+    const insertResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .input('subject', sql.NVarChar(50), subject)
+      .input('permLevel', sql.TinyInt, permLevel)
+      .query(
+        `INSERT INTO dbo.StudentAdmins (SchoolId, StudentId, AdminId, Subject, PermLevel)
+         VALUES (@schoolId, @studentId, @adminId, @subject, @permLevel);
+         SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId;`
+      );
+
+    context.res = ok({ ok: true, link: insertResult.recordset[0] });
+  } catch (error) {
+    context.log('Student link create failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-remove/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "delete"],
+      "route": "ain/super/student-links/remove"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-remove/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const studentId = toCleanString(payload.studentId);
+  const adminId = toInt(payload.adminId);
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `DELETE FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId;`
+      );
+
+    context.res = ok({ ok: true });
+  } catch (error) {
+    context.log('Student link removal failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-student/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "ain/super/student-links/student"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-student/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const query = getQuery(req);
+  const studentId = typeof query.studentId === 'string' ? query.studentId.trim() : '';
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId
+         ORDER BY AdminId`
+      );
+
+    context.res = ok({ ok: true, links: result.recordset });
+  } catch (error) {
+    context.log('Student link list (student) failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-teacher/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "ain/super/student-links/teacher"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-teacher/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const query = getQuery(req);
+  const adminId = toInt(query.adminId);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND AdminId = @adminId
+         ORDER BY StudentId`
+      );
+
+    context.res = ok({ ok: true, links: result.recordset });
+  } catch (error) {
+    context.log('Student link list (teacher) failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-teachers/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post"],
+      "route": "ain/super/teachers"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin, hashPassword } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function handleList(context, session) {
+  const dbPool = await getPool();
+  const result = await dbPool
+    .request()
+    .input('schoolId', sql.Int, session.schoolId)
+    .query(
+      `SELECT AdminId, Username, Role, IsActive
+       FROM dbo.AdminAuthUsers
+       WHERE SchoolId = @schoolId
+       ORDER BY AdminId`
+    );
+
+  context.res = ok({ ok: true, users: result.recordset });
+}
+
+async function handleCreate(context, req, session) {
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const username = toCleanString(payload.username);
+  const password = toCleanString(payload.password);
+  const requestedRole = toInt(payload.role);
+  const role = requestedRole === 1 || requestedRole === 2 ? requestedRole : 2;
+
+  if (!username) {
+    context.res = badRequest('username is required.');
+    return;
+  }
+
+  if (!password) {
+    context.res = badRequest('password is required.');
+    return;
+  }
+
+  const dbPool = await getPool();
+  const existing = await dbPool
+    .request()
+    .input('username', sql.NVarChar(64), username)
+    .query('SELECT AdminId FROM dbo.AdminAuthUsers WHERE Username = @username');
+
+  if (existing.recordset.length) {
+    context.res = badRequest('username already exists.');
+    return;
+  }
+
+  const passwordHash = await hashPassword(password);
+  const insertResult = await dbPool
+    .request()
+    .input('username', sql.NVarChar(64), username)
+    .input('passwordHash', sql.NVarChar(200), passwordHash)
+    .input('role', sql.TinyInt, role)
+    .input('schoolId', sql.Int, session.schoolId)
+    .query(
+      `INSERT INTO dbo.AdminAuthUsers (Username, PasswordHash, Role, SchoolId)
+       VALUES (@username, @passwordHash, @role, @schoolId);
+       SELECT AdminId, Username, Role, IsActive
+       FROM dbo.AdminAuthUsers
+       WHERE Username = @username;`
+    );
+
+  context.res = ok({ ok: true, user: insertResult.recordset[0] });
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  try {
+    if (req.method === 'GET') {
+      await handleList(context, session);
+      return;
+    }
+
+    if (req.method === 'POST') {
+      await handleCreate(context, req, session);
+      return;
+    }
+
+    context.res = badRequest('Unsupported method.');
+  } catch (error) {
+    context.log('Super teacher endpoint failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-teachers-active/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "put"],
+      "route": "ain/super/teachers/active"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers-active/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBool(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const adminId = toInt(payload.adminId);
+  const isActive = toBool(payload.isActive);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  if (isActive === null) {
+    context.res = badRequest('isActive must be true or false.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const updateResult = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('isActive', sql.Bit, isActive)
+      .input('schoolId', sql.Int, session.schoolId)
+      .query(
+        `UPDATE dbo.AdminAuthUsers
+         SET IsActive = @isActive
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;
+         SELECT AdminId, Username, Role, IsActive
+         FROM dbo.AdminAuthUsers
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;`
+      );
+
+    if (!updateResult.recordset.length) {
+      context.res = badRequest('User not found.');
+      return;
+    }
+
+    context.res = ok({ ok: true, user: updateResult.recordset[0] });
+  } catch (error) {
+    context.log('Teacher active update failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-teachers-role/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "put"],
+      "route": "ain/super/teachers/role"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-teachers-role/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session)) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const adminId = toInt(payload.adminId);
+  const role = toInt(payload.role);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  if (role !== 1 && role !== 2) {
+    context.res = badRequest('role must be 1 or 2.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const updateResult = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('role', sql.TinyInt, role)
+      .input('schoolId', sql.Int, session.schoolId)
+      .query(
+        `UPDATE dbo.AdminAuthUsers
+         SET Role = @role
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;
+         SELECT AdminId, Username, Role, IsActive
+         FROM dbo.AdminAuthUsers
+         WHERE AdminId = @adminId AND SchoolId = @schoolId;`
+      );
+
+    if (!updateResult.recordset.length) {
+      context.res = badRequest('User not found.');
+      return;
+    }
+
+    context.res = ok({ ok: true, user: updateResult.recordset[0] });
+  } catch (error) {
+    context.log('Teacher role update failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post"],
+      "route": "ain/super/student-links"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const studentId = toCleanString(payload.studentId);
+  const adminId = toInt(payload.adminId);
+  const subject = toCleanString(payload.subject) || null;
+  const permLevelInput = toInt(payload.permLevel);
+  const permLevel = permLevelInput && permLevelInput > 0 ? permLevelInput : 1;
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const studentCheck = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId AND SchoolId = @schoolId');
+
+    if (!studentCheck.recordset.length) {
+      context.res = badRequest('Student not found.');
+      return;
+    }
+
+    const adminCheck = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query('SELECT AdminId FROM dbo.AdminAuthUsers WHERE AdminId = @adminId AND SchoolId = @schoolId');
+
+    if (!adminCheck.recordset.length) {
+      context.res = badRequest('Teacher not found.');
+      return;
+    }
+
+    const existing = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId`
+      );
+
+    if (existing.recordset.length) {
+      context.res = ok({ ok: true, link: existing.recordset[0] });
+      return;
+    }
+
+    const insertResult = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .input('subject', sql.NVarChar(50), subject)
+      .input('permLevel', sql.TinyInt, permLevel)
+      .query(
+        `INSERT INTO dbo.StudentAdmins (SchoolId, StudentId, AdminId, Subject, PermLevel)
+         VALUES (@schoolId, @studentId, @adminId, @subject, @permLevel);
+         SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId;`
+      );
+
+    context.res = ok({ ok: true, link: insertResult.recordset[0] });
+  } catch (error) {
+    context.log('Student link create failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-remove/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["post", "delete"],
+      "route": "ain/super/student-links/remove"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-remove/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { readJson } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toCleanString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const payload = readJson(req);
+  if (!payload) {
+    context.res = badRequest('Invalid JSON body.');
+    return;
+  }
+
+  const studentId = toCleanString(payload.studentId);
+  const adminId = toInt(payload.adminId);
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `DELETE FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId AND AdminId = @adminId;`
+      );
+
+    context.res = ok({ ok: true });
+  } catch (error) {
+    context.log('Student link removal failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-student/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "ain/super/student-links/student"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-student/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const query = getQuery(req);
+  const studentId = typeof query.studentId === 'string' ? query.studentId.trim() : '';
+
+  if (!studentId) {
+    context.res = badRequest('studentId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('studentId', sql.NVarChar(50), studentId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND StudentId = @studentId
+         ORDER BY AdminId`
+      );
+
+    context.res = ok({ ok: true, links: result.recordset });
+  } catch (error) {
+    context.log('Student link list (student) failed', error);
+    context.res = serverError();
+  }
+};
+
+====================
+FILE: api/ain-super-student-links-teacher/function.json
+====================
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "ain/super/student-links/teacher"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}
+
+====================
+FILE: api/ain-super-student-links-teacher/index.js
+====================
+const { getPool, sql } = require('../_shared/db');
+const { getQuery } = require('../_shared/parse');
+const { ok, badRequest, unauthorized, serverError } = require('../_shared/http');
+const { requireAin } = require('../_shared/ain-auth');
+
+const SCHOOL_ID = 1;
+
+function isSuper(session) {
+  return Number(session?.role) === 1;
+}
+
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+module.exports = async function (context, req) {
+  const session = await requireAin(req, context);
+  if (!session) {
+    return;
+  }
+
+  if (!isSuper(session) || Number(session.schoolId) !== SCHOOL_ID) {
+    context.res = unauthorized();
+    return;
+  }
+
+  const query = getQuery(req);
+  const adminId = toInt(query.adminId);
+
+  if (!adminId) {
+    context.res = badRequest('adminId is required.');
+    return;
+  }
+
+  try {
+    const dbPool = await getPool();
+    const result = await dbPool
+      .request()
+      .input('adminId', sql.Int, adminId)
+      .input('schoolId', sql.Int, SCHOOL_ID)
+      .query(
+        `SELECT SchoolId, StudentId, AdminId, Subject, PermLevel
+         FROM dbo.StudentAdmins
+         WHERE SchoolId = @schoolId AND AdminId = @adminId
+         ORDER BY StudentId`
+      );
+
+    context.res = ok({ ok: true, links: result.recordset });
+  } catch (error) {
+    context.log('Student link list (teacher) failed', error);
+    context.res = serverError();
   }
 };
 
@@ -3797,6 +5250,17 @@ FILE: docs/api-routes.md
 | GET | `/api/ain/me` | Fetch current admin session identity. |
 | POST | `/api/ain/out` | Admin sign-out (revoke session). |
 | POST | `/api/ain/pass` | Change admin password (requires session). |
+| GET | `/api/ain/super/teachers` | List teachers (super only). |
+| POST | `/api/ain/super/teachers` | Create teacher (super only). |
+| POST | `/api/ain/super/teachers/active` | Activate/deactivate teacher (super only). |
+| PUT | `/api/ain/super/teachers/active` | Activate/deactivate teacher (super only). |
+| POST | `/api/ain/super/teachers/role` | Change teacher role (super only). |
+| PUT | `/api/ain/super/teachers/role` | Change teacher role (super only). |
+| POST | `/api/ain/super/student-links` | Link student to teacher (super only). |
+| POST | `/api/ain/super/student-links/remove` | Remove student/teacher link (super only). |
+| DELETE | `/api/ain/super/student-links/remove` | Remove student/teacher link (super only). |
+| GET | `/api/ain/super/student-links/student` | List links for student (super only). |
+| GET | `/api/ain/super/student-links/teacher` | List links for teacher (super only). |
 | GET | `/api/mng/students` | Manage students (requires admin session). |
 | POST | `/api/mng/students` | Create student (requires admin session). |
 | PUT | `/api/mng/students/{studentId}` | Update student (requires admin session). |
@@ -4150,6 +5614,8 @@ async function requireAin(req, context) {
            s.SessionId,
            s.AdminId,
            u.Username,
+           u.Role,
+           u.SchoolId,
            u.IsActive
          FROM dbo.AdminAuthSessions s
          JOIN dbo.AdminAuthUsers u ON u.AdminId = s.AdminId
@@ -4174,6 +5640,8 @@ async function requireAin(req, context) {
     return {
       adminId: session.AdminId,
       username: session.Username,
+      role: session.Role,
+      schoolId: session.SchoolId,
       tokenHash
     };
   } catch (error) {
@@ -4486,7 +5954,14 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = ok({ ok: true, user: { id: session.adminId, username: session.username } });
+  context.res = ok({
+    ok: true,
+    user: {
+      username: session.username,
+      role: session.role,
+      schoolId: session.schoolId
+    }
+  });
 };
 
 ====================

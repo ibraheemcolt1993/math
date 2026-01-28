@@ -20,6 +20,17 @@
 | GET | `/api/ain/me` | Fetch current admin session identity. |
 | POST | `/api/ain/out` | Admin sign-out (revoke session). |
 | POST | `/api/ain/pass` | Change admin password (requires session). |
+| GET | `/api/ain/super/teachers` | List teachers (super only). |
+| POST | `/api/ain/super/teachers` | Create teacher (super only). |
+| POST | `/api/ain/super/teachers/active` | Activate/deactivate teacher (super only). |
+| PUT | `/api/ain/super/teachers/active` | Activate/deactivate teacher (super only). |
+| POST | `/api/ain/super/teachers/role` | Change teacher role (super only). |
+| PUT | `/api/ain/super/teachers/role` | Change teacher role (super only). |
+| POST | `/api/ain/super/student-links` | Link student to teacher (super only). |
+| POST | `/api/ain/super/student-links/remove` | Remove student/teacher link (super only). |
+| DELETE | `/api/ain/super/student-links/remove` | Remove student/teacher link (super only). |
+| GET | `/api/ain/super/student-links/student` | List links for student (super only). |
+| GET | `/api/ain/super/student-links/teacher` | List links for teacher (super only). |
 | GET | `/api/mng/students` | Manage students (requires admin session). |
 | POST | `/api/mng/students` | Create student (requires admin session). |
 | PUT | `/api/mng/students/{studentId}` | Update student (requires admin session). |

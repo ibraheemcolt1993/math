@@ -7,5 +7,12 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = ok({ ok: true, user: { id: session.adminId, username: session.username } });
+  context.res = ok({
+    ok: true,
+    user: {
+      username: session.username,
+      role: session.role,
+      schoolId: session.schoolId
+    }
+  });
 };
