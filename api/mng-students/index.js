@@ -63,28 +63,57 @@ function normalizeDateString(value) {
   return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
-async function handleGet(context, req) {
+function resolveRole(session) {
+  const roleValue = session?.role;
+  if (roleValue === 'super' || Number(roleValue) === 1) return 'super';
+  if (roleValue === 'teacher' || Number(roleValue) === 2) return 'teacher';
+  return 'teacher';
+}
+
+function resolveSchoolId(value, fallback) {
+  const cleaned = normalizeDigits(toCleanString(value));
+  const parsed = Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function handleGet(context, req, session) {
   const query = getQuery(req);
   const q = typeof query.q === 'string' ? query.q.trim() : '';
   const search = q ? `%${normalizeDigits(q)}%` : '';
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const sessionSchoolId = session?.schoolId;
+  const schoolId = role === 'super'
+    ? resolveSchoolId(query.schoolId, sessionSchoolId)
+    : sessionSchoolId;
 
   const dbPool = await getPool();
   const request = dbPool.request();
+  request.input('schoolId', sql.Int, schoolId);
+  const conditions = ['s.SchoolId = @schoolId'];
+
   let sqlQuery =
-    'SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students';
+    'SELECT s.StudentId, s.BirthYear, s.Name, s.FirstName, s.BirthDate, s.Grade, s.Class FROM dbo.Students s';
+
+  if (role === 'teacher') {
+    request.input('adminId', sql.Int, adminId);
+    sqlQuery += ' JOIN dbo.StudentAdmins sa ON sa.StudentId = s.StudentId AND sa.SchoolId = s.SchoolId';
+    conditions.push('sa.AdminId = @adminId');
+  }
 
   if (search) {
     request.input('q', sql.NVarChar(200), search);
-    sqlQuery += ' WHERE StudentId LIKE @q OR Name LIKE @q';
+    conditions.push('(s.StudentId LIKE @q OR s.Name LIKE @q)');
   }
 
+  sqlQuery += ` WHERE ${conditions.join(' AND ')}`;
   sqlQuery += ' ORDER BY Grade, Class, Name, StudentId';
 
   const result = await request.query(sqlQuery);
   context.res = ok({ ok: true, students: result.recordset });
 }
 
-async function handlePost(context, req) {
+async function handlePost(context, req, session) {
   const payload = readJson(req);
   if (!payload) {
     context.res = badRequest('Invalid JSON body.');
@@ -125,39 +154,62 @@ async function handlePost(context, req) {
   }
 
   const birthDate = birthDateInput || `${birthYear}-01-01`;
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
 
   const dbPool = await getPool();
   const existingResult = await dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
-    .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId');
+    .input('schoolId', sql.Int, schoolId)
+    .query('SELECT StudentId FROM dbo.Students WHERE StudentId = @studentId AND SchoolId = @schoolId');
 
   if (existingResult.recordset.length) {
     context.res = badRequest('studentId already exists.');
     return;
   }
 
-  const insertResult = await dbPool
-    .request()
-    .input('studentId', sql.NVarChar(20), studentId)
-    .input('birthYear', sql.NVarChar(10), birthYear)
-    .input('name', sql.NVarChar(200), name)
-    .input('firstName', sql.NVarChar(100), firstName)
-    .input('birthDate', sql.Date, birthDate)
-    .input('grade', sql.NVarChar(50), grade)
-    .input('className', sql.NVarChar(50), className)
-    .query(
-      `INSERT INTO dbo.Students (StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class)
-       VALUES (@studentId, @birthYear, @name, @firstName, @birthDate, @grade, @className);
-       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
-       FROM dbo.Students
-       WHERE StudentId = @studentId;`
-    );
+  const transaction = new sql.Transaction(dbPool);
+  await transaction.begin();
+  try {
+    const insertResult = await new sql.Request(transaction)
+      .input('studentId', sql.NVarChar(20), studentId)
+      .input('birthYear', sql.NVarChar(10), birthYear)
+      .input('name', sql.NVarChar(200), name)
+      .input('firstName', sql.NVarChar(100), firstName)
+      .input('birthDate', sql.Date, birthDate)
+      .input('grade', sql.NVarChar(50), grade)
+      .input('className', sql.NVarChar(50), className)
+      .input('schoolId', sql.Int, schoolId)
+      .query(
+        `INSERT INTO dbo.Students (StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class, SchoolId)
+         VALUES (@studentId, @birthYear, @name, @firstName, @birthDate, @grade, @className, @schoolId);
+         SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
+         FROM dbo.Students
+         WHERE StudentId = @studentId AND SchoolId = @schoolId;`
+      );
 
-  context.res = ok({ ok: true, student: insertResult.recordset[0] });
+    if (role === 'teacher') {
+      await new sql.Request(transaction)
+        .input('studentId', sql.NVarChar(20), studentId)
+        .input('adminId', sql.Int, adminId)
+        .input('schoolId', sql.Int, schoolId)
+        .query(
+          `INSERT INTO dbo.StudentAdmins (SchoolId, StudentId, AdminId)
+           VALUES (@schoolId, @studentId, @adminId);`
+        );
+    }
+
+    await transaction.commit();
+    context.res = ok({ ok: true, student: insertResult.recordset[0] });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 }
 
-async function handlePut(context, req) {
+async function handlePut(context, req, session) {
   const studentId = normalizeDigits(toCleanString(req.params?.studentId));
   if (!studentId) {
     context.res = badRequest('studentId is required.');
@@ -170,11 +222,28 @@ async function handlePut(context, req) {
     return;
   }
 
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
+
   const dbPool = await getPool();
-  const existingResult = await dbPool
+  const existingRequest = dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
-    .query('SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class FROM dbo.Students WHERE StudentId = @studentId');
+    .input('schoolId', sql.Int, schoolId);
+  let existingQuery = `
+    SELECT s.StudentId, s.BirthYear, s.Name, s.FirstName, s.BirthDate, s.Grade, s.Class
+    FROM dbo.Students s
+  `;
+  if (role === 'teacher') {
+    existingRequest.input('adminId', sql.Int, adminId);
+    existingQuery += ' JOIN dbo.StudentAdmins sa ON sa.StudentId = s.StudentId AND sa.SchoolId = s.SchoolId';
+  }
+  existingQuery += ' WHERE s.StudentId = @studentId AND s.SchoolId = @schoolId';
+  if (role === 'teacher') {
+    existingQuery += ' AND sa.AdminId = @adminId';
+  }
+  const existingResult = await existingRequest.query(existingQuery);
 
   if (!existingResult.recordset.length) {
     context.res = notFound('Student not found.');
@@ -215,7 +284,7 @@ async function handlePut(context, req) {
     birthDate = normalizedBirthDate || `${birthYear}-01-01`;
   }
 
-  const updateResult = await dbPool
+  const updateRequest = dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
     .input('birthYear', sql.NVarChar(10), birthYear)
@@ -224,39 +293,80 @@ async function handlePut(context, req) {
     .input('birthDate', sql.Date, birthDate)
     .input('grade', sql.NVarChar(50), grade)
     .input('className', sql.NVarChar(50), className)
-    .query(
-      `UPDATE dbo.Students
-       SET BirthYear = @birthYear,
-           Name = @name,
-           FirstName = @firstName,
-           BirthDate = @birthDate,
-           Grade = @grade,
-           Class = @className
-       WHERE StudentId = @studentId;
-       SELECT StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class
-       FROM dbo.Students
-       WHERE StudentId = @studentId;`
-    );
+    .input('schoolId', sql.Int, schoolId);
+  let updateQuery = `
+    UPDATE dbo.Students
+    SET BirthYear = @birthYear,
+        Name = @name,
+        FirstName = @firstName,
+        BirthDate = @birthDate,
+        Grade = @grade,
+        Class = @className
+    WHERE StudentId = @studentId AND SchoolId = @schoolId
+  `;
+  if (role === 'teacher') {
+    updateRequest.input('adminId', sql.Int, adminId);
+    updateQuery += `
+      AND EXISTS (
+        SELECT 1
+        FROM dbo.StudentAdmins sa
+        WHERE sa.StudentId = dbo.Students.StudentId
+          AND sa.AdminId = @adminId
+          AND sa.SchoolId = @schoolId
+      )
+    `;
+  }
+  updateQuery += ';';
+  updateQuery += `
+    SELECT s.StudentId, s.BirthYear, s.Name, s.FirstName, s.BirthDate, s.Grade, s.Class
+    FROM dbo.Students s
+  `;
+  if (role === 'teacher') {
+    updateQuery += ' JOIN dbo.StudentAdmins sa ON sa.StudentId = s.StudentId AND sa.SchoolId = s.SchoolId';
+  }
+  updateQuery += ' WHERE s.StudentId = @studentId AND s.SchoolId = @schoolId';
+  if (role === 'teacher') {
+    updateQuery += ' AND sa.AdminId = @adminId';
+  }
+  const updateResult = await updateRequest.query(updateQuery);
 
   context.res = ok({ ok: true, student: updateResult.recordset[0] });
 }
 
-async function handleDelete(context, req) {
+async function handleDelete(context, req, session) {
   const studentId = normalizeDigits(toCleanString(req.params?.studentId));
   if (!studentId) {
     context.res = badRequest('studentId is required.');
     return;
   }
 
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
+
   const dbPool = await getPool();
-  const result = await dbPool
+  const deleteRequest = dbPool
     .request()
     .input('studentId', sql.NVarChar(20), studentId)
-    .query(
-      `DELETE FROM dbo.Students
-       WHERE StudentId = @studentId;
-       SELECT @@ROWCOUNT AS affected;`
-    );
+    .input('schoolId', sql.Int, schoolId);
+  let deleteQuery = `
+    DELETE FROM dbo.Students
+    WHERE StudentId = @studentId AND SchoolId = @schoolId
+  `;
+  if (role === 'teacher') {
+    deleteRequest.input('adminId', sql.Int, adminId);
+    deleteQuery += `
+      AND EXISTS (
+        SELECT 1
+        FROM dbo.StudentAdmins sa
+        WHERE sa.StudentId = dbo.Students.StudentId
+          AND sa.AdminId = @adminId
+          AND sa.SchoolId = @schoolId
+      )
+    `;
+  }
+  deleteQuery += '; SELECT @@ROWCOUNT AS affected;';
+  const result = await deleteRequest.query(deleteQuery);
 
   const affected = result.recordset[0]?.affected || 0;
   if (!affected) {
@@ -276,16 +386,16 @@ module.exports = async function (context, req) {
 
     switch (req.method) {
       case 'GET':
-        await handleGet(context, req);
+        await handleGet(context, req, session);
         return;
       case 'POST':
-        await handlePost(context, req);
+        await handlePost(context, req, session);
         return;
       case 'PUT':
-        await handlePut(context, req);
+        await handlePut(context, req, session);
         return;
       case 'DELETE':
-        await handleDelete(context, req);
+        await handleDelete(context, req, session);
         return;
       default:
         context.res = methodNotAllowed();

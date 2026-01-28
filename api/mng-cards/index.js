@@ -41,16 +41,24 @@ function normalizeClassList(value) {
   return Array.from(seen);
 }
 
-async function renumberSeq(transaction, grade) {
+function resolveRole(session) {
+  const roleValue = session?.role;
+  if (roleValue === 'super' || Number(roleValue) === 1) return 'super';
+  if (roleValue === 'teacher' || Number(roleValue) === 2) return 'teacher';
+  return 'teacher';
+}
+
+async function renumberSeq(transaction, grade, schoolId) {
   if (!grade) return;
   await new sql.Request(transaction)
     .input('grade', sql.NVarChar(50), grade)
+    .input('schoolId', sql.Int, schoolId)
     .query(
       `WITH Ranked AS (
          SELECT Week,
                 ROW_NUMBER() OVER (ORDER BY Seq, Week) AS SeqValue
          FROM dbo.Weeks
-         WHERE Grade = @grade AND IsDeleted = 0
+         WHERE Grade = @grade AND SchoolId = @schoolId AND IsDeleted = 0
        )
        UPDATE w
        SET Seq = r.SeqValue
@@ -59,18 +67,26 @@ async function renumberSeq(transaction, grade) {
     );
 }
 
-async function handleGet(context, req) {
+async function handleGet(context, req, session) {
   const query = getQuery(req);
   const grade = normalizeDigits(toCleanString(query.grade));
   const classInput = toCleanString(query.class);
   const className = normalizeDigits(classInput);
   const q = toCleanString(query.q);
   const search = q ? `%${normalizeDigits(q)}%` : '';
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
 
   const dbPool = await getPool();
   const request = dbPool.request();
 
-  const conditions = ['w.IsDeleted = 0'];
+  request.input('schoolId', sql.Int, schoolId);
+  const conditions = ['w.IsDeleted = 0', 'w.SchoolId = @schoolId'];
+  if (role === 'teacher') {
+    request.input('adminId', sql.Int, adminId);
+    conditions.push('w.CreatedByAdminId = @adminId');
+  }
 
   if (grade) {
     request.input('grade', sql.NVarChar(50), grade);
@@ -96,6 +112,7 @@ async function handleGet(context, req) {
   }
 
   const countFilters = [];
+  countFilters.push('s.SchoolId = @schoolId');
   if (grade) {
     countFilters.push('s.Grade = @grade');
   }
@@ -173,7 +190,7 @@ async function handleGet(context, req) {
   context.res = ok({ ok: true, cards });
 }
 
-async function handlePost(context, req) {
+async function handlePost(context, req, session) {
   const payload = readJson(req);
   if (!payload) {
     context.res = badRequest('Invalid JSON body.');
@@ -208,6 +225,10 @@ async function handlePost(context, req) {
     return;
   }
 
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
+
   const dbPool = await getPool();
   let week = requestedWeek;
 
@@ -215,14 +236,18 @@ async function handlePost(context, req) {
     const existing = await dbPool
       .request()
       .input('week', sql.Int, week)
-      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week');
+      .input('schoolId', sql.Int, schoolId)
+      .query('SELECT Week FROM dbo.Weeks WHERE Week = @week AND SchoolId = @schoolId');
 
     if (existing.recordset.length) {
       context.res = badRequest('week already exists.');
       return;
     }
   } else {
-    const maxResult = await dbPool.request().query('SELECT ISNULL(MAX(Week), 0) AS maxWeek FROM dbo.Weeks');
+    const maxResult = await dbPool
+      .request()
+      .input('schoolId', sql.Int, schoolId)
+      .query('SELECT ISNULL(MAX(Week), 0) AS maxWeek FROM dbo.Weeks WHERE SchoolId = @schoolId');
     week = (maxResult.recordset[0]?.maxWeek || 0) + 1;
   }
 
@@ -235,7 +260,8 @@ async function handlePost(context, req) {
     const prereqResult = await dbPool
       .request()
       .input('week', sql.Int, prereqWeek)
-      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+      .input('schoolId', sql.Int, schoolId)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0');
 
     if (!prereqResult.recordset.length) {
       context.res = badRequest('prereqWeek does not exist.');
@@ -251,9 +277,11 @@ async function handlePost(context, req) {
   const seqResult = await dbPool
     .request()
     .input('grade', sql.NVarChar(50), grade)
-    .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+    .input('schoolId', sql.Int, schoolId)
+    .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND SchoolId = @schoolId AND IsDeleted = 0');
 
   const nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
+  const createdByAdminId = role === 'teacher' ? adminId : null;
 
   const transaction = new sql.Transaction(dbPool);
   try {
@@ -265,9 +293,11 @@ async function handlePost(context, req) {
       .input('grade', sql.NVarChar(50), grade)
       .input('seq', sql.Int, nextSeq)
       .input('prereqWeek', sql.Int, prereqWeek)
+      .input('schoolId', sql.Int, schoolId)
+      .input('createdByAdminId', sql.Int, createdByAdminId)
       .query(
-        `INSERT INTO dbo.Weeks (Week, Title, Grade, Seq, PrereqWeek, IsDeleted)
-         VALUES (@week, @title, @grade, @seq, @prereqWeek, 0);`
+        `INSERT INTO dbo.Weeks (Week, Title, Grade, Seq, PrereqWeek, IsDeleted, SchoolId, CreatedByAdminId)
+         VALUES (@week, @title, @grade, @seq, @prereqWeek, 0, @schoolId, @createdByAdminId);`
       );
 
     for (const classValue of classes) {
@@ -288,7 +318,7 @@ async function handlePost(context, req) {
   }
 }
 
-async function handlePut(context, req) {
+async function handlePut(context, req, session) {
   const week = parseWeek(req.params?.week);
   if (!week) {
     context.res = badRequest('week must be a valid integer.');
@@ -328,11 +358,21 @@ async function handlePut(context, req) {
     return;
   }
 
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
+
   const dbPool = await getPool();
-  const existing = await dbPool
+  const existingRequest = dbPool
     .request()
     .input('week', sql.Int, week)
-    .query('SELECT Week, Grade, Seq FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+    .input('schoolId', sql.Int, schoolId);
+  let existingQuery = 'SELECT Week, Grade, Seq FROM dbo.Weeks WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0';
+  if (role === 'teacher') {
+    existingRequest.input('adminId', sql.Int, adminId);
+    existingQuery += ' AND CreatedByAdminId = @adminId';
+  }
+  const existing = await existingRequest.query(existingQuery);
 
   if (!existing.recordset.length) {
     context.res = notFound('Card not found.');
@@ -347,7 +387,8 @@ async function handlePut(context, req) {
     const prereqResult = await dbPool
       .request()
       .input('week', sql.Int, prereqWeek)
-      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+      .input('schoolId', sql.Int, schoolId)
+      .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0');
 
     if (!prereqResult.recordset.length) {
       context.res = badRequest('prereqWeek does not exist.');
@@ -365,7 +406,8 @@ async function handlePut(context, req) {
     const seqResult = await dbPool
       .request()
       .input('grade', sql.NVarChar(50), grade)
-      .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND IsDeleted = 0');
+      .input('schoolId', sql.Int, schoolId)
+      .query('SELECT ISNULL(MAX(Seq), 0) AS maxSeq FROM dbo.Weeks WHERE Grade = @grade AND SchoolId = @schoolId AND IsDeleted = 0');
     nextSeq = (seqResult.recordset[0]?.maxSeq || 0) + 1;
   }
 
@@ -373,19 +415,29 @@ async function handlePut(context, req) {
   try {
     await transaction.begin();
 
-    await new sql.Request(transaction)
+    const updateRequest = new sql.Request(transaction)
       .input('week', sql.Int, week)
       .input('title', sql.NVarChar(200), title)
       .input('grade', sql.NVarChar(50), grade)
       .input('seq', sql.Int, nextSeq)
       .input('prereqWeek', sql.Int, prereqWeek)
+      .input('schoolId', sql.Int, schoolId);
+    let updateQuery = `
+      UPDATE dbo.Weeks
+      SET Title = @title,
+          Grade = @grade,
+          Seq = @seq,
+          PrereqWeek = @prereqWeek
+      WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0
+    `;
+    if (role === 'teacher') {
+      updateRequest.input('adminId', sql.Int, adminId);
+      updateQuery += ' AND CreatedByAdminId = @adminId';
+    }
+    updateQuery += ';';
+    await updateRequest
       .query(
-        `UPDATE dbo.Weeks
-         SET Title = @title,
-             Grade = @grade,
-             Seq = @seq,
-             PrereqWeek = @prereqWeek
-         WHERE Week = @week AND IsDeleted = 0;`
+        updateQuery
       );
 
     await new sql.Request(transaction)
@@ -403,8 +455,8 @@ async function handlePut(context, req) {
     }
 
     if (gradeChanged) {
-      await renumberSeq(transaction, previousGrade);
-      await renumberSeq(transaction, grade);
+      await renumberSeq(transaction, previousGrade, schoolId);
+      await renumberSeq(transaction, grade, schoolId);
     }
 
     await transaction.commit();
@@ -415,18 +467,28 @@ async function handlePut(context, req) {
   }
 }
 
-async function handleDelete(context, req) {
+async function handleDelete(context, req, session) {
   const week = parseWeek(req.params?.week);
   if (!week) {
     context.res = badRequest('week must be a valid integer.');
     return;
   }
 
+  const role = resolveRole(session);
+  const adminId = session?.adminId;
+  const schoolId = session?.schoolId;
+
   const dbPool = await getPool();
-  const existing = await dbPool
+  const existingRequest = dbPool
     .request()
     .input('week', sql.Int, week)
-    .query('SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND IsDeleted = 0');
+    .input('schoolId', sql.Int, schoolId);
+  let existingQuery = 'SELECT Week, Grade FROM dbo.Weeks WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0';
+  if (role === 'teacher') {
+    existingRequest.input('adminId', sql.Int, adminId);
+    existingQuery += ' AND CreatedByAdminId = @adminId';
+  }
+  const existing = await existingRequest.query(existingQuery);
 
   if (!existing.recordset.length) {
     context.res = notFound('Card not found.');
@@ -439,14 +501,20 @@ async function handleDelete(context, req) {
   try {
     await transaction.begin();
 
-    const result = await new sql.Request(transaction)
+    const deleteRequest = new sql.Request(transaction)
       .input('week', sql.Int, week)
-      .query(
-        `UPDATE dbo.Weeks
-         SET IsDeleted = 1
-         WHERE Week = @week AND IsDeleted = 0;
-         SELECT @@ROWCOUNT AS affected;`
-      );
+      .input('schoolId', sql.Int, schoolId);
+    let deleteQuery = `
+      UPDATE dbo.Weeks
+      SET IsDeleted = 1
+      WHERE Week = @week AND SchoolId = @schoolId AND IsDeleted = 0
+    `;
+    if (role === 'teacher') {
+      deleteRequest.input('adminId', sql.Int, adminId);
+      deleteQuery += ' AND CreatedByAdminId = @adminId';
+    }
+    deleteQuery += '; SELECT @@ROWCOUNT AS affected;';
+    const result = await deleteRequest.query(deleteQuery);
 
     const affected = result.recordset[0]?.affected || 0;
     if (!affected) {
@@ -457,13 +525,14 @@ async function handleDelete(context, req) {
 
     await new sql.Request(transaction)
       .input('week', sql.Int, week)
-      .query('UPDATE dbo.Weeks SET PrereqWeek = NULL WHERE PrereqWeek = @week;');
+      .input('schoolId', sql.Int, schoolId)
+      .query('UPDATE dbo.Weeks SET PrereqWeek = NULL WHERE PrereqWeek = @week AND SchoolId = @schoolId;');
 
     await new sql.Request(transaction)
       .input('week', sql.Int, week)
       .query('DELETE FROM dbo.WeekTargets WHERE Week = @week;');
 
-    await renumberSeq(transaction, grade);
+    await renumberSeq(transaction, grade, schoolId);
 
     await transaction.commit();
     context.res = ok({ ok: true });
@@ -482,16 +551,16 @@ module.exports = async function (context, req) {
 
     switch (req.method) {
       case 'GET':
-        await handleGet(context, req);
+        await handleGet(context, req, session);
         return;
       case 'POST':
-        await handlePost(context, req);
+        await handlePost(context, req, session);
         return;
       case 'PUT':
-        await handlePut(context, req);
+        await handlePut(context, req, session);
         return;
       case 'DELETE':
-        await handleDelete(context, req);
+        await handleDelete(context, req, session);
         return;
       default:
         context.res = methodNotAllowed();
