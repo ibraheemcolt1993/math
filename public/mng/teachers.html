@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — إدارة المعلمين</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <script src="/assets/js/mng/ain-guard.js" defer></script>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>لوحة إدارة المعلمين</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <span id="ainUserLabel" class="badge primary">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+            الرئيسية
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <div class="warning-banner" role="alert">
+        ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
+      </div>
+
+      <section class="card manager-card">
+        <div class="card-header">
+          <div>
+            <h1 class="h1">Teachers Manager</h1>
+            <p class="p">إدارة حسابات المعلمين (عرض، إضافة، تفعيل، تغيير دور، إعادة تعيين كلمة السر).</p>
+          </div>
+          <span id="ainStatusBadge" class="badge primary">محمي</span>
+        </div>
+
+        <div class="card-body">
+          <div class="manager-toolbar">
+            <div class="row">
+              <button id="btnAddTeacher" class="btn btn-primary">إضافة معلم</button>
+            </div>
+            <div class="row">
+              <span class="badge">روابط سريعة</span>
+              <a class="btn btn-outline btn-sm" href="/mng/students.html">إدارة الطلاب</a>
+              <a class="btn btn-outline btn-sm" href="/mng/cards.html">إدارة البطاقات</a>
+              <a class="btn btn-outline btn-sm" href="/mng/card-editor.html">محرر بطاقة</a>
+              <a class="btn btn-outline btn-sm" href="/mng/teachers.html">المعلمين</a>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" aria-live="polite">
+              <thead>
+                <tr>
+                  <th>المعرف</th>
+                  <th>اسم المستخدم</th>
+                  <th>الدور</th>
+                  <th>الحالة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="teachersBody">
+                <tr>
+                  <td colspan="5" class="muted center">تحميل البيانات...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container section center">
+      <p class="small">© math — لوحة إدارة تجريبية</p>
+    </footer>
+  </div>
+
+  <div id="teacherModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="teacherModalTitle">
+      <div class="modal-header">
+        <h2 id="teacherModalTitle" class="h2">إضافة معلم</h2>
+        <button id="btnCloseTeacherModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <form id="teacherForm" class="modal-body">
+        <div class="field">
+          <label class="label" for="teacherUsername">اسم المستخدم</label>
+          <input id="teacherUsername" class="input" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label class="label" for="teacherPassword">كلمة السر</label>
+          <input id="teacherPassword" class="input ltr" type="password" autocomplete="new-password" required />
+        </div>
+        <div class="field">
+          <label class="label" for="teacherRole">الدور</label>
+          <select id="teacherRole" class="input">
+            <option value="1">مشرف (Super)</option>
+            <option value="2" selected>معلم</option>
+          </select>
+        </div>
+        <div class="modal-footer modal-actions">
+          <button id="btnSaveTeacher" class="btn btn-primary" type="submit">حفظ</button>
+          <button id="btnCancelTeacher" class="btn btn-outline" type="button">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="passwordModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+      <div class="modal-header">
+        <h2 id="passwordModalTitle" class="h2">تغيير كلمة السر</h2>
+        <button id="btnClosePasswordModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+      </div>
+      <form id="passwordForm" class="modal-body">
+        <p id="passwordUserLabel" class="p muted">—</p>
+        <div class="field">
+          <label class="label" for="newPasswordInput">كلمة السر الجديدة</label>
+          <input id="newPasswordInput" class="input ltr" type="password" autocomplete="new-password" required />
+        </div>
+        <div class="row">
+          <button id="btnGeneratePassword" class="btn btn-outline btn-sm" type="button">توليد كلمة مرور</button>
+        </div>
+        <div class="modal-footer modal-actions">
+          <button id="btnSubmitPassword" class="btn btn-primary" type="submit">تحديث</button>
+          <button id="btnCancelPassword" class="btn btn-outline" type="button">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="/assets/js/mng/teachersManager.js"></script>
+</body>
+</html>
