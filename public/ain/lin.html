@@ -91,7 +91,7 @@
 
         const params = new URLSearchParams(window.location.search);
         const next = params.get('next');
-        const safeNext = next && next.startsWith('/') ? next : '/mng/students.html';
+        const safeNext = next && next.startsWith('/') ? next : '/mng/';
         window.location.replace(safeNext);
       } catch (error) {
         errorText.textContent = 'تعذر الاتصال بالخادم.';

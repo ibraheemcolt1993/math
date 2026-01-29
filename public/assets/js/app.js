@@ -55,9 +55,15 @@ function initIndexPage() {
   const welcomeTitle = document.getElementById('welcomeTitle');
   const welcomeChip = document.getElementById('welcomeChip');
   const welcomeName = document.getElementById('welcomeName');
+  const loginTabButtons = document.querySelectorAll('[data-login-tab]');
+  const loginTabPanels = document.querySelectorAll('[data-login-panel]');
+  const adminPortalLink = document.getElementById('adminPortalLink');
 
   // Ensure Birth Year input exists (inject if missing)
   const inputBirthYear = ensureBirthYearInput(inputId);
+
+  initLoginTabs();
+  updateAdminPortalLink();
 
   hideAllScreens();
 
@@ -189,6 +195,58 @@ function initIndexPage() {
     if (inputId) inputId.value = '';
     if (inputBirthYear) inputBirthYear.value = '';
   });
+
+  function initLoginTabs() {
+    if (!loginTabButtons.length || !loginTabPanels.length) return;
+
+    const setLoginTab = (tab) => {
+      loginTabButtons.forEach((btn) => {
+        const isActive = btn.dataset.loginTab === tab;
+        btn.classList.toggle('btn-primary', isActive);
+        btn.classList.toggle('btn-outline', !isActive);
+        btn.setAttribute('aria-selected', String(isActive));
+      });
+
+      loginTabPanels.forEach((panel) => {
+        const isActive = panel.dataset.loginPanel === tab;
+        panel.classList.toggle('hidden', !isActive);
+        panel.toggleAttribute('hidden', !isActive);
+        if (isActive) {
+          panel.style.removeProperty('display');
+        } else {
+          panel.style.display = 'none';
+        }
+      });
+    };
+
+    loginTabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setLoginTab(btn.dataset.loginTab);
+      });
+    });
+
+    setLoginTab('pupil');
+  }
+
+  async function updateAdminPortalLink() {
+    if (!adminPortalLink) return;
+    const loginHref = '/ain/lin.html?next=/mng/';
+    adminPortalLink.href = loginHref;
+
+    try {
+      const res = await fetch('/api/ain/me', {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (data?.user) {
+        adminPortalLink.href = '/mng/';
+      }
+    } catch (error) {
+      adminPortalLink.href = loginHref;
+    }
+  }
 
   function setScreenVisibility(screen, isVisible) {
     if (!screen) return;
