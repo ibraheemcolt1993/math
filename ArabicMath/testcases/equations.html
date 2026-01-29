@@ -1,0 +1,67 @@
+<table border="1" cellpadding="8">
+    <tr>
+        <th>
+            #ID Name
+        </th>
+        <th>
+            Equation
+        </th>
+        <th>
+            English
+        </th>
+        <th>
+            Arabic
+        </th>
+    </tr>
+    <tr>
+        <td>
+            <strong>Test Equation</strong>
+        </td>
+        <td>
+            Enter your equation here:
+            <br />
+            <br />
+            <textarea id="dynamic-equation" rows="3" cols="50">x = 10</textarea>
+            <br />
+            <button id="show-dynamic-equation">Show</button>
+        </td>
+        <td id="dynamic-en"></td>
+        <td id="dynamic-ar"></td>
+    </tr>
+    {{#equations}}
+    <tr id="eq_{{id}}">
+        <td>
+            <a href="#eq_{{id}}">
+                <strong>#{{id}} {{name}}</strong>
+            </a>
+        </td>
+        <td id="eq_{{id}}_code">
+            <a class="inline-link" href="#eq_{{id}}_code">#</a>
+            <code>{{{equation}}}</code>
+        </td>
+        <td id="eq_{{id}}_en">
+            <a class="inline-link" href="#eq_{{id}}_en">#</a>
+            <script type="math/tex; mode=display">
+                {{{equation}}}
+            </script>
+        </td>
+        <td id="eq_{{id}}_ar">
+            <a class="inline-link" href="#eq_{{id}}_ar">#</a>
+
+            {{#hide_arabic}}
+              <i>English-only test case.</i>
+            {{/hide_arabic}}
+
+            {{^hide_arabic}}
+              <script type="math/tex; mode=display">
+                  \ar{
+                      {{{equation}}}
+                  }
+              </script>
+            {{/hide_arabic}}
+        </td>
+    </tr>
+    {{/equations}}
+</table>
+<br />
+<br />
