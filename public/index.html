@@ -37,20 +37,39 @@
           <div class="card-header">
             <div>
               <h1 class="h1">تسجيل الدخول</h1>
-              <p class="p">أدخل رقم الهوية للمتابعة وحفظ التقدم.</p>
+              <p class="p">اختر بوابة الدخول المناسبة للمتابعة.</p>
             </div>
             <span class="badge primary">نهاري</span>
           </div>
 
           <div class="card-body">
-            <div class="field">
-              <label class="label" for="studentId">رقم الهوية</label>
-              <input id="studentId" class="input ltr" inputmode="numeric" autocomplete="off" placeholder="مثال: 123456789" />
-              <div class="help">يُستخدم لحفظ التقدم على هذا الجهاز.</div>
+            <div class="row" role="tablist" aria-label="بوابة الدخول">
+              <button type="button" class="btn btn-primary btn-sm" data-login-tab="pupil" aria-selected="true">
+                دخول الطلاب
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" data-login-tab="teacher" aria-selected="false">
+                دخول المعلمين
+              </button>
             </div>
 
-            <div class="row">
-              <button id="btnLogin" class="btn btn-primary btn-lg w-100">دخول</button>
+            <div class="login-tab-panel" data-login-panel="pupil">
+              <div class="field">
+                <label class="label" for="studentId">رقم الهوية</label>
+                <input id="studentId" class="input ltr" inputmode="numeric" autocomplete="off" placeholder="مثال: 123456789" />
+                <div class="help">يُستخدم لحفظ التقدم على هذا الجهاز.</div>
+              </div>
+
+              <div class="row">
+                <button id="btnLogin" class="btn btn-primary btn-lg w-100">دخول</button>
+              </div>
+            </div>
+
+            <div class="login-tab-panel hidden" data-login-panel="teacher" hidden>
+              <p class="p">للمعلمين والمشرفين فقط.</p>
+              <a id="adminPortalLink" class="btn btn-primary btn-lg w-100" href="/mng/">
+                لوحة الإدارة
+              </a>
+              <div class="help">سيتم تحويلك تلقائيًا لبوابة الدخول الآمن عند الحاجة.</div>
             </div>
           </div>
         </div>
