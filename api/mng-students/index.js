@@ -49,12 +49,6 @@ function toNullableInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function toNullableInt(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function isValidBirthYear(value) {
   return /^\d{4}$/.test(value);
 }
@@ -96,14 +90,18 @@ async function handleGet(context, req, session) {
   const role = resolveRole(session);
   const adminId = session?.adminId;
   const sessionSchoolId = session?.schoolId;
-  const schoolId = role === 'super'
+  const resolvedSchoolId = role === 'super'
     ? resolveSchoolId(query.schoolId, sessionSchoolId)
     : sessionSchoolId;
+  const schoolId = Number.isFinite(resolvedSchoolId) ? resolvedSchoolId : null;
 
   const dbPool = await getPool();
   const request = dbPool.request();
-  request.input('schoolId', sql.Int, schoolId);
-  const conditions = ['s.SchoolId = @schoolId'];
+  const conditions = [];
+  if (schoolId !== null) {
+    request.input('schoolId', sql.Int, schoolId);
+    conditions.push('s.SchoolId = @schoolId');
+  }
 
   let sqlQuery =
     'SELECT s.StudentId, s.BirthYear, s.Name, s.FirstName, s.BirthDate, s.Grade, s.Class FROM dbo.Students s';
@@ -119,7 +117,9 @@ async function handleGet(context, req, session) {
     conditions.push('(s.StudentId LIKE @q OR s.Name LIKE @q)');
   }
 
-  sqlQuery += ` WHERE ${conditions.join(' AND ')}`;
+  if (conditions.length) {
+    sqlQuery += ` WHERE ${conditions.join(' AND ')}`;
+  }
   sqlQuery += ' ORDER BY Grade, Class, Name, StudentId';
 
   const result = await request.query(sqlQuery);
