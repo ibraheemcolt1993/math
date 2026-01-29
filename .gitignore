@@ -2,3 +2,5 @@ node_modules/
 api/node_modules/
 server/
 .DS_Store
+/public/assets/vendor/mathjax/
+/public/assets/vendor/mathjax2/
