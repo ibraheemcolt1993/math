@@ -39,7 +39,14 @@ function normalizeGrade(value) {
 }
 
 function toCleanString(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function toNullableInt(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toNullableInt(value) {
