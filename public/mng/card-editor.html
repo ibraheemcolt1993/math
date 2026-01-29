@@ -276,20 +276,6 @@
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script src="/assets/vendor/katex/katex.min.js" defer></script>
   <script src="/assets/vendor/mathlive/mathlive.min.js" defer></script>
-  <script>
-    window.MathJax = window.MathJax || {};
-    window.MathJax.Ajax = window.MathJax.Ajax || { config: { path: {} } };
-    window.MathJax.Hub = window.MathJax.Hub || { Config: function () {}, Queue: function () {} };
-    MathJax.Ajax.config.path['arabic'] = '/assets/vendor/arabic-mathjax';
-    MathJax.Hub.Config({
-      extensions: ['[arabic]/arabic.js'],
-      jax: ['input/TeX', 'output/HTML-CSS'],
-      TeX: {
-        extensions: ['AMSmath.js', 'AMSsymbols.js']
-      }
-    });
-  </script>
-  <script src="/assets/vendor/mathjax2/MathJax.js?config=TeX-AMS_HTML"></script>
   <script type="module" src="/assets/js/mng/cardEditor.js"></script>
   <script type="module" src="/assets/js/mng/cardbuilder-mathx.js"></script>
 </body>
