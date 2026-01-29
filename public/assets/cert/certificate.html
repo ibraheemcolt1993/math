@@ -8,11 +8,15 @@
 
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/cert/certificate.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
 </head>
 
-<body class="cert-app">
+<body class="cert-app md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math999">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -22,19 +26,19 @@
           </div>
         </div>
         <div class="row">
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="العودة للرئيسية">الرئيسية</a>
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="العودة للرئيسية">الرئيسية</a>
         </div>
       </div>
     </header>
 
     <main class="container section">
-      <section id="certEmpty" class="card hidden" aria-live="polite">
+      <section id="certEmpty" class="card md-card hidden" aria-live="polite">
         <div class="card-header">
           <h1 class="h2">لا توجد بيانات شهادة حالياً</h1>
           <p class="p muted">أكمل بطاقة أولًا أو افتح الشهادة من زر "عرض الشهادة" بعد الإنهاء.</p>
         </div>
         <div class="card-body">
-          <a class="btn btn-primary" href="/">العودة للرئيسية</a>
+          <a class="btn btn-primary md-btn" href="/">العودة للرئيسية</a>
         </div>
       </section>
 
@@ -92,9 +96,9 @@
   </div>
 
   <div id="certActions" class="cert-actions" role="group" aria-label="إجراءات الشهادة">
-    <button id="btnDownloadPng" class="btn btn-primary" type="button">تحميل PNG</button>
-    <button id="btnDownloadJpg" class="btn btn-outline" type="button">تحميل JPEG</button>
-    <button id="btnShareWhatsapp" class="btn btn-whatsapp" type="button">مشاركة واتساب</button>
+    <button id="btnDownloadPng" class="btn btn-primary md-btn" type="button">تحميل PNG</button>
+    <button id="btnDownloadJpg" class="btn btn-outline md-btn" type="button">تحميل JPEG</button>
+    <button id="btnShareWhatsapp" class="btn btn-whatsapp md-btn" type="button">مشاركة واتساب</button>
   </div>
 
   <div id="certNotice" class="cert-notice hidden" role="status" aria-live="polite"></div>

@@ -10,12 +10,16 @@
   <link rel="stylesheet" href="/assets/css/lesson.css" />
   <link rel="stylesheet" href="/assets/css/questions.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
 </head>
 
-<body>
+<body class="md-theme">
   <div class="app">
     <!-- Topbar -->
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -25,7 +29,7 @@
           </div>
         </div>
 
-        <a id="btnBackHome" class="btn btn-ghost btn-sm" href="/" aria-label="العودة للبطاقات">
+        <a id="btnBackHome" class="btn btn-ghost btn-sm md-btn" href="/" aria-label="العودة للبطاقات">
           العودة للبطاقات
         </a>
       </div>
@@ -38,7 +42,7 @@
           <h1 id="lessonTitle" class="h1">تحميل البطاقة...</h1>
           <div class="lesson-meta">
             <span id="lessonStudent" class="lesson-student">طالب</span>
-            <span id="lessonWeek" class="badge primary">week</span>
+            <span id="lessonWeek" class="badge primary md-badge">week</span>
           </div>
         </div>
 
@@ -61,19 +65,19 @@
 
       <!-- Completion -->
       <section id="lessonComplete" class="lesson-complete hidden" hidden>
-        <div class="card">
+        <div class="card md-card">
           <div class="card-header">
             <div>
               <h2 class="h2">أحسنت 🎉</h2>
               <p class="p">أنهيت البطاقة بنجاح.</p>
             </div>
-            <span class="badge done">منجزة</span>
+            <span class="badge done md-badge">منجزة</span>
           </div>
 
           <div class="card-body">
             <p class="p">تم حفظ الإنجاز، ويمكنك العودة للبطاقات لمتابعة التالي.</p>
             <div class="row">
-              <a href="/" class="btn btn-primary btn-lg w-100">العودة للبطاقات</a>
+              <a href="/" class="btn btn-primary btn-lg w-100 md-btn">العودة للبطاقات</a>
             </div>
           </div>
         </div>

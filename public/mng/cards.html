@@ -9,12 +9,16 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
-<body>
+<body class="md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -25,9 +29,9 @@
         </div>
 
         <div class="row">
-          <span id="ainUserLabel" class="badge primary">محمي</span>
-          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
         </div>
@@ -39,26 +43,26 @@
         ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
       </div>
 
-      <section class="card manager-card">
+      <section class="card manager-card md-card">
         <div class="card-header">
           <div>
             <h1 class="h1">Cards Manager</h1>
             <p class="p">إدارة بطاقات الأسابيع (عرض، إضافة، تعديل، حذف).</p>
           </div>
-          <span id="ainStatusBadge" class="badge primary">محمي</span>
+          <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
 
         <div class="card-body">
           <div class="manager-toolbar">
             <div class="row">
-              <button id="btnAddCard" class="btn btn-primary">إضافة بطاقة</button>
-              <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
-              <button id="btnExportCards" class="btn btn-outline" disabled>تصدير Excel</button>
+              <button id="btnAddCard" class="btn btn-primary md-btn">إضافة بطاقة</button>
+              <button id="btnDeleteSelected" class="btn btn-outline md-btn" disabled>حذف المحدد</button>
+              <button id="btnExportCards" class="btn btn-outline md-btn" disabled>تصدير Excel</button>
             </div>
             <div class="row filter-row">
-              <div class="field">
-                <label class="label" for="gradeFilter">الصف</label>
-                <select id="gradeFilter" class="input">
+              <div class="field md-field">
+                <label class="label md-label" for="gradeFilter">الصف</label>
+                <select id="gradeFilter" class="input md-input">
                   <option value="">كل الصفوف</option>
                   <option value="1">الأول</option>
                   <option value="2">الثاني</option>
@@ -71,28 +75,28 @@
                   <option value="9">التاسع</option>
                 </select>
               </div>
-              <div class="field">
-                <label class="label" for="classFilter">الشعبة</label>
-                <select id="classFilter" class="input" disabled>
+              <div class="field md-field">
+                <label class="label md-label" for="classFilter">الشعبة</label>
+                <select id="classFilter" class="input md-input" disabled>
                   <option value="">كل الشعب</option>
                 </select>
               </div>
             </div>
             <div class="row search-row">
-              <div class="field w-100">
-                <label class="label" for="searchInput">بحث سريع</label>
-                <input id="searchInput" class="input" placeholder="ابحث برقم البطاقة أو العنوان" autocomplete="off" />
+              <div class="field w-100 md-field">
+                <label class="label md-label" for="searchInput">بحث سريع</label>
+                <input id="searchInput" class="input md-input" placeholder="ابحث برقم البطاقة أو العنوان" autocomplete="off" />
               </div>
-              <button id="btnSearch" class="btn btn-outline">بحث</button>
+              <button id="btnSearch" class="btn btn-outline md-btn">بحث</button>
             </div>
           </div>
 
           <div class="table-wrap">
-            <table class="table" aria-live="polite">
+            <table class="table md-table" aria-live="polite">
               <thead>
                 <tr>
                   <th class="select-cell">
-                    <input id="selectAllCards" type="checkbox" aria-label="تحديد الكل" />
+                    <input id="selectAllCards" type="checkbox" class="md-checkbox" aria-label="تحديد الكل" />
                   </th>
                   <th>رقم البطاقة</th>
                   <th>العنوان</th>
@@ -118,25 +122,25 @@
     </footer>
   </div>
 
-  <div id="cardModal" class="modal hidden" aria-hidden="true">
+  <div id="cardModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card md-modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-header">
         <h2 id="modalTitle" class="h2">إضافة بطاقة</h2>
-        <button id="btnCloseModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseModal" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <form id="cardForm" class="modal-body">
-        <div class="field" id="weekDisplayRow">
-          <label class="label">معرف البطاقة</label>
+        <div class="field md-field" id="weekDisplayRow">
+          <label class="label md-label">معرف البطاقة</label>
           <div id="weekDisplay" class="help">—</div>
         </div>
-        <div class="field">
-          <label class="label" for="titleInput">العنوان</label>
-          <input id="titleInput" class="input" autocomplete="off" required />
+        <div class="field md-field">
+          <label class="label md-label" for="titleInput">العنوان</label>
+          <input id="titleInput" class="input md-input" autocomplete="off" required />
         </div>
-        <div class="field">
-          <label class="label" for="gradeInput">الصف</label>
-          <select id="gradeInput" class="input" required>
+        <div class="field md-field">
+          <label class="label md-label" for="gradeInput">الصف</label>
+          <select id="gradeInput" class="input md-input" required>
             <option value="">اختر الصف</option>
             <option value="1">الأول</option>
             <option value="2">الثاني</option>
@@ -149,64 +153,64 @@
             <option value="9">التاسع</option>
           </select>
         </div>
-        <div class="field">
-          <label class="label" for="prereqSelect">المتطلب السابق</label>
-          <select id="prereqSelect" class="input"></select>
+        <div class="field md-field">
+          <label class="label md-label" for="prereqSelect">المتطلب السابق</label>
+          <select id="prereqSelect" class="input md-input"></select>
           <div class="help">اختياري — تظهر بطاقات الصف نفسه فقط.</div>
         </div>
-        <div class="field">
-          <label class="label">الشعب المستهدفة</label>
-          <label class="label" for="allClassesToggle">
-            <input id="allClassesToggle" type="checkbox" checked />
+        <div class="field md-field">
+          <label class="label md-label">الشعب المستهدفة</label>
+          <label class="label md-label" for="allClassesToggle">
+            <input id="allClassesToggle" type="checkbox" class="md-checkbox" checked />
             كل الشعب
           </label>
-          <div id="classesPicker" class="field">
+          <div id="classesPicker" class="field md-field">
             <div class="row" id="classesOptions"></div>
-            <div class="field">
-              <label class="label" for="classesManual">إدخال يدوي (مفصول بفواصل)</label>
-              <input id="classesManual" class="input" placeholder="مثال: 1,2,3" autocomplete="off" />
+            <div class="field md-field">
+              <label class="label md-label" for="classesManual">إدخال يدوي (مفصول بفواصل)</label>
+              <input id="classesManual" class="input md-input" placeholder="مثال: 1,2,3" autocomplete="off" />
             </div>
           </div>
         </div>
 
         <div class="modal-footer modal-actions">
-          <button id="btnSubmit" class="btn btn-primary" type="submit">حفظ</button>
-          <button id="btnCancel" class="btn btn-outline" type="button">إلغاء</button>
+          <button id="btnSubmit" class="btn btn-primary md-btn" type="submit">حفظ</button>
+          <button id="btnCancel" class="btn btn-outline md-btn" type="button">إلغاء</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="confirmModal" class="modal hidden" aria-hidden="true">
+  <div id="confirmModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-card modal-card-sm md-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div class="modal-header">
         <h2 id="confirmTitle" class="h2">تأكيد الحذف</h2>
-        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <p id="confirmMessage" class="p">هل أنت متأكد من حذف البطاقة؟</p>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnConfirmDelete" class="btn btn-primary" type="button">تأكيد الحذف</button>
-        <button id="btnCancelDelete" class="btn btn-outline" type="button">إلغاء</button>
+        <button id="btnConfirmDelete" class="btn btn-primary md-btn" type="button">تأكيد الحذف</button>
+        <button id="btnCancelDelete" class="btn btn-outline md-btn" type="button">إلغاء</button>
       </div>
     </div>
   </div>
 
-  <div id="completionsModal" class="modal hidden" aria-hidden="true">
+  <div id="completionsModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="completionsTitle">
+    <div class="modal-card md-modal-card" role="dialog" aria-modal="true" aria-labelledby="completionsTitle">
       <div class="modal-header">
         <h2 id="completionsTitle" class="h2">من أنهى البطاقة</h2>
-        <button id="btnCloseCompletions" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseCompletions" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="row space-between">
           <p id="completionsSubtitle" class="p muted">جاري التحميل...</p>
         </div>
         <div class="table-wrap">
-          <table class="table">
+          <table class="table md-table">
             <thead>
               <tr>
                 <th>رقم الطالب</th>

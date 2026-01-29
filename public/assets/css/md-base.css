@@ -1,0 +1,110 @@
+/* Material 3 base layer (RTL + typography) */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body.md-theme {
+  font-family: var(--md-font-family);
+  background: var(--md-color-background);
+  color: var(--md-color-on-surface);
+  line-height: var(--md-line-height-normal);
+  font-weight: var(--md-font-weight-medium);
+  direction: rtl;
+}
+
+body.md-theme ::selection {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+body.md-theme a {
+  color: inherit;
+}
+
+:where(.md-theme) .h1,
+:where(.md-theme) h1 {
+  font-size: var(--md-font-size-2xl);
+  line-height: var(--md-line-height-tight);
+  font-weight: var(--md-font-weight-bold);
+  margin: 0;
+}
+
+:where(.md-theme) .h2,
+:where(.md-theme) h2 {
+  font-size: var(--md-font-size-xl);
+  line-height: var(--md-line-height-tight);
+  font-weight: var(--md-font-weight-bold);
+  margin: 0;
+}
+
+:where(.md-theme) .h3,
+:where(.md-theme) h3 {
+  font-size: var(--md-font-size-lg);
+  font-weight: var(--md-font-weight-semibold);
+  margin: 0;
+}
+
+:where(.md-theme) .p,
+:where(.md-theme) p {
+  font-size: var(--md-font-size-md);
+  color: var(--md-color-on-surface-variant);
+  margin: 0;
+}
+
+:where(.md-theme) .small {
+  font-size: var(--md-font-size-sm);
+  color: var(--md-color-on-surface-variant);
+}
+
+:where(.md-theme) .muted {
+  color: var(--md-color-on-surface-variant);
+}
+
+:where(.md-theme) .container {
+  width: min(1200px, calc(100% - 32px));
+}
+
+:where(.md-theme) .section {
+  padding-block: 32px;
+}
+
+:where(.md-theme) .center {
+  text-align: center;
+}
+
+:where(.md-theme) .ltr {
+  direction: ltr;
+}
+
+:where(.md-theme) .hidden[hidden] {
+  display: none !important;
+}
+
+/* Map legacy design tokens to Material tokens for consistency */
+:root {
+  --bg: var(--md-color-background);
+  --surface: var(--md-color-surface);
+  --surface-2: var(--md-color-surface-variant);
+  --text: var(--md-color-on-surface);
+  --muted: var(--md-color-on-surface-variant);
+  --border: var(--md-color-outline);
+  --primary: var(--md-color-primary);
+  --primary-600: #1d4ed8;
+  --primary-100: rgba(37, 99, 235, 0.12);
+  --r-sm: var(--md-radius-sm);
+  --r-md: var(--md-radius-md);
+  --r-lg: var(--md-radius-lg);
+}
+
+@media (max-width: 600px) {
+  :where(.md-theme) .section {
+    padding-block: 24px;
+  }
+
+  :where(.md-theme) .container {
+    width: min(100%, calc(100% - 24px));
+  }
+}

@@ -8,12 +8,16 @@
 
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
 </head>
 
-<body class="is-loading">
+<body class="is-loading md-theme">
   <div class="app">
     <!-- Topbar -->
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -23,7 +27,7 @@
         </div>
 
         <div class="row">
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
         </div>
@@ -33,40 +37,40 @@
     <main class="container section">
       <!-- Screen: ID -->
       <section id="screen-id" class="stack">
-        <div class="card">
+        <div class="card md-card">
           <div class="card-header">
             <div>
               <h1 class="h1">تسجيل الدخول</h1>
               <p class="p">اختر بوابة الدخول المناسبة للمتابعة.</p>
             </div>
-            <span class="badge primary">نهاري</span>
+            <span class="badge primary md-badge">نهاري</span>
           </div>
 
           <div class="card-body">
             <div class="row" role="tablist" aria-label="بوابة الدخول">
-              <button type="button" class="btn btn-primary btn-sm" data-login-tab="pupil" aria-selected="true">
+              <button type="button" class="btn btn-primary btn-sm md-btn" data-login-tab="pupil" aria-selected="true">
                 دخول الطلاب
               </button>
-              <button type="button" class="btn btn-outline btn-sm" data-login-tab="teacher" aria-selected="false">
+              <button type="button" class="btn btn-outline btn-sm md-btn" data-login-tab="teacher" aria-selected="false">
                 دخول المعلمين
               </button>
             </div>
 
             <div class="login-tab-panel" data-login-panel="pupil">
-              <div class="field">
-                <label class="label" for="studentId">رقم الهوية</label>
-                <input id="studentId" class="input ltr" inputmode="numeric" autocomplete="off" placeholder="مثال: 123456789" />
+              <div class="field md-field">
+                <label class="label md-label" for="studentId">رقم الهوية</label>
+                <input id="studentId" class="input ltr md-input" inputmode="numeric" autocomplete="off" placeholder="مثال: 123456789" />
                 <div class="help">يُستخدم لحفظ التقدم على هذا الجهاز.</div>
               </div>
 
               <div class="row">
-                <button id="btnLogin" class="btn btn-primary btn-lg w-100">دخول</button>
+                <button id="btnLogin" class="btn btn-primary btn-lg w-100 md-btn">دخول</button>
               </div>
             </div>
 
             <div class="login-tab-panel hidden" data-login-panel="teacher" hidden>
               <p class="p">للمعلمين والمشرفين فقط.</p>
-              <a id="adminPortalLink" class="btn btn-primary btn-lg w-100" href="/mng/">
+              <a id="adminPortalLink" class="btn btn-primary btn-lg w-100 md-btn" href="/mng/">
                 لوحة الإدارة
               </a>
               <div class="help">سيتم تحويلك تلقائيًا لبوابة الدخول الآمن عند الحاجة.</div>
@@ -77,38 +81,38 @@
 
       <!-- Screen: Welcome -->
       <section id="screen-welcome" class="stack hidden" hidden style="display:none;">
-        <div class="card">
+        <div class="card md-card">
           <div class="card-header">
             <div>
               <h1 class="h1" id="welcomeTitle">مرحبًا 👋</h1>
               <p class="p" id="welcomeSub">هل تريد البدء ببطاقات الأسبوع؟</p>
             </div>
-            <span class="badge primary" id="welcomeChip">طالب</span>
+            <span class="badge primary md-badge" id="welcomeChip">طالب</span>
           </div>
 
           <div class="card-body">
-            <div class="field">
-              <label class="label">اسم الطالب</label>
-              <div id="welcomeName" class="input is-static" role="status">طالب</div>
+            <div class="field md-field">
+              <label class="label md-label">اسم الطالب</label>
+              <div id="welcomeName" class="input is-static md-input" role="status">طالب</div>
               <div class="help">يمكنك تغيير رقم الهوية من الزر أدناه.</div>
             </div>
-            <button id="btnToCards" class="btn btn-primary btn-lg w-100">عرض البطاقات</button>
-            <button id="btnChangeId" class="btn btn-outline w-100">تغيير رقم الهوية</button>
+            <button id="btnToCards" class="btn btn-primary btn-lg w-100 md-btn">عرض البطاقات</button>
+            <button id="btnChangeId" class="btn btn-outline w-100 md-btn">تغيير رقم الهوية</button>
           </div>
         </div>
       </section>
 
       <!-- Screen: Cards -->
       <section id="screen-cards" class="stack hidden" hidden style="display:none;">
-        <div class="card">
+        <div class="card md-card">
           <div class="card-header">
             <div>
               <h2 class="h2">بطاقات الأسابيع</h2>
               <p class="p">اختر بطاقة مفتوحة؛ تُفتح البطاقات المقفلة بعد إكمال السابقة.</p>
             </div>
             <div class="row">
-              <span class="badge primary" id="cardsStudentName">طالب</span>
-              <button id="btnLogout" class="btn btn-ghost btn-sm">تبديل الطالب</button>
+              <span class="badge primary md-badge" id="cardsStudentName">طالب</span>
+              <button id="btnLogout" class="btn btn-ghost btn-sm md-btn">تبديل الطالب</button>
             </div>
           </div>
 

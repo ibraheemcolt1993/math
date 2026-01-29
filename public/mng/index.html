@@ -9,12 +9,16 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
-<body>
+<body class="md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -25,9 +29,9 @@
         </div>
 
         <div class="row">
-          <span id="ainUserLabel" class="badge primary">محمي</span>
-          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
         </div>
@@ -39,20 +43,20 @@
         ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
       </div>
 
-      <section class="card manager-card">
+      <section class="card manager-card md-card">
         <div class="card-header">
           <div>
             <h1 class="h1">Admin Home</h1>
             <p class="p">روابط منظمة لإدارة الطلاب والبطاقات والمواد.</p>
           </div>
-          <span id="ainStatusBadge" class="badge primary">محمي</span>
+          <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
 
         <div class="card-body">
           <div class="stack">
             <h2 class="h2">روابط الإدارة</h2>
             <div id="adminLinks" class="grid cards">
-              <div class="card soft">
+              <div class="card soft md-card">
                 <p class="p muted">جاري تحميل الروابط...</p>
               </div>
             </div>

@@ -12,29 +12,33 @@
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
-<body>
+<body class="md-theme">
   <div class="page-shell">
     <header class="editor-header">
       <div class="container header-inner">
         <div class="header-main">
-          <a id="btnBack" class="btn btn-ghost btn-sm" href="/mng/cards.html">رجوع للبطاقات</a>
+          <a id="btnBack" class="btn btn-ghost btn-sm md-btn" href="/mng/cards.html">رجوع للبطاقات</a>
           <h1 class="editor-title" id="cardTitle">بطاقة رقم —</h1>
           <p class="editor-subtitle" id="cardSubtitle">تحميل البيانات...</p>
         </div>
         <div class="header-actions">
           <label class="preview-toggle" for="previewToggle">
             <span>👁 معاينة الطالب</span>
-            <input id="previewToggle" type="checkbox" />
+            <input id="previewToggle" type="checkbox" class="md-checkbox" />
             <span class="toggle-track" aria-hidden="true"></span>
           </label>
-          <span id="ainUserLabel" class="badge primary">محمي</span>
-          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
           <div id="saveStatus" class="save-status">تم الحفظ</div>
-          <button id="btnSave" class="btn btn-primary">حفظ الآن</button>
+          <button id="btnSave" class="btn btn-primary md-btn">حفظ الآن</button>
         </div>
       </div>
     </header>
@@ -49,7 +53,7 @@
               <h1 id="lessonTitle" class="h1">معاينة البطاقة</h1>
               <div class="lesson-meta">
                 <span id="lessonStudent" class="lesson-student">طالب تجريبي</span>
-                <span id="lessonWeek" class="badge primary">week</span>
+                <span id="lessonWeek" class="badge primary md-badge">week</span>
               </div>
             </div>
             <div class="progress-wrap">
@@ -66,13 +70,13 @@
           <section id="lessonContent" class="stack" aria-live="polite"></section>
 
           <section id="lessonComplete" class="lesson-complete hidden" hidden>
-            <div class="card">
+            <div class="card md-card">
               <div class="card-header">
                 <div>
                   <h2 class="h2">أحسنت 🎉</h2>
                   <p class="p">أنهيت البطاقة بنجاح.</p>
                 </div>
-                <span class="badge done">منجزة</span>
+                <span class="badge done md-badge">منجزة</span>
               </div>
               <div class="card-body">
                 <p class="p">هذه معاينة فقط — لن يتم حفظ أي تقدّم.</p>
@@ -84,12 +88,12 @@
     </main>
   </div>
 
-  <div id="imageEditor" class="modal hidden" aria-hidden="true">
+  <div id="imageEditor" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-lg image-editor" role="dialog" aria-modal="true" aria-labelledby="imageEditorTitle">
+    <div class="modal-card modal-card-lg image-editor md-modal-card" role="dialog" aria-modal="true" aria-labelledby="imageEditorTitle">
       <div class="modal-header">
         <h2 id="imageEditorTitle" class="h2">تعديل الصورة</h2>
-        <button id="btnCloseImageEditor" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseImageEditor" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body image-editor-body">
         <div class="image-editor-stage">
@@ -97,35 +101,35 @@
         </div>
         <div class="image-editor-tools">
           <div class="tool-group">
-            <label class="label">نسبة القص</label>
+            <label class="label md-label">نسبة القص</label>
             <div class="tool-options">
-              <button class="btn btn-ghost btn-sm" data-aspect="free" type="button">حر</button>
-              <button class="btn btn-ghost btn-sm" data-aspect="1" type="button">1:1</button>
-              <button class="btn btn-ghost btn-sm" data-aspect="4/3" type="button">4:3</button>
-              <button class="btn btn-ghost btn-sm" data-aspect="16/9" type="button">16:9</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-aspect="free" type="button">حر</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-aspect="1" type="button">1:1</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-aspect="4/3" type="button">4:3</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-aspect="16/9" type="button">16:9</button>
             </div>
           </div>
           <div class="tool-group">
-            <label class="label">تحكم</label>
+            <label class="label md-label">تحكم</label>
             <div class="tool-options">
-              <button class="btn btn-ghost btn-sm" data-action="zoom-in" type="button">تكبير +</button>
-              <button class="btn btn-ghost btn-sm" data-action="zoom-out" type="button">تصغير -</button>
-              <button class="btn btn-ghost btn-sm" data-action="rotate-left" type="button">دوران ⟲</button>
-              <button class="btn btn-ghost btn-sm" data-action="rotate-right" type="button">دوران ⟳</button>
-              <button class="btn btn-ghost btn-sm" data-action="flip" type="button">قلب أفقي</button>
-              <button class="btn btn-ghost btn-sm" data-action="reset" type="button">إعادة ضبط</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="zoom-in" type="button">تكبير +</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="zoom-out" type="button">تصغير -</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="rotate-left" type="button">دوران ⟲</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="rotate-right" type="button">دوران ⟳</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="flip" type="button">قلب أفقي</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-action="reset" type="button">إعادة ضبط</button>
             </div>
           </div>
           <div class="tool-group">
-            <label class="label">الإطار</label>
+            <label class="label md-label">الإطار</label>
             <div class="tool-options">
-              <button class="btn btn-ghost btn-sm" data-frame="none" type="button">بدون</button>
-              <button class="btn btn-ghost btn-sm" data-frame="border" type="button">إطار أبيض</button>
-              <button class="btn btn-ghost btn-sm" data-frame="rounded" type="button">حواف دائرية</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-frame="none" type="button">بدون</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-frame="border" type="button">إطار أبيض</button>
+              <button class="btn btn-ghost btn-sm md-btn" data-frame="rounded" type="button">حواف دائرية</button>
             </div>
           </div>
           <div class="image-editor-preview">
-            <span class="label">المعاينة</span>
+            <span class="label md-label">المعاينة</span>
             <div class="image-editor-thumb">
               <img id="imageEditorThumb" alt="معاينة مصغرة" />
             </div>
@@ -133,18 +137,18 @@
         </div>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnCancelImageEdit" class="btn btn-outline" type="button">إلغاء</button>
-        <button id="btnApplyImageEdit" class="btn btn-primary" type="button">اعتماد التعديل</button>
+        <button id="btnCancelImageEdit" class="btn btn-outline md-btn" type="button">إلغاء</button>
+        <button id="btnApplyImageEdit" class="btn btn-primary md-btn" type="button">اعتماد التعديل</button>
       </div>
     </div>
   </div>
 
-  <div id="mathEditor" class="modal hidden" aria-hidden="true">
+  <div id="mathEditor" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-md math-editor" role="dialog" aria-modal="true" aria-labelledby="mathEditorTitle">
+    <div class="modal-card modal-card-md math-editor md-modal-card" role="dialog" aria-modal="true" aria-labelledby="mathEditorTitle">
       <div class="modal-header">
         <h2 id="mathEditorTitle" class="h2">إدراج صيغة رياضية</h2>
-        <button id="btnCloseMathEditor" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseMathEditor" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="math-editor-tabs" role="tablist" aria-label="أدوات الرياضيات">
@@ -155,62 +159,62 @@
         </div>
         <div class="math-editor-panels">
           <div class="math-editor-panel active" data-math-panel="frac">
-            <div class="field">
-              <label class="label">البسط</label>
-              <input id="mathFracNumerator" class="input" type="text" placeholder="مثال: س + 1" />
+            <div class="field md-field">
+              <label class="label md-label">البسط</label>
+              <input id="mathFracNumerator" class="input md-input" type="text" placeholder="مثال: س + 1" />
             </div>
-            <div class="field">
-              <label class="label">المقام</label>
-              <input id="mathFracDenominator" class="input" type="text" placeholder="مثال: 2س" />
+            <div class="field md-field">
+              <label class="label md-label">المقام</label>
+              <input id="mathFracDenominator" class="input md-input" type="text" placeholder="مثال: 2س" />
             </div>
           </div>
           <div class="math-editor-panel" data-math-panel="table">
             <div class="math-table-settings">
-              <div class="field">
-                <label class="label">عدد الصفوف</label>
-                <input id="mathTableRows" class="input ltr" type="number" min="1" value="2" />
+              <div class="field md-field">
+                <label class="label md-label">عدد الصفوف</label>
+                <input id="mathTableRows" class="input ltr md-input" type="number" min="1" value="2" />
               </div>
-              <div class="field">
-                <label class="label">عدد الأعمدة</label>
-                <input id="mathTableCols" class="input ltr" type="number" min="1" value="2" />
+              <div class="field md-field">
+                <label class="label md-label">عدد الأعمدة</label>
+                <input id="mathTableCols" class="input ltr md-input" type="number" min="1" value="2" />
               </div>
             </div>
             <div id="mathTableGrid" class="math-table-grid" aria-label="خلايا الجدول"></div>
           </div>
           <div class="math-editor-panel" data-math-panel="sqrt">
-            <div class="field">
-              <label class="label">داخل الجذر</label>
-              <input id="mathRootExpr" class="input" type="text" placeholder="مثال: س^2 + 4" />
+            <div class="field md-field">
+              <label class="label md-label">داخل الجذر</label>
+              <input id="mathRootExpr" class="input md-input" type="text" placeholder="مثال: س^2 + 4" />
             </div>
           </div>
           <div class="math-editor-panel" data-math-panel="cbrt">
-            <div class="field">
-              <label class="label">داخل الجذر التكعيبي</label>
-              <input id="mathCbrtExpr" class="input" type="text" placeholder="مثال: س^3 + 1" />
+            <div class="field md-field">
+              <label class="label md-label">داخل الجذر التكعيبي</label>
+              <input id="mathCbrtExpr" class="input md-input" type="text" placeholder="مثال: س^3 + 1" />
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnMathEditorCancel" class="btn btn-outline" type="button">إلغاء</button>
-        <button id="btnMathEditorInsert" class="btn btn-primary" type="button">إدراج</button>
+        <button id="btnMathEditorCancel" class="btn btn-outline md-btn" type="button">إلغاء</button>
+        <button id="btnMathEditorInsert" class="btn btn-primary md-btn" type="button">إدراج</button>
       </div>
     </div>
   </div>
 
-  <div id="confirmLeave" class="modal hidden" aria-hidden="true">
+  <div id="confirmLeave" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmLeaveTitle">
+    <div class="modal-card modal-card-sm md-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmLeaveTitle">
       <div class="modal-header">
         <h2 id="confirmLeaveTitle" class="h2">تغييرات غير محفوظة</h2>
-        <button id="btnCloseLeave" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseLeave" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <p class="p">لديك تغييرات غير محفوظة. هل تريد المتابعة بدون حفظ؟</p>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnConfirmLeave" class="btn btn-primary" type="button">متابعة بدون حفظ</button>
-        <button id="btnCancelLeave" class="btn btn-outline" type="button">إلغاء</button>
+        <button id="btnConfirmLeave" class="btn btn-primary md-btn" type="button">متابعة بدون حفظ</button>
+        <button id="btnCancelLeave" class="btn btn-outline md-btn" type="button">إلغاء</button>
       </div>
     </div>
   </div>
