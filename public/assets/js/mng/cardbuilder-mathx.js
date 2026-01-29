@@ -10,6 +10,7 @@ const mathxElements = {
   field: document.getElementById('mathxField'),
   previewBox: document.getElementById('mathxPreviewBox'),
   previewError: document.getElementById('mathxPreviewError'),
+  arabicToggle: document.getElementById('mathxArabicToggle'),
   btnClose: document.getElementById('btnCloseMathxEditor'),
   btnCancel: document.getElementById('btnMathxCancel'),
   btnInsert: document.getElementById('btnMathxInsert'),
@@ -169,10 +170,37 @@ function handleCopy() {
   navigator.clipboard?.writeText(latex).catch(() => undefined);
 }
 
+function isMathJaxReady() {
+  return Boolean(window.MathJax && MathJax.Hub && typeof MathJax.Hub.Queue === 'function');
+}
+
+function supportsArabicExtension() {
+  return Boolean(isMathJaxReady() && !MathJax.__stub);
+}
+
+function shouldArabicRender() {
+  return Boolean(mathxElements.arabicToggle?.checked);
+}
+
+function wrapLatexForArabic(latex) {
+  const trimmed = (latex || '').trim();
+  if (!trimmed) return '';
+  if (!supportsArabicExtension()) {
+    return trimmed;
+  }
+  return shouldArabicRender() ? `\\alwaysar{${trimmed}}` : `\\ar{${trimmed}}`;
+}
+
 function renderPreview(latex) {
   if (!mathxElements.previewBox) return;
   const target = latex || '';
-  if (!window.katex || typeof window.katex.render !== 'function') {
+  const wrappedLatex = wrapLatexForArabic(target);
+  const hasMathJax = isMathJaxReady();
+  const hasKatex = window.katex && typeof window.katex.render === 'function';
+
+  mathxElements.previewBox.textContent = '';
+
+  if (!hasMathJax && !hasKatex) {
     mathxElements.previewBox.textContent = target;
     if (mathxElements.previewError) {
       mathxElements.previewError.hidden = false;
@@ -184,6 +212,15 @@ function renderPreview(latex) {
   if (mathxElements.previewError) {
     mathxElements.previewError.hidden = true;
     mathxElements.previewError.textContent = '';
+  }
+
+  if (hasMathJax) {
+    const script = document.createElement('script');
+    script.type = 'math/tex; mode=display';
+    script.textContent = wrappedLatex || target || '\\; ';
+    mathxElements.previewBox.appendChild(script);
+    MathJax.Hub.Queue(['Typeset', MathJax.Hub, mathxElements.previewBox]);
+    return;
   }
 
   try {
@@ -213,6 +250,10 @@ function replaceMathTokens(root) {
   const nodes = [];
   let node = walker.nextNode();
   while (node) {
+    if (node.parentElement?.closest?.('.mathx-inline')) {
+      node = walker.nextNode();
+      continue;
+    }
     if (node.nodeValue && node.nodeValue.includes('[[math:')) {
       nodes.push(node);
     }
@@ -245,15 +286,30 @@ function replaceMathTokens(root) {
 function renderMathTokens(root) {
   replaceMathTokens(root);
   const mathNodes = root?.querySelectorAll?.('.mathx-inline') || [];
+  const hasMathJax = isMathJaxReady();
+  const hasKatex = window.katex && typeof window.katex.render === 'function';
   mathNodes.forEach((node) => {
     if (node.dataset.mathxRendered === 'true') return;
     const latex = node.dataset.latex || '';
-    if (!window.katex || typeof window.katex.render !== 'function') {
+    if (!hasMathJax && !hasKatex) {
       node.textContent = latex;
       node.classList.add('mathx-inline-fallback');
       node.dataset.mathxRendered = 'true';
       return;
     }
+
+    if (hasMathJax) {
+      if (!node.querySelector('script[type^="math/tex"]')) {
+        node.textContent = '';
+        const script = document.createElement('script');
+        script.type = 'math/tex';
+        script.textContent = wrapLatexForArabic(latex) || latex || '\\; ';
+        node.appendChild(script);
+      }
+      node.dataset.mathxRendered = 'true';
+      return;
+    }
+
     try {
       window.katex.render(latex || '\\; ', node, { throwOnError: true, displayMode: false });
       node.classList.remove('mathx-inline-fallback');
@@ -264,6 +320,9 @@ function renderMathTokens(root) {
       node.dataset.mathxRendered = 'true';
     }
   });
+  if (hasMathJax && mathNodes.length) {
+    MathJax.Hub.Queue(['Typeset', MathJax.Hub, root]);
+  }
 }
 
 function schedulePreviewTokenRender() {
@@ -306,6 +365,10 @@ function bindMathxEvents() {
   mathxElements.btnCancel?.addEventListener('click', closeMathxEditor);
   mathxElements.btnInsert?.addEventListener('click', handleInsert);
   mathxElements.btnCopy?.addEventListener('click', handleCopy);
+  mathxElements.arabicToggle?.addEventListener('change', () => {
+    schedulePreviewRender();
+    schedulePreviewTokenRender();
+  });
 
   document.addEventListener('click', (event) => {
     const openBtn = event.target.closest('[data-action="open-mathx"]');
