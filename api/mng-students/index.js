@@ -42,6 +42,12 @@ function toCleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function toNullableInt(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function isValidBirthYear(value) {
   return /^\d{4}$/.test(value);
 }
@@ -126,8 +132,10 @@ async function handlePost(context, req, session) {
   const birthDateValue = toCleanString(payload.birthDate);
   const birthDateInput = normalizeDateString(birthDateValue);
   let firstName = toCleanString(payload.firstName);
-  const grade = payload.grade != null ? normalizeGrade(payload.grade) : '';
-  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : '';
+  const gradeInput = payload.grade != null ? normalizeGrade(payload.grade) : '';
+  const grade = toNullableInt(gradeInput);
+  const classInput = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : '';
+  const className = toNullableInt(classInput);
 
   if (!studentId) {
     context.res = badRequest('studentId is required.');
@@ -141,6 +149,11 @@ async function handlePost(context, req, session) {
 
   if (!name) {
     context.res = badRequest('name is required.');
+    return;
+  }
+
+  if (grade === null) {
+    context.res = badRequest('grade is required.');
     return;
   }
 
@@ -179,8 +192,8 @@ async function handlePost(context, req, session) {
       .input('name', sql.NVarChar(200), name)
       .input('firstName', sql.NVarChar(100), firstName)
       .input('birthDate', sql.Date, birthDate)
-      .input('grade', sql.NVarChar(50), grade)
-      .input('className', sql.NVarChar(50), className)
+      .input('grade', sql.Int, grade)
+      .input('className', sql.Int, className)
       .input('schoolId', sql.Int, schoolId)
       .query(
         `INSERT INTO dbo.Students (StudentId, BirthYear, Name, FirstName, BirthDate, Grade, Class, SchoolId)
@@ -260,8 +273,10 @@ async function handlePut(context, req, session) {
   if (payload.name != null && !incomingFirstName) {
     firstName = deriveFirstName(name);
   }
-  const grade = payload.grade != null ? normalizeGrade(payload.grade) : existing.Grade;
-  const className = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : existing.Class;
+  const gradeInput = payload.grade != null ? normalizeGrade(payload.grade) : existing.Grade;
+  const grade = toNullableInt(gradeInput);
+  const classInput = payload.class != null ? normalizeDigits(toCleanString(payload.class)) : existing.Class;
+  const className = toNullableInt(classInput);
   const birthDateValue = payload.birthDate != null ? toCleanString(payload.birthDate) : '';
   let birthDate = existing.BirthDate;
 
@@ -272,6 +287,11 @@ async function handlePut(context, req, session) {
 
   if (!name) {
     context.res = badRequest('name is required.');
+    return;
+  }
+
+  if (grade === null) {
+    context.res = badRequest('grade is required.');
     return;
   }
 
@@ -291,8 +311,8 @@ async function handlePut(context, req, session) {
     .input('name', sql.NVarChar(200), name)
     .input('firstName', sql.NVarChar(100), firstName)
     .input('birthDate', sql.Date, birthDate)
-    .input('grade', sql.NVarChar(50), grade)
-    .input('className', sql.NVarChar(50), className)
+    .input('grade', sql.Int, grade)
+    .input('className', sql.Int, className)
     .input('schoolId', sql.Int, schoolId);
   let updateQuery = `
     UPDATE dbo.Students
