@@ -73,3 +73,12 @@
 .mathx-btn {
   font-weight: 600;
 }
+
+.mathx-preview-box,
+.mathx-inline,
+.mathx-field-wrap,
+math-field.mathx-field {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
