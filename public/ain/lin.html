@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
 
   <style>
     .lin-card {
@@ -17,9 +21,9 @@
     }
   </style>
 </head>
-<body>
+<body class="md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -32,7 +36,7 @@
     </header>
 
     <main class="container section">
-      <section class="card manager-card lin-card">
+      <section class="card manager-card lin-card md-card">
         <div class="card-header">
           <div>
             <h1 class="h1">الدخول الآمن</h1>
@@ -40,17 +44,17 @@
           </div>
         </div>
         <div class="card-body">
-          <form id="linForm" class="field">
-            <div class="field">
-              <label class="label" for="usernameInput">اسم المستخدم</label>
-              <input id="usernameInput" class="input" autocomplete="username" required />
+          <form id="linForm" class="field md-field">
+            <div class="field md-field">
+              <label class="label md-label" for="usernameInput">اسم المستخدم</label>
+              <input id="usernameInput" class="input md-input" autocomplete="username" required />
             </div>
-            <div class="field">
-              <label class="label" for="passwordInput">كلمة السر</label>
-              <input id="passwordInput" type="password" class="input" autocomplete="current-password" required />
+            <div class="field md-field">
+              <label class="label md-label" for="passwordInput">كلمة السر</label>
+              <input id="passwordInput" type="password" class="input md-input" autocomplete="current-password" required />
             </div>
             <div class="row">
-              <button class="btn btn-primary" type="submit">دخول</button>
+              <button class="btn btn-primary md-btn" type="submit">دخول</button>
             </div>
             <p id="errorText" class="muted" role="alert" style="min-height: 1.5em;"></p>
           </form>

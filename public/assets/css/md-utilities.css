@@ -1,0 +1,76 @@
+/* Material 3 utilities */
+
+.md-flex {
+  display: flex;
+}
+
+.md-inline-flex {
+  display: inline-flex;
+}
+
+.md-grid {
+  display: grid;
+}
+
+.md-wrap {
+  flex-wrap: wrap;
+}
+
+.md-center {
+  align-items: center;
+  justify-content: center;
+}
+
+.md-gap-1 {
+  gap: var(--md-space-1);
+}
+
+.md-gap-2 {
+  gap: var(--md-space-2);
+}
+
+.md-gap-3 {
+  gap: var(--md-space-3);
+}
+
+.md-gap-4 {
+  gap: var(--md-space-4);
+}
+
+.md-gap-5 {
+  gap: var(--md-space-5);
+}
+
+.md-gap-6 {
+  gap: var(--md-space-6);
+}
+
+.md-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-space-3);
+}
+
+.md-surface {
+  background: var(--md-color-surface);
+}
+
+.md-surface-variant {
+  background: var(--md-color-surface-variant);
+}
+
+.md-text-center {
+  text-align: center;
+}
+
+.md-w-100 {
+  width: 100%;
+}
+
+.md-overflow-x {
+  overflow-x: auto;
+}
+
+.md-hide {
+  display: none !important;
+}

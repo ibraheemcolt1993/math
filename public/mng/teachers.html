@@ -9,12 +9,16 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
-<body>
+<body class="md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -25,9 +29,9 @@
         </div>
 
         <div class="row">
-          <span id="ainUserLabel" class="badge primary">محمي</span>
-          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
         </div>
@@ -39,31 +43,31 @@
         ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
       </div>
 
-      <section class="card manager-card">
+      <section class="card manager-card md-card">
         <div class="card-header">
           <div>
             <h1 class="h1">Teachers Manager</h1>
             <p class="p">إدارة حسابات المعلمين (عرض، إضافة، تفعيل، تغيير دور، إعادة تعيين كلمة السر).</p>
           </div>
-          <span id="ainStatusBadge" class="badge primary">محمي</span>
+          <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
 
         <div class="card-body">
           <div class="manager-toolbar">
             <div class="row">
-              <button id="btnAddTeacher" class="btn btn-primary">إضافة معلم</button>
+              <button id="btnAddTeacher" class="btn btn-primary md-btn">إضافة معلم</button>
             </div>
             <div class="row">
-              <span class="badge">روابط سريعة</span>
-              <a class="btn btn-outline btn-sm" href="/mng/students.html">إدارة الطلاب</a>
-              <a class="btn btn-outline btn-sm" href="/mng/cards.html">إدارة البطاقات</a>
-              <a class="btn btn-outline btn-sm" href="/mng/card-editor.html">محرر بطاقة</a>
-              <a class="btn btn-outline btn-sm" href="/mng/teachers.html">المعلمين</a>
+              <span class="badge md-badge">روابط سريعة</span>
+              <a class="btn btn-outline btn-sm md-btn" href="/mng/students.html">إدارة الطلاب</a>
+              <a class="btn btn-outline btn-sm md-btn" href="/mng/cards.html">إدارة البطاقات</a>
+              <a class="btn btn-outline btn-sm md-btn" href="/mng/card-editor.html">محرر بطاقة</a>
+              <a class="btn btn-outline btn-sm md-btn" href="/mng/teachers.html">المعلمين</a>
             </div>
           </div>
 
           <div class="table-wrap">
-            <table class="table" aria-live="polite">
+            <table class="table md-table" aria-live="polite">
               <thead>
                 <tr>
                   <th>المعرف</th>
@@ -89,56 +93,56 @@
     </footer>
   </div>
 
-  <div id="teacherModal" class="modal hidden" aria-hidden="true">
+  <div id="teacherModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="teacherModalTitle">
+    <div class="modal-card md-modal-card" role="dialog" aria-modal="true" aria-labelledby="teacherModalTitle">
       <div class="modal-header">
         <h2 id="teacherModalTitle" class="h2">إضافة معلم</h2>
-        <button id="btnCloseTeacherModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseTeacherModal" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <form id="teacherForm" class="modal-body">
-        <div class="field">
-          <label class="label" for="teacherUsername">اسم المستخدم</label>
-          <input id="teacherUsername" class="input" autocomplete="off" required />
+        <div class="field md-field">
+          <label class="label md-label" for="teacherUsername">اسم المستخدم</label>
+          <input id="teacherUsername" class="input md-input" autocomplete="off" required />
         </div>
-        <div class="field">
-          <label class="label" for="teacherPassword">كلمة السر</label>
-          <input id="teacherPassword" class="input ltr" type="password" autocomplete="new-password" required />
+        <div class="field md-field">
+          <label class="label md-label" for="teacherPassword">كلمة السر</label>
+          <input id="teacherPassword" class="input ltr md-input" type="password" autocomplete="new-password" required />
         </div>
-        <div class="field">
-          <label class="label" for="teacherRole">الدور</label>
-          <select id="teacherRole" class="input">
+        <div class="field md-field">
+          <label class="label md-label" for="teacherRole">الدور</label>
+          <select id="teacherRole" class="input md-input">
             <option value="1">مشرف (Super)</option>
             <option value="2" selected>معلم</option>
           </select>
         </div>
         <div class="modal-footer modal-actions">
-          <button id="btnSaveTeacher" class="btn btn-primary" type="submit">حفظ</button>
-          <button id="btnCancelTeacher" class="btn btn-outline" type="button">إلغاء</button>
+          <button id="btnSaveTeacher" class="btn btn-primary md-btn" type="submit">حفظ</button>
+          <button id="btnCancelTeacher" class="btn btn-outline md-btn" type="button">إلغاء</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="passwordModal" class="modal hidden" aria-hidden="true">
+  <div id="passwordModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+    <div class="modal-card modal-card-sm md-modal-card" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
       <div class="modal-header">
         <h2 id="passwordModalTitle" class="h2">تغيير كلمة السر</h2>
-        <button id="btnClosePasswordModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnClosePasswordModal" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <form id="passwordForm" class="modal-body">
         <p id="passwordUserLabel" class="p muted">—</p>
-        <div class="field">
-          <label class="label" for="newPasswordInput">كلمة السر الجديدة</label>
-          <input id="newPasswordInput" class="input ltr" type="password" autocomplete="new-password" required />
+        <div class="field md-field">
+          <label class="label md-label" for="newPasswordInput">كلمة السر الجديدة</label>
+          <input id="newPasswordInput" class="input ltr md-input" type="password" autocomplete="new-password" required />
         </div>
         <div class="row">
-          <button id="btnGeneratePassword" class="btn btn-outline btn-sm" type="button">توليد كلمة مرور</button>
+          <button id="btnGeneratePassword" class="btn btn-outline btn-sm md-btn" type="button">توليد كلمة مرور</button>
         </div>
         <div class="modal-footer modal-actions">
-          <button id="btnSubmitPassword" class="btn btn-primary" type="submit">تحديث</button>
-          <button id="btnCancelPassword" class="btn btn-outline" type="button">إلغاء</button>
+          <button id="btnSubmitPassword" class="btn btn-primary md-btn" type="submit">تحديث</button>
+          <button id="btnCancelPassword" class="btn btn-outline md-btn" type="button">إلغاء</button>
         </div>
       </form>
     </div>

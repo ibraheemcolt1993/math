@@ -9,12 +9,16 @@
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
-<body>
+<body class="md-theme">
   <div class="app">
-    <header class="topbar">
+    <header class="topbar md-topbar">
       <div class="container topbar-inner">
         <div class="brand" aria-label="math">
           <div class="brand-mark" aria-hidden="true"></div>
@@ -25,9 +29,9 @@
         </div>
 
         <div class="row">
-          <span id="ainUserLabel" class="badge primary">محمي</span>
-          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm" type="button">تسجيل خروج</button>
-          <a class="btn btn-ghost btn-sm" href="/" aria-label="الصفحة الرئيسية">
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm md-btn" href="/" aria-label="الصفحة الرئيسية">
             الرئيسية
           </a>
         </div>
@@ -39,27 +43,27 @@
         ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
       </div>
 
-      <section class="card manager-card">
+      <section class="card manager-card md-card">
         <div class="card-header">
           <div>
             <h1 class="h1">Student Manager</h1>
             <p class="p">إدارة بيانات الطلاب (عرض، إضافة، تعديل، حذف).</p>
           </div>
-          <span id="ainStatusBadge" class="badge primary">محمي</span>
+          <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
 
         <div class="card-body">
           <div class="manager-toolbar">
           <div class="row">
-            <button id="btnAddStudent" class="btn btn-primary">إضافة طالب</button>
-            <button id="btnImportStudents" class="btn btn-outline">استيراد من Excel</button>
-            <button id="btnDeleteSelected" class="btn btn-outline" disabled>حذف المحدد</button>
-            <button id="btnExportStudents" class="btn btn-outline" disabled>تصدير Excel</button>
+            <button id="btnAddStudent" class="btn btn-primary md-btn">إضافة طالب</button>
+            <button id="btnImportStudents" class="btn btn-outline md-btn">استيراد من Excel</button>
+            <button id="btnDeleteSelected" class="btn btn-outline md-btn" disabled>حذف المحدد</button>
+            <button id="btnExportStudents" class="btn btn-outline md-btn" disabled>تصدير Excel</button>
           </div>
             <div class="row filter-row">
-              <div class="field">
-                <label class="label" for="gradeFilter">الصف</label>
-                <select id="gradeFilter" class="input">
+              <div class="field md-field">
+                <label class="label md-label" for="gradeFilter">الصف</label>
+                <select id="gradeFilter" class="input md-input">
                   <option value="">كل الصفوف</option>
                   <option value="1">الأول</option>
                   <option value="2">الثاني</option>
@@ -72,28 +76,28 @@
                   <option value="9">التاسع</option>
                 </select>
               </div>
-              <div class="field">
-                <label class="label" for="classFilter">الشعبة</label>
-                <select id="classFilter" class="input" disabled>
+              <div class="field md-field">
+                <label class="label md-label" for="classFilter">الشعبة</label>
+                <select id="classFilter" class="input md-input" disabled>
                   <option value="">كل الشعب</option>
                 </select>
               </div>
             </div>
             <div class="row search-row">
-              <div class="field w-100">
-                <label class="label" for="searchInput">بحث سريع</label>
-                <input id="searchInput" class="input" placeholder="ابحث بالهوية أو الاسم" autocomplete="off" />
+              <div class="field w-100 md-field">
+                <label class="label md-label" for="searchInput">بحث سريع</label>
+                <input id="searchInput" class="input md-input" placeholder="ابحث بالهوية أو الاسم" autocomplete="off" />
               </div>
-              <button id="btnSearch" class="btn btn-outline">بحث</button>
+              <button id="btnSearch" class="btn btn-outline md-btn">بحث</button>
             </div>
           </div>
 
           <div class="table-wrap">
-            <table class="table" aria-live="polite">
+            <table class="table md-table" aria-live="polite">
               <thead>
                 <tr>
                   <th class="select-cell">
-                    <input id="selectAllStudents" type="checkbox" aria-label="تحديد الكل" />
+                    <input id="selectAllStudents" type="checkbox" class="md-checkbox" aria-label="تحديد الكل" />
                   </th>
                   <th>رقم الهوية</th>
                   <th>سنة الميلاد</th>
@@ -110,7 +114,7 @@
               </tbody>
             </table>
           </div>
-          <div id="studentsPagination" class="pagination" aria-label="الصفحات"></div>
+          <div id="studentsPagination" class="pagination md-pagination" aria-label="الصفحات"></div>
         </div>
       </section>
     </main>
@@ -120,84 +124,84 @@
     </footer>
   </div>
 
-  <div id="studentModal" class="modal hidden" aria-hidden="true">
+  <div id="studentModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card md-modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-header">
         <h2 id="modalTitle" class="h2">إضافة طالب</h2>
-        <button id="btnCloseModal" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseModal" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <form id="studentForm" class="modal-body">
-        <div class="field">
-          <label class="label" for="studentIdInput">رقم الهوية</label>
-          <input id="studentIdInput" class="input ltr" inputmode="numeric" autocomplete="off" required />
+        <div class="field md-field">
+          <label class="label md-label" for="studentIdInput">رقم الهوية</label>
+          <input id="studentIdInput" class="input ltr md-input" inputmode="numeric" autocomplete="off" required />
         </div>
-        <div class="field">
-          <label class="label">تاريخ الميلاد</label>
+        <div class="field md-field">
+          <label class="label md-label">تاريخ الميلاد</label>
           <div class="wheel-row">
             <div id="wheelYear" class="wheel" aria-label="السنة"></div>
             <div id="wheelMonth" class="wheel" aria-label="الشهر"></div>
             <div id="wheelDay" class="wheel" aria-label="اليوم"></div>
           </div>
         </div>
-        <div class="field">
-          <label class="label" for="nameInput">الاسم الرباعي</label>
-          <input id="nameInput" class="input" autocomplete="off" required />
+        <div class="field md-field">
+          <label class="label md-label" for="nameInput">الاسم الرباعي</label>
+          <input id="nameInput" class="input md-input" autocomplete="off" required />
         </div>
-        <div class="field">
-          <label class="label" for="firstNameInput">الاسم الأول</label>
-          <input id="firstNameInput" class="input" autocomplete="off" />
+        <div class="field md-field">
+          <label class="label md-label" for="firstNameInput">الاسم الأول</label>
+          <input id="firstNameInput" class="input md-input" autocomplete="off" />
         </div>
-        <div class="field">
-          <label class="label">الصف</label>
+        <div class="field md-field">
+          <label class="label md-label">الصف</label>
           <div id="wheelGrade" class="wheel" aria-label="الصف"></div>
         </div>
-        <div class="field">
-          <label class="label" for="classInput">الشعبة</label>
-          <input id="classInput" class="input" autocomplete="off" />
+        <div class="field md-field">
+          <label class="label md-label" for="classInput">الشعبة</label>
+          <input id="classInput" class="input md-input" autocomplete="off" />
         </div>
 
         <div class="modal-footer modal-actions">
-          <button id="btnSubmit" class="btn btn-primary" type="submit">حفظ</button>
-          <button id="btnCancel" class="btn btn-outline" type="button">إلغاء</button>
+          <button id="btnSubmit" class="btn btn-primary md-btn" type="submit">حفظ</button>
+          <button id="btnCancel" class="btn btn-outline md-btn" type="button">إلغاء</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="confirmModal" class="modal hidden" aria-hidden="true">
+  <div id="confirmModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-card modal-card-sm md-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div class="modal-header">
         <h2 id="confirmTitle" class="h2">تأكيد الحذف</h2>
-        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseConfirm" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <p id="confirmMessage" class="p">هل أنت متأكد من حذف الطالب؟</p>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnConfirmDelete" class="btn btn-primary" type="button">تأكيد الحذف</button>
-        <button id="btnCancelDelete" class="btn btn-outline" type="button">إلغاء</button>
+        <button id="btnConfirmDelete" class="btn btn-primary md-btn" type="button">تأكيد الحذف</button>
+        <button id="btnCancelDelete" class="btn btn-outline md-btn" type="button">إلغاء</button>
       </div>
     </div>
   </div>
 
-  <div id="importModal" class="modal hidden" aria-hidden="true">
+  <div id="importModal" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card modal-card-lg" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-card modal-card-lg md-modal-card" role="dialog" aria-modal="true" aria-labelledby="importTitle">
       <div class="modal-header">
         <h2 id="importTitle" class="h2">استيراد الطلاب من Excel</h2>
-        <button id="btnCloseImport" class="btn btn-ghost btn-sm" type="button">إغلاق</button>
+        <button id="btnCloseImport" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="import-grid">
-          <div class="field">
-            <label class="label" for="importFile">ملف Excel أو CSV</label>
-            <input id="importFile" class="input" type="file" accept=".xlsx,.csv" />
+          <div class="field md-field">
+            <label class="label md-label" for="importFile">ملف Excel أو CSV</label>
+            <input id="importFile" class="input md-input" type="file" accept=".xlsx,.csv" />
           </div>
-          <div class="field field-inline">
-            <label class="label" for="importHasHeader">
-              <input id="importHasHeader" type="checkbox" checked />
+          <div class="field field-inline md-field">
+            <label class="label md-label" for="importHasHeader">
+              <input id="importHasHeader" type="checkbox" class="md-checkbox" checked />
               الصف الأول يحتوي عناوين
             </label>
           </div>
@@ -206,7 +210,7 @@
         <div class="import-preview">
           <h3 class="h3">معاينة البيانات (أول 10 صفوف)</h3>
           <div class="preview-table">
-            <table class="table table-compact" aria-live="polite">
+            <table class="table table-compact md-table" aria-live="polite">
               <thead id="importPreviewHead"></thead>
               <tbody id="importPreviewBody">
                 <tr>
@@ -220,32 +224,32 @@
         <div class="import-mapping">
           <h3 class="h3">تعيين الأعمدة</h3>
           <div class="mapping-grid">
-            <div class="field">
-              <label class="label" for="mapStudentId">رقم الهوية (إلزامي)</label>
-              <select id="mapStudentId" class="input"></select>
+            <div class="field md-field">
+              <label class="label md-label" for="mapStudentId">رقم الهوية (إلزامي)</label>
+              <select id="mapStudentId" class="input md-input"></select>
             </div>
-            <div class="field">
-              <label class="label" for="mapName">الاسم (إلزامي)</label>
-              <select id="mapName" class="input"></select>
+            <div class="field md-field">
+              <label class="label md-label" for="mapName">الاسم (إلزامي)</label>
+              <select id="mapName" class="input md-input"></select>
             </div>
-            <div class="field">
-              <label class="label" for="mapBirthDate">تاريخ الميلاد (إلزامي)</label>
-              <select id="mapBirthDate" class="input"></select>
+            <div class="field md-field">
+              <label class="label md-label" for="mapBirthDate">تاريخ الميلاد (إلزامي)</label>
+              <select id="mapBirthDate" class="input md-input"></select>
             </div>
-            <div class="field">
-              <label class="label" for="mapGrade">الصف (اختياري)</label>
-              <select id="mapGrade" class="input"></select>
+            <div class="field md-field">
+              <label class="label md-label" for="mapGrade">الصف (اختياري)</label>
+              <select id="mapGrade" class="input md-input"></select>
             </div>
-            <div class="field">
-              <label class="label" for="mapClass">الشعبة (اختياري)</label>
-              <select id="mapClass" class="input"></select>
+            <div class="field md-field">
+              <label class="label md-label" for="mapClass">الشعبة (اختياري)</label>
+              <select id="mapClass" class="input md-input"></select>
             </div>
           </div>
         </div>
 
         <div class="import-actions">
-          <button id="btnImportValidate" class="btn btn-outline" type="button">تحقق</button>
-          <button id="btnImportExecute" class="btn btn-primary" type="button" disabled>تنفيذ الاستيراد</button>
+          <button id="btnImportValidate" class="btn btn-outline md-btn" type="button">تحقق</button>
+          <button id="btnImportExecute" class="btn btn-primary md-btn" type="button" disabled>تنفيذ الاستيراد</button>
         </div>
 
         <div class="import-progress">
@@ -262,17 +266,17 @@
           <h3 class="h3">النتائج</h3>
           <div id="importSummary" class="result-summary muted">لم يتم تنفيذ أي عملية بعد.</div>
           <div class="result-actions">
-            <button id="btnDownloadSkipped" class="btn btn-outline btn-sm" type="button" disabled>تنزيل تقرير المتخطّين</button>
-            <button id="btnDownloadErrors" class="btn btn-outline btn-sm" type="button" disabled>تنزيل تقرير الأخطاء</button>
+            <button id="btnDownloadSkipped" class="btn btn-outline btn-sm md-btn" type="button" disabled>تنزيل تقرير المتخطّين</button>
+            <button id="btnDownloadErrors" class="btn btn-outline btn-sm md-btn" type="button" disabled>تنزيل تقرير الأخطاء</button>
           </div>
-          <div class="field">
-            <label class="label" for="importTeacherNote">نص موجّه للمعلم (قابل للنسخ)</label>
-            <textarea id="importTeacherNote" class="input" rows="4" readonly></textarea>
+          <div class="field md-field">
+            <label class="label md-label" for="importTeacherNote">نص موجّه للمعلم (قابل للنسخ)</label>
+            <textarea id="importTeacherNote" class="input md-input" rows="4" readonly></textarea>
           </div>
         </div>
       </div>
       <div class="modal-footer modal-actions">
-        <button id="btnCancelImport" class="btn btn-outline" type="button">إغلاق</button>
+        <button id="btnCancelImport" class="btn btn-outline md-btn" type="button">إغلاق</button>
       </div>
     </div>
   </div>
