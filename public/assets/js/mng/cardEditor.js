@@ -34,7 +34,9 @@ const elements = {
   mathCbrtExpr: document.getElementById('mathCbrtExpr'),
   mathTableRows: document.getElementById('mathTableRows'),
   mathTableCols: document.getElementById('mathTableCols'),
-  mathTableGrid: document.getElementById('mathTableGrid')
+  mathTableGrid: document.getElementById('mathTableGrid'),
+  mathxArabicToggle: document.getElementById('mathxArabicToggle'),
+  mathxPreviewBox: document.getElementById('mathxPreviewBox')
 };
 
 const state = {
@@ -49,6 +51,7 @@ const state = {
   saving: false,
   pendingNavigation: null,
   previewEnabled: false,
+  mathArabicEnabled: false,
   openMenu: null,
   pendingDelete: null,
   pendingAdd: null
@@ -81,6 +84,99 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function isMathJaxReady() {
+  return Boolean(window.MathJax?.Hub && typeof window.MathJax.Hub.Queue === 'function');
+}
+
+function isArabicExtReady() {
+  return Boolean(window.MathJax?.Extension?.Arabic && (window.MathJax.Extension.Arabic.version || window.MathJax.Extension.Arabic));
+}
+
+function wrapLatexForArabic(latexRaw) {
+  if (!isArabicExtReady()) return latexRaw;
+  return state.mathArabicEnabled ? `\\alwaysar{${latexRaw}}` : `\\ar{${latexRaw}}`;
+}
+
+function renderMathPreview(previewBox, latexRaw, displayMode = true) {
+  if (!previewBox) return;
+  const rawValue = latexRaw ?? '';
+  if (!rawValue) {
+    previewBox.textContent = '';
+    return;
+  }
+  if (!isMathJaxReady()) {
+    previewBox.textContent = rawValue;
+    return;
+  }
+  const script = document.createElement('script');
+  script.type = displayMode ? 'math/tex; mode=display' : 'math/tex';
+  script.textContent = wrapLatexForArabic(rawValue);
+  previewBox.innerHTML = '';
+  previewBox.append(script);
+  window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, previewBox]);
+}
+
+function renderMathTokensInElement(root) {
+  if (!root) return;
+  const mathReady = isMathJaxReady();
+  const arabicReady = isArabicExtReady();
+  const tokenRegex = /\[\[math:([\s\S]+?)\]\]/g;
+  const nodesToProcess = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.includes('[[math:')) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent || parent.tagName === 'SCRIPT') return NodeFilter.FILTER_REJECT;
+      if (parent.closest('[data-mathx-rendered="1"]')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  while (walker.nextNode()) {
+    nodesToProcess.push(walker.currentNode);
+  }
+
+  let didUpdate = false;
+  nodesToProcess.forEach((textNode) => {
+    const rawText = textNode.nodeValue;
+    if (!rawText) return;
+    let match = null;
+    let lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let nodeUpdated = false;
+    tokenRegex.lastIndex = 0;
+    while ((match = tokenRegex.exec(rawText)) !== null) {
+      const before = rawText.slice(lastIndex, match.index);
+      if (before) fragment.append(document.createTextNode(before));
+      const latexRaw = match[1];
+      const span = document.createElement('span');
+      span.className = 'mathx-inline';
+      span.dataset.mathxRendered = '1';
+      if (!mathReady) {
+        span.textContent = latexRaw;
+      } else {
+        const script = document.createElement('script');
+        script.type = 'math/tex';
+        script.textContent = arabicReady ? wrapLatexForArabic(latexRaw) : latexRaw;
+        span.append(script);
+      }
+      fragment.append(span);
+      lastIndex = match.index + match[0].length;
+      didUpdate = true;
+      nodeUpdated = true;
+    }
+    const after = rawText.slice(lastIndex);
+    if (after) fragment.append(document.createTextNode(after));
+    if (nodeUpdated) {
+      textNode.replaceWith(fragment);
+    }
+  });
+
+  if (didUpdate && mathReady) {
+    window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, root]);
+  }
 }
 
 function normalizeValidation(value) {
@@ -237,6 +333,7 @@ function openMathEditor(targetInput, preferredTab) {
   if (elements.mathTableRows) elements.mathTableRows.value = mathEditorState.tableRows;
   if (elements.mathTableCols) elements.mathTableCols.value = mathEditorState.tableCols;
   updateMathTableGrid();
+  renderMathEditorPreview();
   elements.mathEditor.classList.remove('hidden');
   elements.mathEditor.setAttribute('aria-hidden', 'false');
 }
@@ -255,6 +352,7 @@ function setMathEditorTab(tab) {
   const panels = elements.mathEditor.querySelectorAll('[data-math-panel]');
   tabs.forEach((node) => node.classList.toggle('active', node.dataset.mathTab === tab));
   panels.forEach((node) => node.classList.toggle('active', node.dataset.mathPanel === tab));
+  renderMathEditorPreview();
 }
 
 function updateMathTableGrid() {
@@ -280,6 +378,43 @@ function updateMathTableGrid() {
       `
     )
     .join('');
+  renderMathEditorPreview();
+}
+
+function buildActiveMathLatex() {
+  const tab = mathEditorState.activeTab;
+  if (tab === 'frac') {
+    const numerator = elements.mathFracNumerator?.value ?? '';
+    const denominator = elements.mathFracDenominator?.value ?? '';
+    return `\\frac{${numerator}}{${denominator}}`;
+  }
+  if (tab === 'sqrt') {
+    const expr = elements.mathRootExpr?.value ?? '';
+    return `\\sqrt{${expr}}`;
+  }
+  if (tab === 'cbrt') {
+    const expr = elements.mathCbrtExpr?.value ?? '';
+    return `\\sqrt[3]{${expr}}`;
+  }
+  if (tab === 'table') {
+    const rows = Math.max(1, Number(elements.mathTableRows?.value) || mathEditorState.tableRows || 2);
+    const cols = Math.max(1, Number(elements.mathTableCols?.value) || mathEditorState.tableCols || 2);
+    const total = rows * cols;
+    const cells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
+    const colSpec = 'c'.repeat(cols);
+    const rowChunks = [];
+    for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+      const start = rowIndex * cols;
+      const rowCells = cells.slice(start, start + cols).map((cell) => cell ?? '');
+      rowChunks.push(rowCells.join(' & '));
+    }
+    return `\\begin{array}{${colSpec}}${rowChunks.join(' \\\\ ')}\\end{array}`;
+  }
+  return '';
+}
+
+function renderMathEditorPreview() {
+  renderMathPreview(elements.mathxPreviewBox, buildActiveMathLatex(), true);
 }
 
 function insertMathToken() {
@@ -2202,6 +2337,7 @@ function handleMathEditorInput(event) {
     const idx = Number(event.target.dataset.mathCellIndex);
     mathEditorState.tableCells[idx] = event.target.value;
   }
+  renderMathEditorPreview();
 }
 
 function handleConfirmDelete(targetId) {
@@ -2742,6 +2878,7 @@ function renderPreview() {
     mountEl: elements.previewLessonContent,
     preview: true
   });
+  renderMathTokensInElement(elements.previewLessonContent);
 }
 
 function togglePreview(value) {
@@ -2825,6 +2962,13 @@ function bindEvents() {
   elements.btnCloseMathEditor?.addEventListener('click', closeMathEditor);
   elements.btnMathEditorCancel?.addEventListener('click', closeMathEditor);
   elements.btnMathEditorInsert?.addEventListener('click', insertMathToken);
+  elements.mathxArabicToggle?.addEventListener('change', (event) => {
+    state.mathArabicEnabled = event.target.checked;
+    renderMathEditorPreview();
+    if (state.previewEnabled) {
+      schedulePreviewRender();
+    }
+  });
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.action-menu') && !event.target.closest('[data-action="toggle-menu"]')) {
@@ -2854,6 +2998,8 @@ async function init() {
 
   state.week = week;
   bindEvents();
+  state.mathArabicEnabled = Boolean(elements.mathxArabicToggle?.checked);
+  renderMathEditorPreview();
 
   try {
     const response = await fetch(`/api/mng/weeks/${encodeURIComponent(week)}/content`, {

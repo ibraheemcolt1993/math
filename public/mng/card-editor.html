@@ -157,6 +157,10 @@
           <button type="button" class="math-tab" data-math-tab="sqrt">√ جذر تربيعي</button>
           <button type="button" class="math-tab" data-math-tab="cbrt">∛ جذر تكعيبي</button>
         </div>
+        <label class="field md-field" for="mathxArabicToggle">
+          <span class="label md-label">تعريب المعادلة</span>
+          <input id="mathxArabicToggle" class="md-checkbox" type="checkbox" />
+        </label>
         <div class="math-editor-panels">
           <div class="math-editor-panel active" data-math-panel="frac">
             <div class="field md-field">
@@ -194,6 +198,10 @@
             </div>
           </div>
         </div>
+        <div class="field md-field">
+          <span class="label md-label">معاينة المعادلة</span>
+          <div id="mathxPreviewBox" class="md-card md-card--ghost"></div>
+        </div>
       </div>
       <div class="modal-footer modal-actions">
         <button id="btnMathEditorCancel" class="btn btn-outline md-btn" type="button">إلغاء</button>
@@ -220,9 +228,10 @@
   </div>
 
   <script type="text/x-mathjax-config">
+    MathJax.Ajax.config.path["arabic"] = "/assets/vendor/arabic-mathjax";
     MathJax.Hub.Config({
       jax: ["input/TeX","output/HTML-CSS"],
-      extensions: ["tex2jax.js"],
+      extensions: ["tex2jax.js","[arabic]/arabic.js"],
       TeX: { extensions: ["AMSmath.js","AMSsymbols.js"] },
       showProcessingMessages: false,
       messageStyle: "none"
