@@ -156,6 +156,7 @@
           <button type="button" class="math-tab" data-math-tab="table">جدول</button>
           <button type="button" class="math-tab" data-math-tab="sqrt">√ جذر تربيعي</button>
           <button type="button" class="math-tab" data-math-tab="cbrt">∛ جذر تكعيبي</button>
+          <button type="button" class="math-tab" data-math-tab="latex">قوالب LaTeX</button>
         </div>
         <label class="field md-field" for="mathxArabicToggle">
           <span class="label md-label">تعريب المعادلة</span>
@@ -195,6 +196,36 @@
             <div class="field md-field">
               <label class="label md-label">داخل الجذر التكعيبي</label>
               <input id="mathCbrtExpr" class="input md-input" type="text" placeholder="مثال: س^3 + 1" />
+            </div>
+          </div>
+          <div class="math-editor-panel" data-math-panel="latex">
+            <div class="field md-field">
+              <label class="label md-label">الصيغة (LaTeX)</label>
+              <textarea id="mathxLatexInput" class="input ltr md-input" rows="4" placeholder="مثال: \\frac{1}{2} + x^2"></textarea>
+            </div>
+            <div class="math-template-toolbar" aria-label="قوالب LaTeX السريعة">
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="frac">كسر</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="pow">أس</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="sub">مؤشر</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="rootIndex">جذر بأس</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="parens">( )</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="abs">| |</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="limit">نهاية</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="logBase">لوغاريتم بأساس</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="sum">سيغما</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="integral">تكامل</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="matrix2">مصفوفة 2×2</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="matrix3">مصفوفة 3×3</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="det2">محدد 2×2</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="overline">قطعة</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="overrightarrow">شعاع</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="overleftrightarrow">مستقيم</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="sin">sin</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="cos">cos</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="tan">tan</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="cot">cot</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="sec">sec</button>
+              <button type="button" class="btn btn-ghost btn-sm md-btn" data-math-template="csc">csc</button>
             </div>
           </div>
         </div>

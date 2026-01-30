@@ -493,6 +493,16 @@
   gap: 12px;
 }
 
+.math-template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.math-template-toolbar .btn {
+  white-space: nowrap;
+}
+
 .math-table-settings {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
