@@ -35,6 +35,7 @@ const elements = {
   mathTableRows: document.getElementById('mathTableRows'),
   mathTableCols: document.getElementById('mathTableCols'),
   mathTableGrid: document.getElementById('mathTableGrid'),
+  mathxLatexInput: document.getElementById('mathxLatexInput'),
   mathxArabicToggle: document.getElementById('mathxArabicToggle'),
   mathxPreviewBox: document.getElementById('mathxPreviewBox')
 };
@@ -73,6 +74,30 @@ const mathEditorState = {
   tableCells: []
 };
 
+const MATH_TEMPLATE_MAP = {
+  pow: '^{ {{cursor}} }',
+  sub: '_{ {{cursor}} }',
+  rootIndex: '\\sqrt[{{cursor}}]{ }',
+  parens: '\\left({{cursor}}\\right)',
+  abs: '\\left|{{cursor}}\\right|',
+  limit: '\\lim_{ {{cursor}} }',
+  logBase: '\\log_{ {{cursor}} }( )',
+  sum: '\\sum_{ {{cursor}} }^{ }',
+  integral: '\\int_{ {{cursor}} }^{ }',
+  matrix2: '\\begin{pmatrix}{{cursor}} &  \\\\  &  \\end{pmatrix}',
+  matrix3: '\\begin{pmatrix}{{cursor}} &  &  \\\\  &  &  \\\\  &  &  \\end{pmatrix}',
+  det2: '\\begin{vmatrix}{{cursor}} &  \\\\  &  \\end{vmatrix}',
+  overline: '\\overline{ {{cursor}} }',
+  overrightarrow: '\\overrightarrow{ {{cursor}} }',
+  overleftrightarrow: '\\overleftrightarrow{ {{cursor}} }',
+  sin: '\\sin {{cursor}}',
+  cos: '\\cos {{cursor}}',
+  tan: '\\tan {{cursor}}',
+  cot: '\\cot {{cursor}}',
+  sec: '\\sec {{cursor}}',
+  csc: '\\csc {{cursor}}'
+};
+
 function normalizeValue(value) {
   return value == null ? '' : String(value).trim();
 }
@@ -94,12 +119,12 @@ function isArabicExtReady() {
   return Boolean(window.MathJax?.Extension?.Arabic && (window.MathJax.Extension.Arabic.version || window.MathJax.Extension.Arabic));
 }
 
-function wrapLatexForArabic(latexRaw) {
+function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
   if (!isArabicExtReady()) return latexRaw;
-  return state.mathArabicEnabled ? `\\alwaysar{${latexRaw}}` : `\\ar{${latexRaw}}`;
+  return arabicMode ? `\\alwaysar{${latexRaw}}` : latexRaw;
 }
 
-function renderMathPreview(previewBox, latexRaw, displayMode = true) {
+function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {
   if (!previewBox) return;
   const rawValue = latexRaw ?? '';
   if (!rawValue) {
@@ -112,16 +137,17 @@ function renderMathPreview(previewBox, latexRaw, displayMode = true) {
   }
   const script = document.createElement('script');
   script.type = displayMode ? 'math/tex; mode=display' : 'math/tex';
-  script.textContent = wrapLatexForArabic(rawValue);
+  script.textContent = wrapLatexForArabic(rawValue, arabicMode);
   previewBox.innerHTML = '';
   previewBox.append(script);
   window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, previewBox]);
 }
 
-function renderMathTokensInElement(root) {
+function renderMathTokensInElement(root, { arabicMode = state.mathArabicEnabled } = {}) {
   if (!root) return;
   const mathReady = isMathJaxReady();
   const arabicReady = isArabicExtReady();
+  const wrapArabic = arabicReady && arabicMode;
   const tokenRegex = /\[\[math:([\s\S]+?)\]\]/g;
   const nodesToProcess = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -159,7 +185,7 @@ function renderMathTokensInElement(root) {
       } else {
         const script = document.createElement('script');
         script.type = 'math/tex';
-        script.textContent = arabicReady ? wrapLatexForArabic(latexRaw) : latexRaw;
+        script.textContent = wrapArabic ? wrapLatexForArabic(latexRaw, true) : latexRaw;
         span.append(script);
       }
       fragment.append(span);
@@ -322,6 +348,45 @@ function insertTokenAtCursor(textarea, token) {
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+function insertTemplateAtCursor(textarea, template, selectionText = '') {
+  if (!textarea || !template) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  const normalizedSelection = selectionText || '';
+  let output = template.replace('{{selection}}', normalizedSelection);
+  const cursorIndex = output.indexOf('{{cursor}}');
+  output = output.replace('{{cursor}}', '');
+  textarea.value = `${before}${output}${after}`;
+  const nextPos = cursorIndex >= 0 ? start + cursorIndex : start + output.length;
+  textarea.setSelectionRange(nextPos, nextPos);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function insertFractionTemplate(textarea) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const selection = textarea.value.slice(start, end);
+  if (selection) {
+    insertTemplateAtCursor(textarea, '\\frac{ {{selection}} }{ {{cursor}} }', selection);
+  } else {
+    insertTemplateAtCursor(textarea, '\\frac{ {{cursor}} }{ }');
+  }
+}
+
+function insertMathTemplate(textarea, templateKey) {
+  if (!textarea || !templateKey) return;
+  if (templateKey === 'frac') {
+    insertFractionTemplate(textarea);
+    return;
+  }
+  const template = MATH_TEMPLATE_MAP[templateKey];
+  if (!template) return;
+  insertTemplateAtCursor(textarea, template);
+}
+
 function openMathEditor(targetInput, preferredTab) {
   if (!elements.mathEditor) return;
   mathEditorState.targetInput = targetInput || null;
@@ -410,11 +475,14 @@ function buildActiveMathLatex() {
     }
     return `\\begin{array}{${colSpec}}${rowChunks.join(' \\\\ ')}\\end{array}`;
   }
+  if (tab === 'latex') {
+    return elements.mathxLatexInput?.value ?? '';
+  }
   return '';
 }
 
 function renderMathEditorPreview() {
-  renderMathPreview(elements.mathxPreviewBox, buildActiveMathLatex(), true);
+  renderMathPreview(elements.mathxPreviewBox, buildActiveMathLatex(), true, state.mathArabicEnabled);
 }
 
 function insertMathToken() {
@@ -424,30 +492,20 @@ function insertMathToken() {
     return;
   }
   const tab = mathEditorState.activeTab;
-  if (tab === 'frac') {
-    const numerator = elements.mathFracNumerator?.value ?? '';
-    const denominator = elements.mathFracDenominator?.value ?? '';
-    insertTokenAtCursor(target, `[[frac:${numerator}|${denominator}]]`);
-  } else if (tab === 'table') {
+  if (tab === 'table') {
     const rows = Math.max(1, Number(elements.mathTableRows?.value) || 2);
     const cols = Math.max(1, Number(elements.mathTableCols?.value) || 2);
     if (!Number.isInteger(rows) || !Number.isInteger(cols)) {
       showToast('تنبيه', 'أدخل أرقامًا صحيحة للصفوف والأعمدة.', 'warning');
       return;
     }
-    const total = rows * cols;
-    const cells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
-    insertTokenAtCursor(target, buildTableToken(rows, cols, cells));
-  } else if (tab === 'sqrt') {
-    const expr = elements.mathRootExpr?.value ?? '';
-    insertTokenAtCursor(target, `[[sqrt:${expr}]]`);
-  } else if (tab === 'cbrt') {
-    const expr = elements.mathCbrtExpr?.value ?? '';
-    insertTokenAtCursor(target, `[[cbrt:${expr}]]`);
   }
-  if (String(target.value || '').includes('[[table:')) {
-    renderEditor();
+  const latex = buildActiveMathLatex();
+  if (!latex) {
+    showToast('تنبيه', 'أدخل صيغة رياضية أولاً.', 'warning');
+    return;
   }
+  insertTokenAtCursor(target, `[[math:${latex}]]`);
   closeMathEditor();
 }
 
@@ -2323,6 +2381,13 @@ function handleMathEditorClick(event) {
     }
     return;
   }
+  const templateButton = event.target.closest('[data-math-template]');
+  if (templateButton) {
+    if (!elements.mathxLatexInput) return;
+    insertMathTemplate(elements.mathxLatexInput, templateButton.dataset.mathTemplate);
+    renderMathEditorPreview();
+    return;
+  }
   if (event.target.dataset?.close) {
     closeMathEditor();
   }
@@ -2336,6 +2401,10 @@ function handleMathEditorInput(event) {
   if (event.target.dataset?.mathCellIndex != null) {
     const idx = Number(event.target.dataset.mathCellIndex);
     mathEditorState.tableCells[idx] = event.target.value;
+  }
+  if (event.target === elements.mathxLatexInput) {
+    renderMathEditorPreview();
+    return;
   }
   renderMathEditorPreview();
 }
@@ -2878,7 +2947,7 @@ function renderPreview() {
     mountEl: elements.previewLessonContent,
     preview: true
   });
-  renderMathTokensInElement(elements.previewLessonContent);
+  renderMathTokensInElement(elements.previewLessonContent, { arabicMode: state.mathArabicEnabled });
 }
 
 function togglePreview(value) {
