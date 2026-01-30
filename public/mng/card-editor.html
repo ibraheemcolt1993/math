@@ -12,9 +12,6 @@
   <link rel="stylesheet" href="/assets/css/toast.css" />
   <link rel="stylesheet" href="/assets/css/mng/manager.css" />
   <link rel="stylesheet" href="/assets/css/mng/card-editor.css" />
-  <link rel="stylesheet" href="/assets/vendor/katex/katex.min.css" />
-  <link rel="stylesheet" href="/assets/vendor/mathlive/mathlive.css" />
-  <link rel="stylesheet" href="/assets/css/mathx.css" />
   <link rel="stylesheet" href="/assets/css/md-tokens.css" />
   <link rel="stylesheet" href="/assets/css/md-base.css" />
   <link rel="stylesheet" href="/assets/css/md-components.css" />
@@ -205,57 +202,6 @@
     </div>
   </div>
 
-  <div id="mathxEditor" class="modal hidden md-modal" aria-hidden="true">
-    <div class="modal-backdrop" data-mathx-close="true"></div>
-    <div class="modal-card modal-card-lg mathx-modal md-modal-card" role="dialog" aria-modal="true" aria-labelledby="mathxEditorTitle">
-      <div class="modal-header">
-        <h2 id="mathxEditorTitle" class="h2">محرر المعادلات</h2>
-        <button id="btnCloseMathxEditor" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
-      </div>
-      <div class="modal-body">
-        <div class="mathx-toolbar" role="toolbar" aria-label="أدوات المعادلات">
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\frac{#?}{#?}">كسر</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\sqrt{#?}">جذر</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="^{#?}">أس</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="_{#?}">مؤشر سفلي</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\left( #? \\right)">أقواس</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\left| #? \\right|">قيمة مطلقة</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="=">=</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\neq">≠</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\leq">≤</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\geq">≥</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\approx">≈</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\pi">π</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\theta">θ</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\sqrt{#?}">√</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\sum_{#?}^{#?}">∑</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-insert="\\int_{#?}^{#?}">∫</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-command="backspace">حذف</button>
-          <button type="button" class="btn btn-ghost btn-sm md-btn mathx-tool" data-mathx-command="clear">مسح الكل</button>
-        </div>
-        <div class="mathx-field-wrap">
-          <math-field id="mathxField" class="mathx-field" dir="ltr"></math-field>
-        </div>
-        <div class="mathx-options">
-          <label class="label md-label mathx-toggle" for="mathxArabicToggle">
-            <input id="mathxArabicToggle" type="checkbox" class="md-checkbox" checked />
-            <span>تعريب المعادلة</span>
-          </label>
-        </div>
-        <div class="mathx-preview" aria-live="polite">
-          <div class="mathx-preview-label">المعاينة الفورية</div>
-          <div id="mathxPreviewBox" class="mathx-preview-box"></div>
-          <div id="mathxPreviewError" class="mathx-preview-error" role="alert" hidden></div>
-        </div>
-      </div>
-      <div class="modal-footer modal-actions">
-        <button id="btnMathxCancel" class="btn btn-outline md-btn" type="button">إلغاء</button>
-        <button id="btnMathxCopy" class="btn btn-ghost md-btn" type="button">نسخ LaTeX</button>
-        <button id="btnMathxInsert" class="btn btn-primary md-btn" type="button">إدراج</button>
-      </div>
-    </div>
-  </div>
-
   <div id="confirmLeave" class="modal hidden md-modal" aria-hidden="true">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card modal-card-sm md-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmLeaveTitle">
@@ -274,20 +220,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
-  <script src="/assets/vendor/katex/katex.min.js" defer></script>
-  <script src="/assets/vendor/mathlive/mathlive.min.js" defer></script>
-  <script type="text/x-mathjax-config">
-    MathJax.Hub.Config({
-      showProcessingMessages: false,
-      messageStyle: "none",
-      tex2jax: {
-        inlineMath: [["$", "$"], ["\\(", "\\)"]],
-        displayMath: [["$$", "$$"], ["\\[", "\\]"]]
-      }
-    });
-  </script>
-  <script src="/assets/vendor/mathjax/MathJax.js?config=TeX-AMS_HTML"></script>
   <script type="module" src="/assets/js/mng/cardEditor.js"></script>
-  <script type="module" src="/assets/js/mng/cardbuilder-mathx.js"></script>
 </body>
 </html>

@@ -170,7 +170,6 @@ function renderMathField({ id, tag = 'input', value = '', attrs = '', className 
       <div class="input-actions">
         ${actions}
         <button type="button" class="btn btn-ghost btn-sm math-btn" data-action="open-math" data-target-id="${id}">M</button>
-        <button type="button" class="btn btn-ghost btn-sm mathx-btn" data-action="open-mathx" data-target-id="${id}">معادلة</button>
       </div>
     </div>
   `;
