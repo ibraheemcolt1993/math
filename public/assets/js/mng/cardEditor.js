@@ -1,6 +1,5 @@
 import { showToast } from '../ui/toast.js';
 import { initEngine } from '../lesson/engine.js';
-import { renderMathTokensInElement } from '../shared/mathxTokens.js';
 
 const elements = {
   cardTitle: document.getElementById('cardTitle'),
@@ -24,21 +23,7 @@ const elements = {
   previewLessonTitle: document.getElementById('lessonTitle'),
   previewLessonStudent: document.getElementById('lessonStudent'),
   previewLessonWeek: document.getElementById('lessonWeek'),
-  previewLessonContent: document.getElementById('lessonContent'),
-  mathEditor: document.getElementById('mathEditor'),
-  btnCloseMathEditor: document.getElementById('btnCloseMathEditor'),
-  btnMathEditorCancel: document.getElementById('btnMathEditorCancel'),
-  btnMathEditorInsert: document.getElementById('btnMathEditorInsert'),
-  mathFracNumerator: document.getElementById('mathFracNumerator'),
-  mathFracDenominator: document.getElementById('mathFracDenominator'),
-  mathRootExpr: document.getElementById('mathRootExpr'),
-  mathCbrtExpr: document.getElementById('mathCbrtExpr'),
-  mathTableRows: document.getElementById('mathTableRows'),
-  mathTableCols: document.getElementById('mathTableCols'),
-  mathTableGrid: document.getElementById('mathTableGrid'),
-  mathxLatexInput: document.getElementById('mathxLatexInput'),
-  mathxArabicToggle: document.getElementById('mathxArabicToggle'),
-  mathxPreviewBox: document.getElementById('mathxPreviewBox')
+  previewLessonContent: document.getElementById('lessonContent')
 };
 
 const state = {
@@ -53,7 +38,6 @@ const state = {
   saving: false,
   pendingNavigation: null,
   previewEnabled: false,
-  mathArabicEnabled: false,
   openMenu: null,
   pendingDelete: null,
   pendingAdd: null
@@ -67,39 +51,6 @@ const imageEditorState = {
   flip: 1
 };
 
-const mathEditorState = {
-  activeTab: 'frac',
-  targetInput: null,
-  tableRows: 2,
-  tableCols: 2,
-  tableCells: [],
-  editingRange: null
-};
-
-const MATH_TEMPLATE_MAP = {
-  pow: '^{ {{cursor}} }',
-  sub: '_{ {{cursor}} }',
-  sqrt: '\\sqrt{ {{cursor}} }',
-  rootIndex: '\\sqrt[{{cursor}}]{ }',
-  parens: '\\left({{cursor}}\\right)',
-  abs: '\\left|{{cursor}}\\right|',
-  limit: '\\lim_{ {{cursor}} }',
-  limitTo: '\\lim_{ {{cursor}} \\to }',
-  logBase: '\\log_{ {{cursor}} }( )',
-  ln: '\\ln {{cursor}}',
-  sum: '\\sum_{ {{cursor}} }^{ }',
-  prod: '\\prod_{ {{cursor}} }^{ }',
-  integral: '\\int_{ {{cursor}} }^{ }',
-  matrix2: '\\begin{pmatrix}{{cursor}} &  \\\\  &  \\end{pmatrix}',
-  matrix3: '\\begin{pmatrix}{{cursor}} &  &  \\\\  &  &  \\\\  &  &  \\end{pmatrix}',
-  det2: '\\begin{vmatrix}{{cursor}} &  \\\\  &  \\end{vmatrix}',
-  det3: '\\begin{vmatrix}{{cursor}} &  &  \\\\  &  &  \\\\  &  &  \\end{vmatrix}',
-  overline: '\\overline{ {{cursor}} }',
-  overrightarrow: '\\overrightarrow{ {{cursor}} }',
-  overleftrightarrow: '\\overleftrightarrow{ {{cursor}} }',
-  vector: '\\vec{ {{cursor}} }',
-  prime: '{{cursor}}^{\\prime}'
-};
 
 function normalizeValue(value) {
   return value == null ? '' : String(value).trim();
@@ -114,48 +65,6 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function isMathJaxReady() {
-  return Boolean(window.MathJax?.Hub && typeof window.MathJax.Hub.Queue === 'function');
-}
-
-function isArabicExtReady() {
-  return Boolean(window.MathJax?.Extension?.Arabic && (window.MathJax.Extension.Arabic.version || window.MathJax.Extension.Arabic));
-}
-
-function isArabicWrapped(latexRaw) {
-  if (!latexRaw) return false;
-  return /^\s*\\ar\s*\{/.test(latexRaw) || /\\(?:alwaysar|fliph)\b/.test(latexRaw);
-}
-
-function protectArabicText(latexRaw) {
-  if (!latexRaw) return latexRaw;
-  return latexRaw.replace(/([\u0600-\u06FF]+)/g, '\\\\fliph{\\\\text{$1}}');
-}
-
-function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
-  if (!isArabicExtReady()) return latexRaw;
-  if (!arabicMode || isArabicWrapped(latexRaw)) return latexRaw;
-  return `\\ar{${protectArabicText(latexRaw)}}`;
-}
-
-function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {
-  if (!previewBox) return;
-  const rawValue = latexRaw ?? '';
-  if (!rawValue) {
-    previewBox.textContent = '';
-    return;
-  }
-  if (!isMathJaxReady()) {
-    previewBox.textContent = rawValue;
-    return;
-  }
-  const script = document.createElement('script');
-  script.type = displayMode ? 'math/tex; mode=display' : 'math/tex';
-  script.textContent = wrapLatexForArabic(rawValue, arabicMode);
-  previewBox.innerHTML = '';
-  previewBox.append(script);
-  window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, previewBox]);
-}
 
 function normalizeValidation(value) {
   return {
@@ -243,7 +152,6 @@ function renderMathField({ id, tag = 'input', value = '', attrs = '', className 
       ${control}
       <div class="input-actions">
         ${actions}
-        <button type="button" class="btn btn-ghost btn-sm math-btn" data-action="open-math" data-target-id="${id}">M</button>
       </div>
     </div>
   `;
@@ -288,27 +196,6 @@ function replaceTableToken(text, tableIndex, nextToken) {
   return `${text.slice(0, target.start)}${nextToken}${text.slice(target.end)}`;
 }
 
-function findMathTokenAtSelection(textarea) {
-  if (!textarea) return null;
-  const raw = String(textarea.value ?? '');
-  const selectionStart = textarea.selectionStart ?? 0;
-  const selectionEnd = textarea.selectionEnd ?? selectionStart;
-  const regex = /\[\[math:([\s\S]+?)\]\]/g;
-  let match = null;
-  while ((match = regex.exec(raw)) !== null) {
-    const start = match.index;
-    const end = regex.lastIndex;
-    const hasSelection = selectionStart !== selectionEnd;
-    const isMatch = hasSelection
-      ? selectionStart < end && selectionEnd > start
-      : selectionStart >= start && selectionStart < end;
-    if (isMatch) {
-      return { start, end, latex: match[1] };
-    }
-  }
-  return null;
-}
-
 function insertTokenAtCursor(textarea, token) {
   if (!textarea) return;
   const start = textarea.selectionStart ?? textarea.value.length;
@@ -319,194 +206,6 @@ function insertTokenAtCursor(textarea, token) {
   const nextPos = start + token.length;
   textarea.setSelectionRange(nextPos, nextPos);
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
-function replaceRange(textarea, start, end, token) {
-  if (!textarea) return;
-  const before = textarea.value.slice(0, start);
-  const after = textarea.value.slice(end);
-  textarea.value = `${before}${token}${after}`;
-  const nextPos = start + token.length;
-  textarea.setSelectionRange(nextPos, nextPos);
-  textarea.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
-function insertTemplateAtCursor(textarea, template, selectionText = '') {
-  if (!textarea || !template) return;
-  const start = textarea.selectionStart ?? textarea.value.length;
-  const end = textarea.selectionEnd ?? textarea.value.length;
-  const before = textarea.value.slice(0, start);
-  const after = textarea.value.slice(end);
-  const normalizedSelection = selectionText || '';
-  let output = template.replace('{{selection}}', normalizedSelection);
-  const cursorIndex = output.indexOf('{{cursor}}');
-  output = output.replace('{{cursor}}', '');
-  textarea.value = `${before}${output}${after}`;
-  const nextPos = cursorIndex >= 0 ? start + cursorIndex : start + output.length;
-  textarea.setSelectionRange(nextPos, nextPos);
-  textarea.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
-function insertFractionTemplate(textarea) {
-  if (!textarea) return;
-  const start = textarea.selectionStart ?? textarea.value.length;
-  const end = textarea.selectionEnd ?? textarea.value.length;
-  const selection = textarea.value.slice(start, end);
-  if (selection) {
-    insertTemplateAtCursor(textarea, '\\frac{ {{selection}} }{ {{cursor}} }', selection);
-  } else {
-    insertTemplateAtCursor(textarea, '\\frac{ {{cursor}} }{ }');
-  }
-}
-
-function insertMathTemplate(textarea, templateKey) {
-  if (!textarea || !templateKey) return;
-  if (templateKey === 'frac') {
-    insertFractionTemplate(textarea);
-    return;
-  }
-  const template = MATH_TEMPLATE_MAP[templateKey];
-  if (!template) return;
-  insertTemplateAtCursor(textarea, template);
-}
-
-function openMathEditor(targetInput, preferredTab) {
-  if (!elements.mathEditor) return;
-  mathEditorState.targetInput = targetInput || null;
-  const tokenMatch = targetInput ? findMathTokenAtSelection(targetInput) : null;
-  if (tokenMatch) {
-    mathEditorState.editingRange = { start: tokenMatch.start, end: tokenMatch.end };
-    if (elements.mathxLatexInput) {
-      elements.mathxLatexInput.value = tokenMatch.latex ?? '';
-    }
-    setMathEditorTab('latex');
-  } else {
-    mathEditorState.editingRange = null;
-    if (preferredTab) {
-      setMathEditorTab(preferredTab);
-    } else {
-      setMathEditorTab(mathEditorState.activeTab || 'frac');
-    }
-  }
-  if (elements.mathTableRows) elements.mathTableRows.value = mathEditorState.tableRows;
-  if (elements.mathTableCols) elements.mathTableCols.value = mathEditorState.tableCols;
-  updateMathTableGrid();
-  renderMathEditorPreview();
-  elements.mathEditor.classList.remove('hidden');
-  elements.mathEditor.setAttribute('aria-hidden', 'false');
-}
-
-function closeMathEditor() {
-  if (!elements.mathEditor) return;
-  elements.mathEditor.classList.add('hidden');
-  elements.mathEditor.setAttribute('aria-hidden', 'true');
-  mathEditorState.targetInput = null;
-  mathEditorState.editingRange = null;
-}
-
-function setMathEditorTab(tab) {
-  mathEditorState.activeTab = tab;
-  if (!elements.mathEditor) return;
-  const tabs = elements.mathEditor.querySelectorAll('[data-math-tab]');
-  const panels = elements.mathEditor.querySelectorAll('[data-math-panel]');
-  tabs.forEach((node) => node.classList.toggle('active', node.dataset.mathTab === tab));
-  panels.forEach((node) => node.classList.toggle('active', node.dataset.mathPanel === tab));
-  renderMathEditorPreview();
-}
-
-function updateMathTableGrid() {
-  if (!elements.mathTableGrid) return;
-  const rows = Math.max(1, Number(elements.mathTableRows?.value) || mathEditorState.tableRows || 2);
-  const cols = Math.max(1, Number(elements.mathTableCols?.value) || mathEditorState.tableCols || 2);
-  mathEditorState.tableRows = rows;
-  mathEditorState.tableCols = cols;
-  const total = rows * cols;
-  if (!Array.isArray(mathEditorState.tableCells) || mathEditorState.tableCells.length !== total) {
-    mathEditorState.tableCells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
-  }
-  elements.mathTableGrid.style.setProperty('--table-cols', cols);
-  elements.mathTableGrid.innerHTML = mathEditorState.tableCells
-    .map(
-      (value, index) => `
-        <input
-          class="input"
-          data-math-cell-index="${index}"
-          value="${escapeHtml(value ?? '')}"
-          placeholder="خلية"
-        />
-      `
-    )
-    .join('');
-  renderMathEditorPreview();
-}
-
-function buildActiveMathLatex() {
-  const tab = mathEditorState.activeTab;
-  if (tab === 'frac') {
-    const numerator = elements.mathFracNumerator?.value ?? '';
-    const denominator = elements.mathFracDenominator?.value ?? '';
-    return `\\frac{${numerator}}{${denominator}}`;
-  }
-  if (tab === 'sqrt') {
-    const expr = elements.mathRootExpr?.value ?? '';
-    return `\\sqrt{${expr}}`;
-  }
-  if (tab === 'cbrt') {
-    const expr = elements.mathCbrtExpr?.value ?? '';
-    return `\\sqrt[3]{${expr}}`;
-  }
-  if (tab === 'table') {
-    const rows = Math.max(1, Number(elements.mathTableRows?.value) || mathEditorState.tableRows || 2);
-    const cols = Math.max(1, Number(elements.mathTableCols?.value) || mathEditorState.tableCols || 2);
-    const total = rows * cols;
-    const cells = Array.from({ length: total }, (_, idx) => mathEditorState.tableCells?.[idx] ?? '');
-    const colSpec = 'c'.repeat(cols);
-    const rowChunks = [];
-    for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
-      const start = rowIndex * cols;
-      const rowCells = cells.slice(start, start + cols).map((cell) => cell ?? '');
-      rowChunks.push(rowCells.join(' & '));
-    }
-    return `\\begin{array}{${colSpec}}${rowChunks.join(' \\\\ ')}\\end{array}`;
-  }
-  if (tab === 'latex') {
-    return elements.mathxLatexInput?.value ?? '';
-  }
-  return '';
-}
-
-function renderMathEditorPreview() {
-  renderMathPreview(elements.mathxPreviewBox, buildActiveMathLatex(), true, state.mathArabicEnabled);
-}
-
-function insertMathToken() {
-  const target = mathEditorState.targetInput;
-  if (!target) {
-    showToast('تنبيه', 'اختر حقل إدخال أولاً.', 'warning');
-    return;
-  }
-  const tab = mathEditorState.activeTab;
-  if (tab === 'table') {
-    const rows = Math.max(1, Number(elements.mathTableRows?.value) || 2);
-    const cols = Math.max(1, Number(elements.mathTableCols?.value) || 2);
-    if (!Number.isInteger(rows) || !Number.isInteger(cols)) {
-      showToast('تنبيه', 'أدخل أرقامًا صحيحة للصفوف والأعمدة.', 'warning');
-      return;
-    }
-  }
-  const latex = buildActiveMathLatex();
-  if (!latex) {
-    showToast('تنبيه', 'أدخل صيغة رياضية أولاً.', 'warning');
-    return;
-  }
-  const token = `[[math:${latex}]]`;
-  if (mathEditorState.editingRange) {
-    replaceRange(target, mathEditorState.editingRange.start, mathEditorState.editingRange.end, token);
-    mathEditorState.editingRange = null;
-  } else {
-    insertTokenAtCursor(target, token);
-  }
-  closeMathEditor();
 }
 
 function setDirty(value = true) {
@@ -1272,10 +971,6 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
   return `
     <div class="field">
       <label class="label">النص</label>
-      <div class="text-toolbar">
-        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-frac" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${buildMathTargetId('flow', conceptIndex, flowIndex, 'text')}">كسر</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-action="insert-table" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${buildMathTargetId('flow', conceptIndex, flowIndex, 'text')}">جدول</button>
-      </div>
       ${renderMathField({
         id: buildMathTargetId('flow', conceptIndex, flowIndex, 'text'),
         tag: 'textarea',
@@ -1996,20 +1691,6 @@ function handleEditorClick(event) {
     return;
   }
 
-  if (action === 'insert-frac' || action === 'insert-table') {
-    const targetId = button.dataset.targetId;
-    const targetInput = targetId ? document.getElementById(targetId) : null;
-    openMathEditor(targetInput, action === 'insert-frac' ? 'frac' : 'table');
-    return;
-  }
-
-  if (action === 'open-math') {
-    const targetId = button.dataset.targetId;
-    const targetInput = targetId ? document.getElementById(targetId) : null;
-    openMathEditor(targetInput);
-    return;
-  }
-
   if (action === 'insert-blank') {
     const targetId = button.dataset.targetId;
     const targetInput = targetId ? document.getElementById(targetId) : null;
@@ -2370,59 +2051,6 @@ function handleEditorClick(event) {
     setDirty(true);
     renderEditor();
   }
-}
-
-function handleMathEditorClick(event) {
-  const tabButton = event.target.closest('[data-math-tab]');
-  if (tabButton) {
-    setMathEditorTab(tabButton.dataset.mathTab);
-    if (tabButton.dataset.mathTab === 'table') {
-      updateMathTableGrid();
-    }
-    return;
-  }
-  const fracTargetButton = event.target.closest('[data-math-frac-target]');
-  if (fracTargetButton) {
-    const targetKey = fracTargetButton.dataset.mathFracTarget;
-    const target =
-      targetKey === 'numerator'
-        ? elements.mathFracNumerator
-        : targetKey === 'denominator'
-          ? elements.mathFracDenominator
-          : null;
-    if (target) {
-      target.focus();
-      insertFractionTemplate(target);
-      renderMathEditorPreview();
-    }
-    return;
-  }
-  const templateButton = event.target.closest('[data-math-template]');
-  if (templateButton) {
-    if (!elements.mathxLatexInput) return;
-    insertMathTemplate(elements.mathxLatexInput, templateButton.dataset.mathTemplate);
-    renderMathEditorPreview();
-    return;
-  }
-  if (event.target.dataset?.close) {
-    closeMathEditor();
-  }
-}
-
-function handleMathEditorInput(event) {
-  if (event.target === elements.mathTableRows || event.target === elements.mathTableCols) {
-    updateMathTableGrid();
-    return;
-  }
-  if (event.target.dataset?.mathCellIndex != null) {
-    const idx = Number(event.target.dataset.mathCellIndex);
-    mathEditorState.tableCells[idx] = event.target.value;
-  }
-  if (event.target === elements.mathxLatexInput) {
-    renderMathEditorPreview();
-    return;
-  }
-  renderMathEditorPreview();
 }
 
 function handleConfirmDelete(targetId) {
@@ -2963,7 +2591,6 @@ function renderPreview() {
     mountEl: elements.previewLessonContent,
     preview: true
   });
-  renderMathTokensInElement(elements.previewLessonContent, { arabicMode: state.mathArabicEnabled });
 }
 
 function togglePreview(value) {
@@ -3042,19 +2669,6 @@ function bindEvents() {
   elements.btnCancelImageEdit?.addEventListener('click', closeImageEditor);
   elements.btnApplyImageEdit?.addEventListener('click', applyImageEdit);
 
-  elements.mathEditor?.addEventListener('click', handleMathEditorClick);
-  elements.mathEditor?.addEventListener('input', handleMathEditorInput);
-  elements.btnCloseMathEditor?.addEventListener('click', closeMathEditor);
-  elements.btnMathEditorCancel?.addEventListener('click', closeMathEditor);
-  elements.btnMathEditorInsert?.addEventListener('click', insertMathToken);
-  elements.mathxArabicToggle?.addEventListener('change', (event) => {
-    state.mathArabicEnabled = event.target.checked;
-    renderMathEditorPreview();
-    if (state.previewEnabled) {
-      schedulePreviewRender();
-    }
-  });
-
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.action-menu') && !event.target.closest('[data-action="toggle-menu"]')) {
       closeMenus();
@@ -3083,8 +2697,6 @@ async function init() {
 
   state.week = week;
   bindEvents();
-  state.mathArabicEnabled = Boolean(elements.mathxArabicToggle?.checked);
-  renderMathEditorPreview();
 
   try {
     const response = await fetch(`/api/mng/weeks/${encodeURIComponent(week)}/content`, {
