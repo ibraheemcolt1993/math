@@ -98,12 +98,6 @@ const MATH_TEMPLATE_MAP = {
   overrightarrow: '\\overrightarrow{ {{cursor}} }',
   overleftrightarrow: '\\overleftrightarrow{ {{cursor}} }',
   vector: '\\vec{ {{cursor}} }',
-  sin: '\\sin {{cursor}}',
-  cos: '\\cos {{cursor}}',
-  tan: '\\tan {{cursor}}',
-  cot: '\\cot {{cursor}}',
-  sec: '\\sec {{cursor}}',
-  csc: '\\csc {{cursor}}',
   prime: '{{cursor}}^{\\prime}'
 };
 
@@ -133,10 +127,15 @@ function isArabicWrapped(latexRaw) {
   return /^\s*\\ar\s*\{/.test(latexRaw) || /\\(?:alwaysar|fliph)\b/.test(latexRaw);
 }
 
+function protectArabicText(latexRaw) {
+  if (!latexRaw) return latexRaw;
+  return latexRaw.replace(/([\u0600-\u06FF]+)/g, '\\\\fliph{\\\\text{$1}}');
+}
+
 function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
   if (!isArabicExtReady()) return latexRaw;
   if (!arabicMode || isArabicWrapped(latexRaw)) return latexRaw;
-  return `\\ar{${latexRaw}}`;
+  return `\\ar{${protectArabicText(latexRaw)}}`;
 }
 
 function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {

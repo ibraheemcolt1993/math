@@ -19,10 +19,15 @@ function isArabicWrapped(latexRaw) {
   return /^\s*\\ar\s*\{/.test(latexRaw) || /\\(?:alwaysar|fliph)\b/.test(latexRaw);
 }
 
+function protectArabicText(latexRaw) {
+  if (!latexRaw) return latexRaw;
+  return latexRaw.replace(/([\u0600-\u06FF]+)/g, '\\\\fliph{\\\\text{$1}}');
+}
+
 function wrapLatexForArabic(latexRaw, arabicMode) {
   if (!arabicMode || !isArabicExtReady()) return latexRaw;
   if (isArabicWrapped(latexRaw)) return latexRaw;
-  return `\\ar{${latexRaw}}`;
+  return `\\ar{${protectArabicText(latexRaw)}}`;
 }
 
 function scheduleMathJaxRetry(root, options) {
