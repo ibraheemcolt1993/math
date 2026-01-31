@@ -26,7 +26,7 @@ import { renderQuestion } from '../questions/registry.js';
 import { setStudentProgress, getStudentProgress, isCardDone, markCardDone } from '../core/storage.js';
 import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
-import { renderMathTokensInElement } from '../shared/mathxTokens.js';
+import { replaceMathTokensInElement } from '../shared/stripMathTokens.js';
 
 const LEGACY_ORDER = ['goal', 'explain', 'example', 'example2', 'mistake', 'note', 'question'];
 const STAGES = {
@@ -370,24 +370,24 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     if (stage === STAGES.GOALS) {
       renderGoalsStage();
-      renderMathTokensInElement(mountEl, { arabicMode: document.documentElement.lang === 'ar' });
+      replaceMathTokensInElement(mountEl);
       return;
     }
 
     if (stage === STAGES.PREREQ) {
       renderPrereqStage();
-      renderMathTokensInElement(mountEl, { arabicMode: document.documentElement.lang === 'ar' });
+      replaceMathTokensInElement(mountEl);
       return;
     }
 
     if (stage === STAGES.ASSESSMENT) {
       renderAssessmentStage();
-      renderMathTokensInElement(mountEl, { arabicMode: document.documentElement.lang === 'ar' });
+      replaceMathTokensInElement(mountEl);
       return;
     }
 
     renderConceptStage();
-    renderMathTokensInElement(mountEl, { arabicMode: document.documentElement.lang === 'ar' });
+    replaceMathTokensInElement(mountEl);
   }
 
   function renderGoalsStage() {
@@ -1287,7 +1287,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       <div class="solution-text">${escapeHtml(solutionText || '')}</div>
     `;
     container.appendChild(sol);
-    renderMathTokensInElement(sol, { arabicMode: document.documentElement.lang === 'ar' });
+    replaceMathTokensInElement(sol);
   }
 
   function setPendingFocusToNext() {
