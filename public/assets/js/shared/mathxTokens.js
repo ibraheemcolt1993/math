@@ -1,4 +1,7 @@
 const TOKEN_REGEX = /\[\[math:([\s\S]+?)\]\]/g;
+const pendingRoots = new Set();
+const pendingOptions = new WeakMap();
+let retryTimer = null;
 
 function isMathJaxReady() {
   return Boolean(window.MathJax?.Hub && typeof window.MathJax.Hub.Queue === 'function');
@@ -19,6 +22,43 @@ function wrapLatexForArabic(latexRaw, arabicMode) {
   if (!arabicMode || !isArabicExtReady()) return latexRaw;
   if (hasArabicChars(latexRaw)) return latexRaw;
   return `\\ar{${latexRaw}}`;
+}
+
+function scheduleMathJaxRetry(root, options) {
+  if (!root) return;
+  pendingRoots.add(root);
+  pendingOptions.set(root, options);
+  if (retryTimer) return;
+
+  retryTimer = window.setInterval(() => {
+    if (!isMathJaxReady()) return;
+    window.clearInterval(retryTimer);
+    retryTimer = null;
+    pendingRoots.forEach((pendingRoot) => {
+      renderMathTokensInElement(pendingRoot, pendingOptions.get(pendingRoot) || {});
+    });
+    pendingRoots.clear();
+  }, 400);
+}
+
+function upgradeFallbackNodes(root, { arabicMode } = {}) {
+  if (!isMathJaxReady() || !root) return false;
+  const wrapArabic = arabicMode && isArabicExtReady();
+  const fallbackNodes = root.querySelectorAll('[data-mathx-fallback="1"]');
+  if (!fallbackNodes.length) return false;
+
+  fallbackNodes.forEach((node) => {
+    const latexRaw = node.dataset.mathxLatex || node.textContent || '';
+    node.textContent = '';
+    const script = document.createElement('script');
+    script.type = 'math/tex';
+    script.textContent = wrapArabic ? wrapLatexForArabic(latexRaw, true) : latexRaw;
+    node.append(script);
+    node.dataset.mathxFallback = '0';
+    delete node.dataset.mathxLatex;
+  });
+
+  return true;
 }
 
 export function renderMathTokensInElement(root, { arabicMode = document.documentElement.lang === 'ar' } = {}) {
@@ -64,6 +104,8 @@ export function renderMathTokensInElement(root, { arabicMode = document.document
 
       if (!mathReady) {
         span.textContent = latexRaw;
+        span.dataset.mathxFallback = '1';
+        span.dataset.mathxLatex = latexRaw;
       } else {
         const script = document.createElement('script');
         script.type = 'math/tex';
@@ -85,7 +127,22 @@ export function renderMathTokensInElement(root, { arabicMode = document.document
     }
   });
 
+  if (!mathReady) {
+    scheduleMathJaxRetry(root, { arabicMode });
+    return;
+  }
+
+  const upgradedFallbacks = upgradeFallbackNodes(root, { arabicMode });
   if (didUpdate && mathReady) {
+    try {
+      window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, root]);
+    } catch (error) {
+      console.warn('MathJax typeset failed', error);
+    }
+    return;
+  }
+
+  if (upgradedFallbacks) {
     try {
       window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, root]);
     } catch (error) {
