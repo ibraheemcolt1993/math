@@ -72,7 +72,8 @@ const mathEditorState = {
   targetInput: null,
   tableRows: 2,
   tableCols: 2,
-  tableCells: []
+  tableCells: [],
+  editingRange: null
 };
 
 const MATH_TEMPLATE_MAP = {
@@ -97,12 +98,6 @@ const MATH_TEMPLATE_MAP = {
   overrightarrow: '\\overrightarrow{ {{cursor}} }',
   overleftrightarrow: '\\overleftrightarrow{ {{cursor}} }',
   vector: '\\vec{ {{cursor}} }',
-  sin: '\\sin {{cursor}}',
-  cos: '\\cos {{cursor}}',
-  tan: '\\tan {{cursor}}',
-  cot: '\\cot {{cursor}}',
-  sec: '\\sec {{cursor}}',
-  csc: '\\csc {{cursor}}',
   prime: '{{cursor}}^{\\prime}'
 };
 
@@ -127,14 +122,20 @@ function isArabicExtReady() {
   return Boolean(window.MathJax?.Extension?.Arabic && (window.MathJax.Extension.Arabic.version || window.MathJax.Extension.Arabic));
 }
 
-function hasArabicChars(value) {
-  return /[\u0600-\u06FF]/.test(value);
+function isArabicWrapped(latexRaw) {
+  if (!latexRaw) return false;
+  return /^\s*\\ar\s*\{/.test(latexRaw) || /\\(?:alwaysar|fliph)\b/.test(latexRaw);
+}
+
+function protectArabicText(latexRaw) {
+  if (!latexRaw) return latexRaw;
+  return latexRaw.replace(/([\u0600-\u06FF]+)/g, '\\\\fliph{\\\\text{$1}}');
 }
 
 function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
   if (!isArabicExtReady()) return latexRaw;
-  if (!arabicMode || hasArabicChars(latexRaw)) return latexRaw;
-  return `\\ar{${latexRaw}}`;
+  if (!arabicMode || isArabicWrapped(latexRaw)) return latexRaw;
+  return `\\ar{${protectArabicText(latexRaw)}}`;
 }
 
 function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {
@@ -287,10 +288,41 @@ function replaceTableToken(text, tableIndex, nextToken) {
   return `${text.slice(0, target.start)}${nextToken}${text.slice(target.end)}`;
 }
 
+function findMathTokenAtSelection(textarea) {
+  if (!textarea) return null;
+  const raw = String(textarea.value ?? '');
+  const selectionStart = textarea.selectionStart ?? 0;
+  const selectionEnd = textarea.selectionEnd ?? selectionStart;
+  const regex = /\[\[math:([\s\S]+?)\]\]/g;
+  let match = null;
+  while ((match = regex.exec(raw)) !== null) {
+    const start = match.index;
+    const end = regex.lastIndex;
+    const hasSelection = selectionStart !== selectionEnd;
+    const isMatch = hasSelection
+      ? selectionStart < end && selectionEnd > start
+      : selectionStart >= start && selectionStart < end;
+    if (isMatch) {
+      return { start, end, latex: match[1] };
+    }
+  }
+  return null;
+}
+
 function insertTokenAtCursor(textarea, token) {
   if (!textarea) return;
   const start = textarea.selectionStart ?? textarea.value.length;
   const end = textarea.selectionEnd ?? textarea.value.length;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  textarea.value = `${before}${token}${after}`;
+  const nextPos = start + token.length;
+  textarea.setSelectionRange(nextPos, nextPos);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function replaceRange(textarea, start, end, token) {
+  if (!textarea) return;
   const before = textarea.value.slice(0, start);
   const after = textarea.value.slice(end);
   textarea.value = `${before}${token}${after}`;
@@ -341,10 +373,20 @@ function insertMathTemplate(textarea, templateKey) {
 function openMathEditor(targetInput, preferredTab) {
   if (!elements.mathEditor) return;
   mathEditorState.targetInput = targetInput || null;
-  if (preferredTab) {
-    setMathEditorTab(preferredTab);
+  const tokenMatch = targetInput ? findMathTokenAtSelection(targetInput) : null;
+  if (tokenMatch) {
+    mathEditorState.editingRange = { start: tokenMatch.start, end: tokenMatch.end };
+    if (elements.mathxLatexInput) {
+      elements.mathxLatexInput.value = tokenMatch.latex ?? '';
+    }
+    setMathEditorTab('latex');
   } else {
-    setMathEditorTab(mathEditorState.activeTab || 'frac');
+    mathEditorState.editingRange = null;
+    if (preferredTab) {
+      setMathEditorTab(preferredTab);
+    } else {
+      setMathEditorTab(mathEditorState.activeTab || 'frac');
+    }
   }
   if (elements.mathTableRows) elements.mathTableRows.value = mathEditorState.tableRows;
   if (elements.mathTableCols) elements.mathTableCols.value = mathEditorState.tableCols;
@@ -359,6 +401,7 @@ function closeMathEditor() {
   elements.mathEditor.classList.add('hidden');
   elements.mathEditor.setAttribute('aria-hidden', 'true');
   mathEditorState.targetInput = null;
+  mathEditorState.editingRange = null;
 }
 
 function setMathEditorTab(tab) {
@@ -456,7 +499,13 @@ function insertMathToken() {
     showToast('تنبيه', 'أدخل صيغة رياضية أولاً.', 'warning');
     return;
   }
-  insertTokenAtCursor(target, `[[math:${latex}]]`);
+  const token = `[[math:${latex}]]`;
+  if (mathEditorState.editingRange) {
+    replaceRange(target, mathEditorState.editingRange.start, mathEditorState.editingRange.end, token);
+    mathEditorState.editingRange = null;
+  } else {
+    insertTokenAtCursor(target, token);
+  }
   closeMathEditor();
 }
 

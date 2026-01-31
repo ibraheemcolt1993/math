@@ -14,14 +14,20 @@ function isArabicExtReady() {
   );
 }
 
-function hasArabicChars(value) {
-  return /[\u0600-\u06FF]/.test(value);
+function isArabicWrapped(latexRaw) {
+  if (!latexRaw) return false;
+  return /^\s*\\ar\s*\{/.test(latexRaw) || /\\(?:alwaysar|fliph)\b/.test(latexRaw);
+}
+
+function protectArabicText(latexRaw) {
+  if (!latexRaw) return latexRaw;
+  return latexRaw.replace(/([\u0600-\u06FF]+)/g, '\\\\fliph{\\\\text{$1}}');
 }
 
 function wrapLatexForArabic(latexRaw, arabicMode) {
   if (!arabicMode || !isArabicExtReady()) return latexRaw;
-  if (hasArabicChars(latexRaw)) return latexRaw;
-  return `\\ar{${latexRaw}}`;
+  if (isArabicWrapped(latexRaw)) return latexRaw;
+  return `\\ar{${protectArabicText(latexRaw)}}`;
 }
 
 function scheduleMathJaxRetry(root, options) {
@@ -55,7 +61,6 @@ function upgradeFallbackNodes(root, { arabicMode } = {}) {
     script.textContent = wrapArabic ? wrapLatexForArabic(latexRaw, true) : latexRaw;
     node.append(script);
     node.dataset.mathxFallback = '0';
-    delete node.dataset.mathxLatex;
   });
 
   return true;
@@ -101,11 +106,11 @@ export function renderMathTokensInElement(root, { arabicMode = document.document
       const span = document.createElement('span');
       span.className = 'mathx-inline';
       span.dataset.mathxRendered = '1';
+      span.dataset.mathxLatex = latexRaw;
 
       if (!mathReady) {
         span.textContent = latexRaw;
         span.dataset.mathxFallback = '1';
-        span.dataset.mathxLatex = latexRaw;
       } else {
         const script = document.createElement('script');
         script.type = 'math/tex';
