@@ -1,5 +1,6 @@
 import { showToast } from '../ui/toast.js';
 import { initEngine } from '../lesson/engine.js';
+import { renderMathTokensInElement } from '../shared/mathxTokens.js';
 
 const elements = {
   cardTitle: document.getElementById('cardTitle'),
@@ -77,25 +78,32 @@ const mathEditorState = {
 const MATH_TEMPLATE_MAP = {
   pow: '^{ {{cursor}} }',
   sub: '_{ {{cursor}} }',
+  sqrt: '\\sqrt{ {{cursor}} }',
   rootIndex: '\\sqrt[{{cursor}}]{ }',
   parens: '\\left({{cursor}}\\right)',
   abs: '\\left|{{cursor}}\\right|',
   limit: '\\lim_{ {{cursor}} }',
+  limitTo: '\\lim_{ {{cursor}} \\to }',
   logBase: '\\log_{ {{cursor}} }( )',
+  ln: '\\ln {{cursor}}',
   sum: '\\sum_{ {{cursor}} }^{ }',
+  prod: '\\prod_{ {{cursor}} }^{ }',
   integral: '\\int_{ {{cursor}} }^{ }',
   matrix2: '\\begin{pmatrix}{{cursor}} &  \\\\  &  \\end{pmatrix}',
   matrix3: '\\begin{pmatrix}{{cursor}} &  &  \\\\  &  &  \\\\  &  &  \\end{pmatrix}',
   det2: '\\begin{vmatrix}{{cursor}} &  \\\\  &  \\end{vmatrix}',
+  det3: '\\begin{vmatrix}{{cursor}} &  &  \\\\  &  &  \\\\  &  &  \\end{vmatrix}',
   overline: '\\overline{ {{cursor}} }',
   overrightarrow: '\\overrightarrow{ {{cursor}} }',
   overleftrightarrow: '\\overleftrightarrow{ {{cursor}} }',
+  vector: '\\vec{ {{cursor}} }',
   sin: '\\sin {{cursor}}',
   cos: '\\cos {{cursor}}',
   tan: '\\tan {{cursor}}',
   cot: '\\cot {{cursor}}',
   sec: '\\sec {{cursor}}',
-  csc: '\\csc {{cursor}}'
+  csc: '\\csc {{cursor}}',
+  prime: '{{cursor}}^{\\prime}'
 };
 
 function normalizeValue(value) {
@@ -121,7 +129,7 @@ function isArabicExtReady() {
 
 function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
   if (!isArabicExtReady()) return latexRaw;
-  return arabicMode ? `\\alwaysar{${latexRaw}}` : latexRaw;
+  return arabicMode ? `\\ar{${latexRaw}}` : latexRaw;
 }
 
 function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {
@@ -141,68 +149,6 @@ function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode 
   previewBox.innerHTML = '';
   previewBox.append(script);
   window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, previewBox]);
-}
-
-function renderMathTokensInElement(root, { arabicMode = state.mathArabicEnabled } = {}) {
-  if (!root) return;
-  const mathReady = isMathJaxReady();
-  const arabicReady = isArabicExtReady();
-  const wrapArabic = arabicReady && arabicMode;
-  const tokenRegex = /\[\[math:([\s\S]+?)\]\]/g;
-  const nodesToProcess = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (!node.nodeValue || !node.nodeValue.includes('[[math:')) return NodeFilter.FILTER_REJECT;
-      const parent = node.parentElement;
-      if (!parent || parent.tagName === 'SCRIPT') return NodeFilter.FILTER_REJECT;
-      if (parent.closest('[data-mathx-rendered="1"]')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-
-  while (walker.nextNode()) {
-    nodesToProcess.push(walker.currentNode);
-  }
-
-  let didUpdate = false;
-  nodesToProcess.forEach((textNode) => {
-    const rawText = textNode.nodeValue;
-    if (!rawText) return;
-    let match = null;
-    let lastIndex = 0;
-    const fragment = document.createDocumentFragment();
-    let nodeUpdated = false;
-    tokenRegex.lastIndex = 0;
-    while ((match = tokenRegex.exec(rawText)) !== null) {
-      const before = rawText.slice(lastIndex, match.index);
-      if (before) fragment.append(document.createTextNode(before));
-      const latexRaw = match[1];
-      const span = document.createElement('span');
-      span.className = 'mathx-inline';
-      span.dataset.mathxRendered = '1';
-      if (!mathReady) {
-        span.textContent = latexRaw;
-      } else {
-        const script = document.createElement('script');
-        script.type = 'math/tex';
-        script.textContent = wrapArabic ? wrapLatexForArabic(latexRaw, true) : latexRaw;
-        span.append(script);
-      }
-      fragment.append(span);
-      lastIndex = match.index + match[0].length;
-      didUpdate = true;
-      nodeUpdated = true;
-    }
-    const after = rawText.slice(lastIndex);
-    if (after) fragment.append(document.createTextNode(after));
-    if (nodeUpdated) {
-      textNode.replaceWith(fragment);
-    }
-  });
-
-  if (didUpdate && mathReady) {
-    window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, root]);
-  }
 }
 
 function normalizeValidation(value) {
@@ -2378,6 +2324,22 @@ function handleMathEditorClick(event) {
     setMathEditorTab(tabButton.dataset.mathTab);
     if (tabButton.dataset.mathTab === 'table') {
       updateMathTableGrid();
+    }
+    return;
+  }
+  const fracTargetButton = event.target.closest('[data-math-frac-target]');
+  if (fracTargetButton) {
+    const targetKey = fracTargetButton.dataset.mathFracTarget;
+    const target =
+      targetKey === 'numerator'
+        ? elements.mathFracNumerator
+        : targetKey === 'denominator'
+          ? elements.mathFracDenominator
+          : null;
+    if (target) {
+      target.focus();
+      insertFractionTemplate(target);
+      renderMathEditorPreview();
     }
     return;
   }
