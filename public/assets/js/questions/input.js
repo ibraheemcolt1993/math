@@ -17,6 +17,8 @@
      * re-run visibility adjustment after check (so attempts/solution stay visible)
    ========================================================= */
 
+import { judgeTextAnswer } from '../shared/textAnswerJudge.js';
+
 export function renderInputQuestion({ mountEl, question }) {
   mountEl.innerHTML = '';
 
@@ -274,25 +276,44 @@ export function renderInputQuestion({ mountEl, question }) {
     }
 
     // text mode
+    const textSpec = question.textSpec || question.spec || question.answerSpec;
     const user = normalizeSpaces(rawUser);
     const ans = normalizeSpaces(rawAns);
 
     let ok = user !== '' && user === ans;
-    let corrected = false;
+    let corrected = null;
 
-    if (!ok && validation.fuzzyAutocorrect && user !== '') {
-      const normalizedUser = normalizeArabic(user);
-      const normalizedAns = normalizeArabic(ans);
-      ok = normalizedUser === normalizedAns || similarity(normalizedUser, normalizedAns) >= 0.85;
-      corrected = ok;
-    }
-
-    if (ok && corrected && ans) {
-      input.value = ans;
-      question._value = ans;
-      feedback.textContent = `إجابة صحيحة ✅ (تم تصحيحها إلى: ${ans})`;
+    if (textSpec) {
+      const result = judgeTextAnswer(rawUser, textSpec);
+      ok = result.ok;
+      corrected = result.corrected;
+      if (ok && corrected) {
+        input.value = corrected;
+        question._value = corrected;
+      }
+      if (ok) {
+        feedback.innerHTML = corrected
+          ? `<div>✔ صحيح</div><div>✏️ التصحيح: ${corrected}</div>`
+          : '✔ صحيح';
+      } else {
+        feedback.textContent = '✖ خطأ';
+      }
     } else {
-      feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
+      let shouldAutocorrect = false;
+      if (!ok && validation.fuzzyAutocorrect && user !== '') {
+        const normalizedUser = normalizeArabic(user);
+        const normalizedAns = normalizeArabic(ans);
+        ok = normalizedUser === normalizedAns || similarity(normalizedUser, normalizedAns) >= 0.85;
+        shouldAutocorrect = ok;
+      }
+
+      if (ok && shouldAutocorrect && ans) {
+        input.value = ans;
+        question._value = ans;
+        feedback.textContent = `إجابة صحيحة ✅ (تم تصحيحها إلى: ${ans})`;
+      } else {
+        feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
+      }
     }
     feedback.classList.toggle('ok', ok);
     feedback.classList.toggle('err', !ok);

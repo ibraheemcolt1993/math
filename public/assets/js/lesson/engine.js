@@ -27,6 +27,7 @@ import { setStudentProgress, getStudentProgress, isCardDone, markCardDone } from
 import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
 import { replaceMathTokensInElement } from '../shared/stripMathTokens.js';
+import { judgeTextAnswer } from '../shared/textAnswerJudge.js';
 
 const LEGACY_ORDER = ['goal', 'explain', 'example', 'example2', 'mistake', 'note', 'question'];
 const STAGES = {
@@ -1025,14 +1026,15 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
       const rawUser = question._value ?? '';
       const rawAns = question.answer ?? '';
-      const ok = compareAnswer(rawUser, rawAns, question.validation);
+      const textSpec = question.textSpec || question.spec || question.answerSpec;
+      const ok = compareAnswer(rawUser, rawAns, question.validation, textSpec);
       if (ok) score += points;
     });
 
     return { score, total };
   }
 
-  function compareAnswer(userValue, answerValue, validation = {}) {
+  function compareAnswer(userValue, answerValue, validation = {}, textSpec = null) {
     const user = normalizeSpaces(userValue);
     const ans = normalizeSpaces(extractAnswerValue(answerValue));
 
@@ -1041,6 +1043,10 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       const ansNum = parseNumericValue(ans);
 
       return Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
+    }
+
+    if (textSpec) {
+      return judgeTextAnswer(userValue, textSpec).ok;
     }
 
     if (user !== '' && user === ans) return true;
@@ -1195,7 +1201,12 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
     if (!blanks.length) return true;
     if (values.length < blanks.length) return false;
-    return blanks.every((ans, index) => compareAnswer(values[index] ?? '', ans ?? '', validation));
+    return blanks.every((ans, index) => {
+      const spec = Array.isArray(question.textSpec)
+        ? question.textSpec[index]
+        : (question.textSpec || question.spec || question.answerSpec);
+      return compareAnswer(values[index] ?? '', ans ?? '', validation, spec);
+    });
   }
 
   function getYouTubeId(url) {

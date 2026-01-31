@@ -115,10 +115,31 @@ function isBlankEntryFilled(entry) {
   return Boolean(normalizeValue(entry));
 }
 
+const DEFAULT_BLANK_INSERT_TOKEN = '____';
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getBlankInsertToken() {
+  return window?.APP_CONFIG?.blankInsertToken || DEFAULT_BLANK_INSERT_TOKEN;
+}
+
+function getBlankTokens() {
+  const tokens = ['[[blank]]'];
+  const insertToken = getBlankInsertToken();
+  if (insertToken && !tokens.includes(insertToken)) {
+    tokens.push(insertToken);
+  }
+  return tokens;
+}
+
 function countBlankTokens(text) {
   const raw = String(text ?? '');
-  if (!raw.includes('[[blank]]')) return 0;
-  return raw.split('[[blank]]').length - 1;
+  const tokens = getBlankTokens();
+  if (!tokens.some((token) => raw.includes(token))) return 0;
+  const tokenRegex = new RegExp(tokens.map(escapeRegExp).join('|'), 'g');
+  return (raw.match(tokenRegex) || []).length;
 }
 
 function syncBlanksWithText(item, text) {
@@ -198,8 +219,9 @@ function replaceTableToken(text, tableIndex, nextToken) {
 
 function insertTokenAtCursor(textarea, token) {
   if (!textarea) return;
-  const start = textarea.selectionStart ?? textarea.value.length;
-  const end = textarea.selectionEnd ?? textarea.value.length;
+  const isFocused = document.activeElement === textarea;
+  const start = isFocused ? (textarea.selectionStart ?? textarea.value.length) : textarea.value.length;
+  const end = isFocused ? (textarea.selectionEnd ?? textarea.value.length) : textarea.value.length;
   const before = textarea.value.slice(0, start);
   const after = textarea.value.slice(end);
   textarea.value = `${before}${token}${after}`;
@@ -834,10 +856,10 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
               tag: 'textarea',
               rows: 2,
               value: item.text || '',
-              actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${textFieldId}">إدراج فراغ</button>`,
+              actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-blank-token="${escapeHtml(getBlankInsertToken())}" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${textFieldId}">فراغ</button>`,
               attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
             })}
-            <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
+            <div class="help">استخدم [[blank]] أو ${escapeHtml(getBlankInsertToken())} لكل فراغ داخل الجملة.</div>
           `
           : `
             ${renderMathField({
@@ -1078,10 +1100,10 @@ function renderAssessmentQuestion(question, index) {
                 tag: 'textarea',
                 rows: 2,
                 value: question.text || '',
-                actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-question-index="${index}" data-target-id="${textFieldId}">إدراج فراغ</button>`,
+                actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-blank-token="${escapeHtml(getBlankInsertToken())}" data-question-index="${index}" data-target-id="${textFieldId}">فراغ</button>`,
                 attrs: `data-question-field="text" data-question-index="${index}"`
               })}
-              <div class="help">استخدم [[blank]] لكل فراغ داخل الجملة.</div>
+              <div class="help">استخدم [[blank]] أو ${escapeHtml(getBlankInsertToken())} لكل فراغ داخل الجملة.</div>
             `
             : `
               ${renderMathField({
@@ -1695,7 +1717,8 @@ function handleEditorClick(event) {
     const targetId = button.dataset.targetId;
     const targetInput = targetId ? document.getElementById(targetId) : null;
     if (!targetInput) return;
-    insertTokenAtCursor(targetInput, '[[blank]]');
+    const token = button.dataset.blankToken || getBlankInsertToken();
+    insertTokenAtCursor(targetInput, token);
     return;
   }
 

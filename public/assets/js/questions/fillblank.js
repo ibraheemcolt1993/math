@@ -5,6 +5,23 @@
    - Persists values on question._blanks
    ========================================================= */
 
+import { judgeTextAnswer } from '../shared/textAnswerJudge.js';
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getBlankTokens(question) {
+  const tokens = ['[[blank]]', '____'];
+  if (question?.blankToken && !tokens.includes(question.blankToken)) {
+    tokens.push(question.blankToken);
+  }
+  if (window?.APP_CONFIG?.blankInsertToken && !tokens.includes(window.APP_CONFIG.blankInsertToken)) {
+    tokens.push(window.APP_CONFIG.blankInsertToken);
+  }
+  return tokens.filter(Boolean);
+}
+
 export function renderFillBlankQuestion({ mountEl, question }) {
   mountEl.innerHTML = '';
 
@@ -21,8 +38,12 @@ export function renderFillBlankQuestion({ mountEl, question }) {
   feedback.className = 'q-feedback';
 
   const rawText = String(question.text || '');
+  const blankTokens = getBlankTokens(question);
+  const blankTokenRegex = new RegExp(blankTokens.map(escapeRegExp).join('|'), 'g');
+  const blankMatches = rawText.match(blankTokenRegex) || [];
+  const blankCount = blankMatches.length;
   const prompt = question.prompt || '';
-  if (rawText.includes('[[blank]]')) {
+  if (blankCount > 0) {
     if (prompt) {
       desc.textContent = prompt;
       wrap.appendChild(desc);
@@ -36,8 +57,7 @@ export function renderFillBlankQuestion({ mountEl, question }) {
 
   mountEl.appendChild(wrap);
 
-  const parts = rawText.split('[[blank]]');
-  const blankCount = Math.max(0, parts.length - 1);
+  const parts = blankCount > 0 ? rawText.split(blankTokenRegex) : [];
   const blanks = Array.isArray(question.blanks) ? question.blanks : [];
   const inputs = [];
 
@@ -50,26 +70,31 @@ export function renderFillBlankQuestion({ mountEl, question }) {
     ];
   }
 
-  parts.forEach((part, index) => {
-    if (part) {
-      sentence.appendChild(buildTokenFragment(part));
-    }
-    if (index < parts.length - 1) {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'input fillblank-input';
-      input.autocomplete = 'off';
-      input.value = question._blanks[index] || '';
-      input.placeholder = '...';
+  if (blankCount > 0) {
+    parts.forEach((part, index) => {
+      if (part) {
+        sentence.appendChild(buildTokenFragment(part));
+      }
+      if (index < blankCount) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'input fillblank-input';
+        input.autocomplete = 'off';
+        input.value = question._blanks[index] || '';
+        input.placeholder = '...';
 
-      input.addEventListener('input', () => {
-        question._blanks[index] = input.value;
-      });
+        input.addEventListener('input', () => {
+          question._blanks[index] = input.value;
+        });
 
-      inputs.push(input);
-      sentence.appendChild(input);
-    }
-  });
+        inputs.push(input);
+        sentence.appendChild(input);
+      }
+    });
+  } else {
+    // Avoid duplicating the question text when there are no blank tokens in preview.
+    sentence.textContent = '';
+  }
 
   function buildTokenFragment(text) {
     const fragment = document.createDocumentFragment();
@@ -232,7 +257,7 @@ export function renderFillBlankQuestion({ mountEl, question }) {
     return 1 - distance / Math.max(aLen, bLen);
   }
 
-  function compareAnswer(userValue, answerValue) {
+  function compareAnswer(userValue, answerValue, textSpec = null) {
     const user = normalizeSpaces(userValue);
     const ans = normalizeSpaces(extractAnswerValue(answerValue));
     const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
@@ -243,6 +268,15 @@ export function renderFillBlankQuestion({ mountEl, question }) {
       return {
         ok: Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum,
         shouldAutocorrect: false
+      };
+    }
+
+    if (textSpec) {
+      const result = judgeTextAnswer(userValue, textSpec);
+      return {
+        ok: result.ok,
+        shouldAutocorrect: Boolean(result.corrected),
+        corrected: result.corrected
       };
     }
 
@@ -303,27 +337,45 @@ export function renderFillBlankQuestion({ mountEl, question }) {
     }
 
     let ok = true;
+    const corrections = [];
+    const hasTextSpec = Array.isArray(question.textSpec)
+      ? question.textSpec.some(Boolean)
+      : Boolean(question.textSpec || question.spec || question.answerSpec);
     blanks.forEach((ans, index) => {
       if (!ok) return;
-      const result = compareAnswer(userValues[index] ?? '', ans ?? '');
+      const textSpec = Array.isArray(question.textSpec)
+        ? question.textSpec[index]
+        : (question.textSpec || question.spec || question.answerSpec);
+      const result = compareAnswer(userValues[index] ?? '', ans ?? '', textSpec);
       if (!result.ok) {
         ok = false;
         return;
       }
       if (result.shouldAutocorrect) {
-        const resolvedAnswer = extractAnswerValue(ans ?? '');
+        const resolvedAnswer = result.corrected || extractAnswerValue(ans ?? '');
         if (resolvedAnswer) {
           question._blanks[index] = resolvedAnswer;
           if (inputs[index]) {
             inputs[index].value = resolvedAnswer;
           }
+          corrections.push(resolvedAnswer);
         }
       }
     });
 
-    feedback.textContent = ok
-      ? 'إجابات صحيحة ✅'
-      : 'يوجد فراغ غير صحيح، جرّب مرة ثانية';
+    if (hasTextSpec) {
+      if (ok) {
+        feedback.innerHTML = corrections.length
+          ? `<div>✔ صحيح</div><div>✏️ التصحيح: ${corrections.join('، ')}</div>`
+          : '✔ صحيح';
+      } else {
+        feedback.textContent = '✖ خطأ';
+      }
+    } else {
+      feedback.textContent = ok
+        ? 'إجابات صحيحة ✅'
+        : 'يوجد فراغ غير صحيح، جرّب مرة ثانية';
+    }
 
     feedback.classList.toggle('ok', ok);
     feedback.classList.toggle('err', !ok);
