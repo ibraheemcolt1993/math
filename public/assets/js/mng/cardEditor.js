@@ -127,9 +127,14 @@ function isArabicExtReady() {
   return Boolean(window.MathJax?.Extension?.Arabic && (window.MathJax.Extension.Arabic.version || window.MathJax.Extension.Arabic));
 }
 
+function hasArabicChars(value) {
+  return /[\u0600-\u06FF]/.test(value);
+}
+
 function wrapLatexForArabic(latexRaw, arabicMode = state.mathArabicEnabled) {
   if (!isArabicExtReady()) return latexRaw;
-  return arabicMode ? `\\ar{${latexRaw}}` : latexRaw;
+  if (!arabicMode || hasArabicChars(latexRaw)) return latexRaw;
+  return `\\ar{${latexRaw}}`;
 }
 
 function renderMathPreview(previewBox, latexRaw, displayMode = true, arabicMode = state.mathArabicEnabled) {

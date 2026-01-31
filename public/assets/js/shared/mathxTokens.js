@@ -11,8 +11,13 @@ function isArabicExtReady() {
   );
 }
 
+function hasArabicChars(value) {
+  return /[\u0600-\u06FF]/.test(value);
+}
+
 function wrapLatexForArabic(latexRaw, arabicMode) {
   if (!arabicMode || !isArabicExtReady()) return latexRaw;
+  if (hasArabicChars(latexRaw)) return latexRaw;
   return `\\ar{${latexRaw}}`;
 }
 
