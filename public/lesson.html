@@ -89,6 +89,17 @@
     </footer>
   </div>
 
+  <script type="text/x-mathjax-config">
+    MathJax.Ajax.config.path["arabic"] = "/assets/vendor/arabic-mathjax";
+    MathJax.Hub.Config({
+      jax: ["input/TeX","output/HTML-CSS"],
+      extensions: ["tex2jax.js","[arabic]/arabic.js"],
+      TeX: { extensions: ["AMSmath.js","AMSsymbols.js"] },
+      showProcessingMessages: false,
+      messageStyle: "none"
+    });
+  </script>
+  <script src="/assets/vendor/mathjax/MathJax.js?config=TeX-AMS_HTML"></script>
   <script type="module" src="/assets/js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,10 @@
+{
+  "name": "math-web",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  },
+  "scripts": {
+    "test:smoke": "playwright test tests/mathx-smoke.spec.js"
+  }
+}
