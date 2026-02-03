@@ -361,6 +361,12 @@
       text-align: left;
     }
 
+    .eq-preview mjx-container {
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
     #eqInput {
       width: 100%;
       min-height: 160px;
@@ -384,6 +390,16 @@
     const eqInput = document.getElementById('eqInput');
     const eqPreview = document.getElementById('eqPreview');
     let previewTimer;
+    let previewInFlight = false;
+
+    function focusInput() {
+      if (!eqInput) return;
+      try {
+        eqInput.focus({ preventScroll: true });
+      } catch (error) {
+        eqInput.focus();
+      }
+    }
 
     function schedulePreview() {
       clearTimeout(previewTimer);
@@ -392,21 +408,39 @@
 
     function updatePreview() {
       if (!eqInput || !eqPreview) return;
+      if (previewInFlight) return;
       const text = eqInput.value;
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
 
       if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+        previewInFlight = true;
         eqPreview.textContent = text ? `\\(${text}\\)` : ' ';
         window.MathJax.typesetClear?.([eqPreview]);
-        window.MathJax.typesetPromise([eqPreview]);
+        window.MathJax.typesetPromise([eqPreview]).finally(() => {
+          previewInFlight = false;
+          requestAnimationFrame(() => {
+            window.scrollTo(scrollX, scrollY);
+          });
+        });
       } else if (window.MathJax && window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
+        previewInFlight = true;
         eqPreview.textContent = '';
         const script = document.createElement('script');
         script.type = 'math/tex';
         script.textContent = text || ' ';
         eqPreview.appendChild(script);
-        window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview]);
+        window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview], () => {
+          previewInFlight = false;
+          requestAnimationFrame(() => {
+            window.scrollTo(scrollX, scrollY);
+          });
+        });
       } else {
         eqPreview.textContent = text;
+        requestAnimationFrame(() => {
+          window.scrollTo(scrollX, scrollY);
+        });
       }
     }
 
@@ -421,7 +455,7 @@
 
       const placeholderIndex = template.indexOf('□');
       const cursorPos = start + template.length;
-      eqInput.focus();
+      focusInput();
       if (placeholderIndex !== -1) {
         const placeholderPos = start + placeholderIndex;
         eqInput.setSelectionRange(placeholderPos, placeholderPos + 1);
@@ -454,12 +488,17 @@
       }
 
       eqInput.value = `${before}${after}`;
-      eqInput.focus();
+      focusInput();
       eqInput.setSelectionRange(cursorPos, cursorPos);
       schedulePreview();
     }
 
     document.querySelectorAll('.symbol-btn').forEach((button) => {
+      ['mousedown', 'touchstart'].forEach((eventName) => {
+        button.addEventListener(eventName, (event) => {
+          event.preventDefault();
+        });
+      });
       button.addEventListener('click', () => {
         const action = button.getAttribute('data-action');
         if (action === 'backspace') {
@@ -477,6 +516,11 @@
     });
 
     document.querySelectorAll('.eq-tab').forEach((tab) => {
+      ['mousedown', 'touchstart'].forEach((eventName) => {
+        tab.addEventListener(eventName, (event) => {
+          event.preventDefault();
+        });
+      });
       tab.addEventListener('click', () => {
         const target = tab.getAttribute('data-target');
         if (!target) return;
@@ -487,6 +531,7 @@
         document.querySelectorAll('.eq-toolbar-group').forEach((group) => {
           group.classList.toggle('is-active', group.getAttribute('data-group') === target);
         });
+        focusInput();
       });
     });
 
