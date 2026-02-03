@@ -369,7 +369,10 @@
 
     #eqInput {
       width: 100%;
-      min-height: 160px;
+      min-height: 56px;
+      max-height: 40vh;
+      resize: vertical;
+      overflow-y: auto;
       font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     }
 
@@ -404,6 +407,17 @@
     function schedulePreview() {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(updatePreview, 80);
+    }
+
+    function syncInputHeight() {
+      if (!eqInput) return;
+      const styles = window.getComputedStyle(eqInput);
+      const minHeight = parseFloat(styles.minHeight) || 0;
+      const maxHeight = parseFloat(styles.maxHeight) || Number.POSITIVE_INFINITY;
+
+      eqInput.style.height = 'auto';
+      const nextHeight = Math.min(Math.max(eqInput.scrollHeight, minHeight), maxHeight);
+      eqInput.style.height = `${nextHeight}px`;
     }
 
     function updatePreview() {
@@ -464,6 +478,7 @@
       }
 
       schedulePreview();
+      syncInputHeight();
     }
 
     function applyDeletion(isBackspace) {
@@ -491,14 +506,10 @@
       focusInput();
       eqInput.setSelectionRange(cursorPos, cursorPos);
       schedulePreview();
+      syncInputHeight();
     }
 
     document.querySelectorAll('.symbol-btn').forEach((button) => {
-      ['mousedown', 'touchstart'].forEach((eventName) => {
-        button.addEventListener(eventName, (event) => {
-          event.preventDefault();
-        });
-      });
       button.addEventListener('click', () => {
         const action = button.getAttribute('data-action');
         if (action === 'backspace') {
@@ -516,11 +527,6 @@
     });
 
     document.querySelectorAll('.eq-tab').forEach((tab) => {
-      ['mousedown', 'touchstart'].forEach((eventName) => {
-        tab.addEventListener(eventName, (event) => {
-          event.preventDefault();
-        });
-      });
       tab.addEventListener('click', () => {
         const target = tab.getAttribute('data-target');
         if (!target) return;
@@ -535,7 +541,12 @@
       });
     });
 
-    eqInput?.addEventListener('input', schedulePreview);
+    eqInput?.addEventListener('input', () => {
+      schedulePreview();
+      syncInputHeight();
+    });
+    window.addEventListener('resize', syncInputHeight);
+    syncInputHeight();
     schedulePreview();
   </script>
 </body>
