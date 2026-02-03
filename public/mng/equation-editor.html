@@ -672,16 +672,7 @@
 
     document.querySelectorAll('.eq-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
-        const target = tab.getAttribute('data-target');
-        if (!target) return;
-        document.querySelectorAll('.eq-tab').forEach((item) => {
-          item.classList.toggle('is-active', item === tab);
-          item.setAttribute('aria-selected', item === tab ? 'true' : 'false');
-        });
-        document.querySelectorAll('.eq-toolbar-group').forEach((group) => {
-          group.classList.toggle('is-active', group.getAttribute('data-group') === target);
-        });
-        focusInput();
+        activateTabByIndex(index);
       });
     });
 
