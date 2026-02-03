@@ -53,7 +53,7 @@
           <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
         <div class="card-body">
-          <div class="eq-tabs-panel">
+          <div class="eq-panel">
             <div class="eq-tabs" role="tablist" aria-label="تبويبات الرموز">
               <button class="eq-tab is-active" type="button" data-target="basic" aria-selected="true" title="أساسيات">123</button>
               <button class="eq-tab" type="button" data-target="geometry" aria-selected="false" title="هندسة">∠</button>
@@ -61,122 +61,122 @@
             </div>
 
             <div class="eq-toolbar eq-toolbar-group is-active" data-group="basic" aria-label="شريط رموز المعادلات">
-              <button class="symbol-btn" type="button" data-template="+" title="جمع">+</button>
-              <button class="symbol-btn" type="button" data-template="-" title="طرح">−</button>
-              <button class="symbol-btn" type="button" data-template="\\times " title="ضرب">×</button>
-              <button class="symbol-btn" type="button" data-template="\\div " title="قسمة">÷</button>
-              <button class="symbol-btn" type="button" data-template="=" title="يساوي">=</button>
-              <button class="symbol-btn" type="button" data-template="\\ne " title="لا يساوي">≠</button>
-              <button class="symbol-btn" type="button" data-template="&lt;" title="أصغر من">&lt;</button>
-              <button class="symbol-btn" type="button" data-template="&gt;" title="أكبر من">&gt;</button>
-              <button class="symbol-btn" type="button" data-template="\\le " title="أصغر أو يساوي">≤</button>
-              <button class="symbol-btn" type="button" data-template="\\ge " title="أكبر أو يساوي">≥</button>
-              <button class="symbol-btn" type="button" data-template="\\pm " title="زائد أو ناقص">±</button>
-              <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
-                (<span class="box" aria-hidden="true"></span>)
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
-                |<span class="box" aria-hidden="true"></span>|
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
-              <button class="symbol-btn" type="button" data-template="^{\\circ}" title="درجة">°</button>
-              <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
-                [<span class="box" aria-hidden="true"></span>]
-              </button>
-              <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
-                {<span class="box" aria-hidden="true"></span>}
-              </button>
-              <button class="symbol-btn" type="button" data-action="delete" title="حذف للأمام">⌦</button>
-              <button class="symbol-btn" type="button" data-action="backspace" title="رجوع">⌫</button>
-              <button class="symbol-btn" type="button" data-template="\\rightarrow " title="سهم">⟶</button>
-            </div>
-
-            <div class="eq-toolbar eq-toolbar-group" data-group="geometry" aria-label="شريط رموز الهندسة">
-              <button class="symbol-btn" type="button" data-template="\\overline{□\\,□}" title="قطعة مستقيمة">
-                <span class="geom-icon" aria-hidden="true">
-                  <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
-                    <line x1="6" y1="6" x2="30" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
-                    <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
-                    <circle cx="30" cy="6" r="2.5" fill="currentColor"></circle>
-                  </svg>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\overrightarrow{□\\,□}" title="شعاع">
-                <span class="geom-icon" aria-hidden="true">
-                  <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
-                    <line x1="6" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
-                    <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
-                    <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
-                  </svg>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\overleftrightarrow{□\\,□}" title="خط مستقيم">
-                <span class="geom-icon" aria-hidden="true">
-                  <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
-                    <line x1="8" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
-                    <polygon points="8,2 2,6 8,10" fill="currentColor"></polygon>
-                    <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
-                  </svg>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\triangle " title="مثلث">△</button>
-              <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
-              <button class="symbol-btn" type="button" data-template="\\angle " title="زاوية">∠</button>
-              <button class="symbol-btn" type="button" data-template="\\perp " title="تعامد">⟂</button>
-              <button class="symbol-btn" type="button" data-template="\\parallel " title="توازي">∥</button>
-              <button class="symbol-btn" type="button" data-template="\\odot " title="دائرة مع نقطة">⊙</button>
-              <button class="symbol-btn" type="button" data-template="\\circ " title="دائرة">○</button>
-            </div>
-
-            <div class="eq-toolbar eq-toolbar-group" data-group="templates" aria-label="شريط قوالب المعادلات">
-              <button class="symbol-btn" type="button" data-template="\\frac{□}{□}" title="كسر">
-                <span class="fraction" aria-hidden="true">
-                  <span class="box"></span>
-                  <span class="bar"></span>
-                  <span class="box"></span>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\sqrt{□}" title="جذر">
-                √<span class="box" aria-hidden="true"></span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\sqrt[□]{□}" title="جذر برتبة">
-                √<span class="box small" aria-hidden="true"></span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="□^{□}" title="أس">
-                <span class="exp-icon" aria-hidden="true">
-                  <span class="box base"></span>
-                  <span class="box sup"></span>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="□^{2}" title="تربيع سريع">
-                <span class="exp-icon" aria-hidden="true">
-                  <span class="box base"></span>
-                  <span class="sup-text">2</span>
-                </span>
-              </button>
-              <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
-                (<span class="box" aria-hidden="true"></span>)
-              </button>
-              <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
-                [<span class="box" aria-hidden="true"></span>]
-              </button>
-              <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
-                {<span class="box" aria-hidden="true"></span>}
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
-                |<span class="box" aria-hidden="true"></span>|
-              </button>
-              <button class="symbol-btn" type="button" data-template="\\overline{□}" title="شَرطة علوية">
-                <span class="overline-icon" aria-hidden="true">
-                  <span class="overline-bar"></span>
-                  <span class="box"></span>
-                </span>
-              </button>
-            </div>
+            <button class="symbol-btn" type="button" data-template="+" title="جمع">+</button>
+            <button class="symbol-btn" type="button" data-template="-" title="طرح">−</button>
+            <button class="symbol-btn" type="button" data-template="\\times " title="ضرب">×</button>
+            <button class="symbol-btn" type="button" data-template="\\div " title="قسمة">÷</button>
+            <button class="symbol-btn" type="button" data-template="=" title="يساوي">=</button>
+            <button class="symbol-btn" type="button" data-template="\\ne " title="لا يساوي">≠</button>
+            <button class="symbol-btn" type="button" data-template="&lt;" title="أصغر من">&lt;</button>
+            <button class="symbol-btn" type="button" data-template="&gt;" title="أكبر من">&gt;</button>
+            <button class="symbol-btn" type="button" data-template="\\le " title="أصغر أو يساوي">≤</button>
+            <button class="symbol-btn" type="button" data-template="\\ge " title="أكبر أو يساوي">≥</button>
+            <button class="symbol-btn" type="button" data-template="\\pm " title="زائد أو ناقص">±</button>
+            <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
+              (<span class="box" aria-hidden="true"></span>)
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
+              |<span class="box" aria-hidden="true"></span>|
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
+            <button class="symbol-btn" type="button" data-template="^{\\circ}" title="درجة">°</button>
+            <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
+              [<span class="box" aria-hidden="true"></span>]
+            </button>
+            <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
+              {<span class="box" aria-hidden="true"></span>}
+            </button>
+            <button class="symbol-btn" type="button" data-action="delete" title="حذف للأمام">⌦</button>
+            <button class="symbol-btn" type="button" data-action="backspace" title="رجوع">⌫</button>
+            <button class="symbol-btn" type="button" data-template="\\rightarrow " title="سهم">⟶</button>
           </div>
 
-          <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
-          <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+            <div class="eq-toolbar eq-toolbar-group" data-group="geometry" aria-label="شريط رموز الهندسة">
+            <button class="symbol-btn" type="button" data-template="\\overline{□\\,□}" title="قطعة مستقيمة">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="6" y1="6" x2="30" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
+                  <circle cx="30" cy="6" r="2.5" fill="currentColor"></circle>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\overrightarrow{□\\,□}" title="شعاع">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="6" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
+                  <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\overleftrightarrow{□\\,□}" title="خط مستقيم">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="8" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <polygon points="8,2 2,6 8,10" fill="currentColor"></polygon>
+                  <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\triangle " title="مثلث">△</button>
+            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
+            <button class="symbol-btn" type="button" data-template="\\angle " title="زاوية">∠</button>
+            <button class="symbol-btn" type="button" data-template="\\perp " title="تعامد">⟂</button>
+            <button class="symbol-btn" type="button" data-template="\\parallel " title="توازي">∥</button>
+            <button class="symbol-btn" type="button" data-template="\\odot " title="دائرة مع نقطة">⊙</button>
+            <button class="symbol-btn" type="button" data-template="\\circ " title="دائرة">○</button>
+          </div>
+
+            <div class="eq-toolbar eq-toolbar-group" data-group="templates" aria-label="شريط قوالب المعادلات">
+            <button class="symbol-btn" type="button" data-template="\\frac{□}{□}" title="كسر">
+              <span class="fraction" aria-hidden="true">
+                <span class="box"></span>
+                <span class="bar"></span>
+                <span class="box"></span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\sqrt{□}" title="جذر">
+              √<span class="box" aria-hidden="true"></span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\sqrt[□]{□}" title="جذر برتبة">
+              √<span class="box small" aria-hidden="true"></span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="□^{□}" title="أس">
+              <span class="exp-icon" aria-hidden="true">
+                <span class="box base"></span>
+                <span class="box sup"></span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="□^{2}" title="تربيع سريع">
+              <span class="exp-icon" aria-hidden="true">
+                <span class="box base"></span>
+                <span class="sup-text">2</span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
+              (<span class="box" aria-hidden="true"></span>)
+            </button>
+            <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
+              [<span class="box" aria-hidden="true"></span>]
+            </button>
+            <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
+              {<span class="box" aria-hidden="true"></span>}
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
+              |<span class="box" aria-hidden="true"></span>|
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\overline{□}" title="شَرطة علوية">
+              <span class="overline-icon" aria-hidden="true">
+                <span class="overline-bar"></span>
+                <span class="box"></span>
+              </span>
+            </button>
+          </div>
+
+            <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
+            <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+          </div>
         </div>
       </section>
     </main>
@@ -195,8 +195,18 @@
       flex-wrap: wrap;
     }
 
-    .eq-tabs-panel {
-      touch-action: pan-y;
+    .eq-panel {
+      position: relative;
+    }
+
+    body.keyboard-open .eq-panel {
+      position: sticky;
+      bottom: env(safe-area-inset-bottom, 0);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      background: #fff;
+      z-index: 2;
+      border-radius: 16px;
+      box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.08);
     }
 
     .eq-tab {
@@ -431,6 +441,13 @@
       previewTimer = setTimeout(updatePreview, 80);
     }
 
+    function updateKeyboardState() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport ? viewport.height : window.innerHeight;
+      const diff = window.innerHeight - viewportHeight;
+      document.body.classList.toggle('keyboard-open', diff > 120);
+    }
+
     function getActivePlaceholderIndex(value) {
       const positions = [];
       for (let i = 0; i < value.length; i += 1) {
@@ -653,74 +670,10 @@
       });
     });
 
-    const tabButtons = Array.from(document.querySelectorAll('.eq-tab'));
-    const tabGroups = Array.from(document.querySelectorAll('.eq-toolbar-group'));
-
-    function getActiveTabIndex() {
-      const activeIndex = tabButtons.findIndex((tab) => tab.classList.contains('is-active'));
-      return activeIndex === -1 ? 0 : activeIndex;
-    }
-
-    function activateTabByIndex(index) {
-      if (!tabButtons.length) return;
-      const normalizedIndex = ((index % tabButtons.length) + tabButtons.length) % tabButtons.length;
-      const tab = tabButtons[normalizedIndex];
-      const target = tab.getAttribute('data-target');
-      if (!target) return;
-      tabButtons.forEach((item) => {
-        item.classList.toggle('is-active', item === tab);
-        item.setAttribute('aria-selected', item === tab ? 'true' : 'false');
-      });
-      tabGroups.forEach((group) => {
-        group.classList.toggle('is-active', group.getAttribute('data-group') === target);
-      });
-      focusInput();
-    }
-
-    tabButtons.forEach((tab, index) => {
+    document.querySelectorAll('.eq-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         activateTabByIndex(index);
       });
-    });
-
-    const tabsPanel = document.querySelector('.eq-tabs-panel');
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-    let touchTracking = false;
-
-    tabsPanel?.addEventListener('touchstart', (event) => {
-      if (event.touches.length !== 1) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest('textarea, input')) {
-        touchTracking = false;
-        return;
-      }
-      const touch = event.touches[0];
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      touchStartTime = Date.now();
-      touchTracking = true;
-    });
-
-    tabsPanel?.addEventListener('touchend', (event) => {
-      if (!touchTracking || event.changedTouches.length !== 1) return;
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - touchStartX;
-      const deltaY = touch.clientY - touchStartY;
-      const elapsed = Date.now() - touchStartTime;
-      touchTracking = false;
-
-      if (elapsed > 700) return;
-      if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY)) return;
-
-      const currentIndex = getActiveTabIndex();
-      const nextIndex = deltaX < 0 ? currentIndex + 1 : currentIndex - 1;
-      activateTabByIndex(nextIndex);
-    });
-
-    tabsPanel?.addEventListener('touchcancel', () => {
-      touchTracking = false;
     });
 
     eqInput?.addEventListener('input', () => {
@@ -741,7 +694,11 @@
     });
     eqInput?.addEventListener('select', schedulePreview);
     window.addEventListener('resize', syncInputHeight);
+    window.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardState);
     syncInputHeight();
+    updateKeyboardState();
     schedulePreview();
   </script>
 </body>
