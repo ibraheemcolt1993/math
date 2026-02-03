@@ -53,13 +53,14 @@
           <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
         <div class="card-body">
-          <div class="eq-tabs" role="tablist" aria-label="تبويبات الرموز">
-            <button class="eq-tab is-active" type="button" data-target="basic" aria-selected="true" title="أساسيات">123</button>
-            <button class="eq-tab" type="button" data-target="geometry" aria-selected="false" title="هندسة">∠</button>
-            <button class="eq-tab" type="button" data-target="templates" aria-selected="false" title="قوالب">□/□</button>
-          </div>
+          <div class="eq-panel">
+            <div class="eq-tabs" role="tablist" aria-label="تبويبات الرموز">
+              <button class="eq-tab is-active" type="button" data-target="basic" aria-selected="true" title="أساسيات">123</button>
+              <button class="eq-tab" type="button" data-target="geometry" aria-selected="false" title="هندسة">∠</button>
+              <button class="eq-tab" type="button" data-target="templates" aria-selected="false" title="قوالب">□/□</button>
+            </div>
 
-          <div class="eq-toolbar eq-toolbar-group is-active" data-group="basic" aria-label="شريط رموز المعادلات">
+            <div class="eq-toolbar eq-toolbar-group is-active" data-group="basic" aria-label="شريط رموز المعادلات">
             <button class="symbol-btn" type="button" data-template="+" title="جمع">+</button>
             <button class="symbol-btn" type="button" data-template="-" title="طرح">−</button>
             <button class="symbol-btn" type="button" data-template="\\times " title="ضرب">×</button>
@@ -90,7 +91,7 @@
             <button class="symbol-btn" type="button" data-template="\\rightarrow " title="سهم">⟶</button>
           </div>
 
-          <div class="eq-toolbar eq-toolbar-group" data-group="geometry" aria-label="شريط رموز الهندسة">
+            <div class="eq-toolbar eq-toolbar-group" data-group="geometry" aria-label="شريط رموز الهندسة">
             <button class="symbol-btn" type="button" data-template="\\overline{□\\,□}" title="قطعة مستقيمة">
               <span class="geom-icon" aria-hidden="true">
                 <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
@@ -127,7 +128,7 @@
             <button class="symbol-btn" type="button" data-template="\\circ " title="دائرة">○</button>
           </div>
 
-          <div class="eq-toolbar eq-toolbar-group" data-group="templates" aria-label="شريط قوالب المعادلات">
+            <div class="eq-toolbar eq-toolbar-group" data-group="templates" aria-label="شريط قوالب المعادلات">
             <button class="symbol-btn" type="button" data-template="\\frac{□}{□}" title="كسر">
               <span class="fraction" aria-hidden="true">
                 <span class="box"></span>
@@ -173,10 +174,9 @@
             </button>
           </div>
 
-          <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
-
-          <label class="form-label" for="eqInput">المعادلة</label>
-          <textarea id="eqInput" class="input" dir="ltr" rows="6" placeholder="اكتب المعادلة هنا..."></textarea>
+            <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
+            <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+          </div>
         </div>
       </section>
     </main>
@@ -193,6 +193,20 @@
       margin: 0 0 8px;
       align-items: center;
       flex-wrap: wrap;
+    }
+
+    .eq-panel {
+      position: relative;
+    }
+
+    body.keyboard-open .eq-panel {
+      position: sticky;
+      bottom: env(safe-area-inset-bottom, 0);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      background: #fff;
+      z-index: 2;
+      border-radius: 16px;
+      box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.08);
     }
 
     .eq-tab {
@@ -353,12 +367,29 @@
       background: #fff;
       border-radius: 12px;
       padding: 10px 12px;
-      margin-bottom: 12px;
+      margin-bottom: 6px;
       min-height: 56px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
       white-space: pre-wrap;
       direction: ltr;
       text-align: left;
+      color: var(--text, #0f172a);
+    }
+
+    .eq-preview.is-empty {
+      color: var(--muted, #94a3b8);
+    }
+
+    .eq-preview .preview-placeholder {
+      display: inline-block;
+      padding: 0 2px;
+      border-radius: 4px;
+    }
+
+    .eq-preview .preview-placeholder.is-active {
+      background: #e0f2fe;
+      outline: 2px solid #2563eb;
+      outline-offset: 1px;
     }
 
     .eq-preview mjx-container {
@@ -369,7 +400,11 @@
 
     #eqInput {
       width: 100%;
-      min-height: 160px;
+      min-height: 56px;
+      max-height: 40vh;
+      height: 56px;
+      resize: vertical;
+      overflow-y: auto;
       font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     }
 
@@ -406,6 +441,96 @@
       previewTimer = setTimeout(updatePreview, 80);
     }
 
+    function updateKeyboardState() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport ? viewport.height : window.innerHeight;
+      const diff = window.innerHeight - viewportHeight;
+      document.body.classList.toggle('keyboard-open', diff > 120);
+    }
+
+    function getActivePlaceholderIndex(value) {
+      const positions = [];
+      for (let i = 0; i < value.length; i += 1) {
+        if (value[i] === '□') positions.push(i);
+      }
+      if (positions.length === 0 || !eqInput) return -1;
+
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+
+      if (start !== end) {
+        const indexInSelection = positions.findIndex((pos) => pos >= start && pos < end);
+        if (indexInSelection !== -1) return indexInSelection;
+      }
+
+      const atCaretIndex = positions.findIndex((pos) => pos === start || pos === start - 1);
+      if (atCaretIndex !== -1) return atCaretIndex;
+
+      const beforeIndex = [...positions].reverse().findIndex((pos) => pos < start);
+      if (beforeIndex !== -1) {
+        return positions.length - 1 - beforeIndex;
+      }
+
+      return 0;
+    }
+
+    function buildPreviewText(value) {
+      const placeholderNormal = '\\\\square';
+      const placeholderActive = '\\\\bbox[2px,border:2px solid #2563eb,background:#e0f2fe]{\\\\square}';
+      const activeIndex = getActivePlaceholderIndex(value);
+      let placeholderCount = 0;
+      let result = '';
+
+      for (const char of value) {
+        if (char === '□') {
+          result += placeholderCount === activeIndex ? placeholderActive : placeholderNormal;
+          placeholderCount += 1;
+        } else {
+          result += char;
+        }
+      }
+
+      return result;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function buildPreviewFallback(value) {
+      const activeIndex = getActivePlaceholderIndex(value);
+      let placeholderCount = 0;
+      let result = '';
+
+      for (const char of value) {
+        if (char === '□') {
+          const activeClass = placeholderCount === activeIndex ? ' is-active' : '';
+          result += `<span class=\"preview-placeholder${activeClass}\">□</span>`;
+          placeholderCount += 1;
+        } else {
+          result += escapeHtml(char);
+        }
+      }
+
+      return result;
+    }
+
+    function syncInputHeight() {
+      if (!eqInput) return;
+      const styles = window.getComputedStyle(eqInput);
+      const minHeight = parseFloat(styles.minHeight) || 0;
+      const maxHeight = parseFloat(styles.maxHeight) || Number.POSITIVE_INFINITY;
+
+      eqInput.style.height = 'auto';
+      const nextHeight = Math.min(Math.max(eqInput.scrollHeight, minHeight), maxHeight);
+      eqInput.style.height = `${nextHeight}px`;
+    }
+
     function updatePreview() {
       if (!eqInput || !eqPreview) return;
       if (previewInFlight) return;
@@ -413,9 +538,20 @@
       const scrollX = window.scrollX;
       const scrollY = window.scrollY;
 
+      if (!text.trim()) {
+        eqPreview.textContent = 'المعاينة تظهر هنا';
+        eqPreview.classList.add('is-empty');
+        requestAnimationFrame(() => {
+          window.scrollTo(scrollX, scrollY);
+        });
+        return;
+      }
+      eqPreview.classList.remove('is-empty');
+      const previewText = buildPreviewText(text);
+
       if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
         previewInFlight = true;
-        eqPreview.textContent = text ? `\\(${text}\\)` : ' ';
+        eqPreview.textContent = `\\(${previewText}\\)`;
         window.MathJax.typesetClear?.([eqPreview]);
         window.MathJax.typesetPromise([eqPreview]).finally(() => {
           previewInFlight = false;
@@ -428,7 +564,7 @@
         eqPreview.textContent = '';
         const script = document.createElement('script');
         script.type = 'math/tex';
-        script.textContent = text || ' ';
+        script.textContent = previewText;
         eqPreview.appendChild(script);
         window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview], () => {
           previewInFlight = false;
@@ -437,11 +573,33 @@
           });
         });
       } else {
-        eqPreview.textContent = text;
+        eqPreview.innerHTML = buildPreviewFallback(text);
         requestAnimationFrame(() => {
           window.scrollTo(scrollX, scrollY);
         });
       }
+    }
+
+    function selectPlaceholderAtCaret() {
+      if (!eqInput) return;
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+      if (start !== end) return;
+      const value = eqInput.value;
+      if (value[start] === '□') {
+        eqInput.setSelectionRange(start, start + 1);
+        return;
+      }
+      if (start > 0 && value[start - 1] === '□') {
+        eqInput.setSelectionRange(start - 1, start);
+      }
+    }
+
+    function scrollInputIntoView() {
+      if (!eqInput) return;
+      requestAnimationFrame(() => {
+        eqInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
     }
 
     function insertTemplate(rawTemplate) {
@@ -464,6 +622,7 @@
       }
 
       schedulePreview();
+      syncInputHeight();
     }
 
     function applyDeletion(isBackspace) {
@@ -491,14 +650,10 @@
       focusInput();
       eqInput.setSelectionRange(cursorPos, cursorPos);
       schedulePreview();
+      syncInputHeight();
     }
 
     document.querySelectorAll('.symbol-btn').forEach((button) => {
-      ['mousedown', 'touchstart'].forEach((eventName) => {
-        button.addEventListener(eventName, (event) => {
-          event.preventDefault();
-        });
-      });
       button.addEventListener('click', () => {
         const action = button.getAttribute('data-action');
         if (action === 'backspace') {
@@ -516,11 +671,6 @@
     });
 
     document.querySelectorAll('.eq-tab').forEach((tab) => {
-      ['mousedown', 'touchstart'].forEach((eventName) => {
-        tab.addEventListener(eventName, (event) => {
-          event.preventDefault();
-        });
-      });
       tab.addEventListener('click', () => {
         const target = tab.getAttribute('data-target');
         if (!target) return;
@@ -535,7 +685,29 @@
       });
     });
 
-    eqInput?.addEventListener('input', schedulePreview);
+    eqInput?.addEventListener('input', () => {
+      schedulePreview();
+      syncInputHeight();
+    });
+    eqInput?.addEventListener('focus', () => {
+      scrollInputIntoView();
+      setTimeout(scrollInputIntoView, 300);
+    });
+    eqInput?.addEventListener('click', () => {
+      selectPlaceholderAtCaret();
+      schedulePreview();
+    });
+    eqInput?.addEventListener('keyup', () => {
+      selectPlaceholderAtCaret();
+      schedulePreview();
+    });
+    eqInput?.addEventListener('select', schedulePreview);
+    window.addEventListener('resize', syncInputHeight);
+    window.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardState);
+    syncInputHeight();
+    updateKeyboardState();
     schedulePreview();
   </script>
 </body>
