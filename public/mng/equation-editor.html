@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — محرر المعادلات</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/toast.css" />
+  <link rel="stylesheet" href="/assets/css/mng/manager.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
+  <script src="/assets/js/mng/ain-guard.js" defer></script>
+</head>
+
+<body class="md-theme">
+  <div class="app">
+    <header class="topbar md-topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="math">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>math</b>
+            <span>لوحة إدارة الرياضيات</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <span id="ainUserLabel" class="badge primary md-badge">محمي</span>
+          <button id="ainLogoutBtn" class="btn btn-ghost btn-sm md-btn" type="button">تسجيل خروج</button>
+          <a class="btn btn-ghost btn-sm md-btn" href="/mng/index.html" aria-label="لوحة الإدارة">
+            لوحة الإدارة
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container section">
+      <div class="warning-banner" role="alert">
+        ⚠️ صفحة إدارة تجريبية — لا تُدخل بيانات حقيقية
+      </div>
+
+      <section class="card manager-card md-card">
+        <div class="card-header">
+          <div>
+            <h1 class="h1">محرر المعادلات</h1>
+            <p class="p muted">قريباً</p>
+          </div>
+          <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container section center">
+      <p class="small">© math — لوحة إدارة تجريبية</p>
+    </footer>
+  </div>
+</body>
+</html>

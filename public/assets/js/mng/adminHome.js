@@ -28,6 +28,13 @@ const adminLinks = [
     badge: 'محرر'
   },
   {
+    key: 'equation-editor',
+    title: 'محرر المعادلات',
+    description: 'صفحة مخصصة لتحرير المعادلات الرياضية.',
+    href: '/mng/equation-editor.html',
+    badge: 'معادلات'
+  },
+  {
     key: 'teachers',
     title: 'إدارة المعلمين',
     description: 'إدارة حسابات المعلمين وصلاحياتهم.',
@@ -41,6 +48,7 @@ const quickLinks = [
   { key: 'students', label: 'الطلاب', href: '/mng/students.html' },
   { key: 'cards', label: 'البطاقات', href: '/mng/cards.html' },
   { key: 'card-editor', label: 'محرر البطاقة', href: '/mng/card-editor.html' },
+  { key: 'equation-editor', label: 'محرر المعادلات', href: '/mng/equation-editor.html' },
   { key: 'teachers', label: 'المعلمين', href: '/mng/teachers.html', role: 1 }
 ];
 
