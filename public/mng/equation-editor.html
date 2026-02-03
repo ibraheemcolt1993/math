@@ -487,6 +487,13 @@
       }
     }
 
+    function scrollInputIntoView() {
+      if (!eqInput) return;
+      requestAnimationFrame(() => {
+        eqInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }
+
     function insertTemplate(rawTemplate) {
       if (!eqInput) return;
       const template = rawTemplate.replace(/\\\\/g, '\\');
@@ -573,6 +580,10 @@
     eqInput?.addEventListener('input', () => {
       schedulePreview();
       syncInputHeight();
+    });
+    eqInput?.addEventListener('focus', () => {
+      scrollInputIntoView();
+      setTimeout(scrollInputIntoView, 300);
     });
     eqInput?.addEventListener('click', selectPlaceholderAtCaret);
     eqInput?.addEventListener('keyup', selectPlaceholderAtCaret);
