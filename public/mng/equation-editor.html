@@ -364,6 +364,18 @@
       color: var(--muted, #94a3b8);
     }
 
+    .eq-preview .preview-placeholder {
+      display: inline-block;
+      padding: 0 2px;
+      border-radius: 4px;
+    }
+
+    .eq-preview .preview-placeholder.is-active {
+      background: #e0f2fe;
+      outline: 2px solid #2563eb;
+      outline-offset: 1px;
+    }
+
     .eq-preview mjx-container {
       max-width: 100%;
       overflow-x: auto;
@@ -413,6 +425,78 @@
       previewTimer = setTimeout(updatePreview, 80);
     }
 
+    function getActivePlaceholderIndex(value) {
+      const positions = [];
+      for (let i = 0; i < value.length; i += 1) {
+        if (value[i] === '□') positions.push(i);
+      }
+      if (positions.length === 0 || !eqInput) return -1;
+
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+
+      if (start !== end) {
+        const indexInSelection = positions.findIndex((pos) => pos >= start && pos < end);
+        if (indexInSelection !== -1) return indexInSelection;
+      }
+
+      const atCaretIndex = positions.findIndex((pos) => pos === start || pos === start - 1);
+      if (atCaretIndex !== -1) return atCaretIndex;
+
+      const beforeIndex = [...positions].reverse().findIndex((pos) => pos < start);
+      if (beforeIndex !== -1) {
+        return positions.length - 1 - beforeIndex;
+      }
+
+      return 0;
+    }
+
+    function buildPreviewText(value) {
+      const placeholderNormal = '\\\\square';
+      const placeholderActive = '\\\\bbox[2px,border:2px solid #2563eb,background:#e0f2fe]{\\\\square}';
+      const activeIndex = getActivePlaceholderIndex(value);
+      let placeholderCount = 0;
+      let result = '';
+
+      for (const char of value) {
+        if (char === '□') {
+          result += placeholderCount === activeIndex ? placeholderActive : placeholderNormal;
+          placeholderCount += 1;
+        } else {
+          result += char;
+        }
+      }
+
+      return result;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function buildPreviewFallback(value) {
+      const activeIndex = getActivePlaceholderIndex(value);
+      let placeholderCount = 0;
+      let result = '';
+
+      for (const char of value) {
+        if (char === '□') {
+          const activeClass = placeholderCount === activeIndex ? ' is-active' : '';
+          result += `<span class=\"preview-placeholder${activeClass}\">□</span>`;
+          placeholderCount += 1;
+        } else {
+          result += escapeHtml(char);
+        }
+      }
+
+      return result;
+    }
+
     function syncInputHeight() {
       if (!eqInput) return;
       const styles = window.getComputedStyle(eqInput);
@@ -440,10 +524,11 @@
         return;
       }
       eqPreview.classList.remove('is-empty');
+      const previewText = buildPreviewText(text);
 
       if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
         previewInFlight = true;
-        eqPreview.textContent = `\\(${text}\\)`;
+        eqPreview.textContent = `\\(${previewText}\\)`;
         window.MathJax.typesetClear?.([eqPreview]);
         window.MathJax.typesetPromise([eqPreview]).finally(() => {
           previewInFlight = false;
@@ -456,7 +541,7 @@
         eqPreview.textContent = '';
         const script = document.createElement('script');
         script.type = 'math/tex';
-        script.textContent = text;
+        script.textContent = previewText;
         eqPreview.appendChild(script);
         window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview], () => {
           previewInFlight = false;
@@ -465,7 +550,7 @@
           });
         });
       } else {
-        eqPreview.textContent = text;
+        eqPreview.innerHTML = buildPreviewFallback(text);
         requestAnimationFrame(() => {
           window.scrollTo(scrollX, scrollY);
         });
@@ -585,8 +670,15 @@
       scrollInputIntoView();
       setTimeout(scrollInputIntoView, 300);
     });
-    eqInput?.addEventListener('click', selectPlaceholderAtCaret);
-    eqInput?.addEventListener('keyup', selectPlaceholderAtCaret);
+    eqInput?.addEventListener('click', () => {
+      selectPlaceholderAtCaret();
+      schedulePreview();
+    });
+    eqInput?.addEventListener('keyup', () => {
+      selectPlaceholderAtCaret();
+      schedulePreview();
+    });
+    eqInput?.addEventListener('select', schedulePreview);
     window.addEventListener('resize', syncInputHeight);
     syncInputHeight();
     schedulePreview();
