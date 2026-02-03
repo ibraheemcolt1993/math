@@ -174,9 +174,7 @@
           </div>
 
           <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
-
-          <label class="form-label" for="eqInput">المعادلة</label>
-          <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..."></textarea>
+          <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
         </div>
       </section>
     </main>
@@ -353,12 +351,17 @@
       background: #fff;
       border-radius: 12px;
       padding: 10px 12px;
-      margin-bottom: 12px;
+      margin-bottom: 6px;
       min-height: 56px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
       white-space: pre-wrap;
       direction: ltr;
       text-align: left;
+      color: var(--text, #0f172a);
+    }
+
+    .eq-preview.is-empty {
+      color: var(--muted, #94a3b8);
     }
 
     .eq-preview mjx-container {
@@ -428,9 +431,19 @@
       const scrollX = window.scrollX;
       const scrollY = window.scrollY;
 
+      if (!text.trim()) {
+        eqPreview.textContent = 'المعاينة تظهر هنا';
+        eqPreview.classList.add('is-empty');
+        requestAnimationFrame(() => {
+          window.scrollTo(scrollX, scrollY);
+        });
+        return;
+      }
+      eqPreview.classList.remove('is-empty');
+
       if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
         previewInFlight = true;
-        eqPreview.textContent = text ? `\\(${text}\\)` : ' ';
+        eqPreview.textContent = `\\(${text}\\)`;
         window.MathJax.typesetClear?.([eqPreview]);
         window.MathJax.typesetPromise([eqPreview]).finally(() => {
           previewInFlight = false;
@@ -443,7 +456,7 @@
         eqPreview.textContent = '';
         const script = document.createElement('script');
         script.type = 'math/tex';
-        script.textContent = text || ' ';
+        script.textContent = text;
         eqPreview.appendChild(script);
         window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview], () => {
           previewInFlight = false;
@@ -456,6 +469,21 @@
         requestAnimationFrame(() => {
           window.scrollTo(scrollX, scrollY);
         });
+      }
+    }
+
+    function selectPlaceholderAtCaret() {
+      if (!eqInput) return;
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+      if (start !== end) return;
+      const value = eqInput.value;
+      if (value[start] === '□') {
+        eqInput.setSelectionRange(start, start + 1);
+        return;
+      }
+      if (start > 0 && value[start - 1] === '□') {
+        eqInput.setSelectionRange(start - 1, start);
       }
     }
 
@@ -546,6 +574,8 @@
       schedulePreview();
       syncInputHeight();
     });
+    eqInput?.addEventListener('click', selectPlaceholderAtCaret);
+    eqInput?.addEventListener('keyup', selectPlaceholderAtCaret);
     window.addEventListener('resize', syncInputHeight);
     syncInputHeight();
     schedulePreview();
