@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/assets/css/md-base.css" />
   <link rel="stylesheet" href="/assets/css/md-components.css" />
   <link rel="stylesheet" href="/assets/css/md-utilities.css" />
+  <script src="/assets/vendor/mathjax/tex-svg.js"></script>
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
@@ -356,6 +357,8 @@
       min-height: 56px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
       white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
     }
 
     #eqInput {
@@ -391,7 +394,11 @@
       if (!eqInput || !eqPreview) return;
       const text = eqInput.value;
 
-      if (window.MathJax && window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
+      if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+        eqPreview.textContent = text ? `\\(${text}\\)` : ' ';
+        window.MathJax.typesetClear?.([eqPreview]);
+        window.MathJax.typesetPromise([eqPreview]);
+      } else if (window.MathJax && window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
         eqPreview.textContent = '';
         const script = document.createElement('script');
         script.type = 'math/tex';
