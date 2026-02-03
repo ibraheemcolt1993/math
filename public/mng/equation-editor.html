@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/assets/css/md-base.css" />
   <link rel="stylesheet" href="/assets/css/md-components.css" />
   <link rel="stylesheet" href="/assets/css/md-utilities.css" />
+  <script src="/assets/vendor/mathjax/tex-svg.js"></script>
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
@@ -52,7 +53,13 @@
           <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
         </div>
         <div class="card-body">
-          <div class="equation-toolbar" aria-label="شريط رموز المعادلات">
+          <div class="eq-tabs" role="tablist" aria-label="تبويبات الرموز">
+            <button class="eq-tab is-active" type="button" data-target="basic" aria-selected="true" title="أساسيات">123</button>
+            <button class="eq-tab" type="button" data-target="geometry" aria-selected="false" title="هندسة">∠</button>
+            <button class="eq-tab" type="button" data-target="templates" aria-selected="false" title="قوالب">□/□</button>
+          </div>
+
+          <div class="eq-toolbar eq-toolbar-group is-active" data-group="basic" aria-label="شريط رموز المعادلات">
             <button class="symbol-btn" type="button" data-template="+" title="جمع">+</button>
             <button class="symbol-btn" type="button" data-template="-" title="طرح">−</button>
             <button class="symbol-btn" type="button" data-template="\\times " title="ضرب">×</button>
@@ -67,12 +74,60 @@
             <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
               (<span class="box" aria-hidden="true"></span>)
             </button>
+            <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
+              |<span class="box" aria-hidden="true"></span>|
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
+            <button class="symbol-btn" type="button" data-template="^{\\circ}" title="درجة">°</button>
             <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
               [<span class="box" aria-hidden="true"></span>]
             </button>
             <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
               {<span class="box" aria-hidden="true"></span>}
             </button>
+            <button class="symbol-btn" type="button" data-action="delete" title="حذف للأمام">⌦</button>
+            <button class="symbol-btn" type="button" data-action="backspace" title="رجوع">⌫</button>
+            <button class="symbol-btn" type="button" data-template="\\rightarrow " title="سهم">⟶</button>
+          </div>
+
+          <div class="eq-toolbar eq-toolbar-group" data-group="geometry" aria-label="شريط رموز الهندسة">
+            <button class="symbol-btn" type="button" data-template="\\overline{□\\,□}" title="قطعة مستقيمة">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="6" y1="6" x2="30" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
+                  <circle cx="30" cy="6" r="2.5" fill="currentColor"></circle>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\overrightarrow{□\\,□}" title="شعاع">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="6" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
+                  <circle cx="6" cy="6" r="2.5" fill="currentColor"></circle>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\overleftrightarrow{□\\,□}" title="خط مستقيم">
+              <span class="geom-icon" aria-hidden="true">
+                <svg class="geom-svg" viewBox="0 0 36 12" focusable="false" aria-hidden="true">
+                  <line x1="8" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                  <polygon points="8,2 2,6 8,10" fill="currentColor"></polygon>
+                  <polygon points="28,2 34,6 28,10" fill="currentColor"></polygon>
+                </svg>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\triangle " title="مثلث">△</button>
+            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
+            <button class="symbol-btn" type="button" data-template="\\angle " title="زاوية">∠</button>
+            <button class="symbol-btn" type="button" data-template="\\perp " title="تعامد">⟂</button>
+            <button class="symbol-btn" type="button" data-template="\\parallel " title="توازي">∥</button>
+            <button class="symbol-btn" type="button" data-template="\\odot " title="دائرة مع نقطة">⊙</button>
+            <button class="symbol-btn" type="button" data-template="\\circ " title="دائرة">○</button>
+          </div>
+
+          <div class="eq-toolbar eq-toolbar-group" data-group="templates" aria-label="شريط قوالب المعادلات">
             <button class="symbol-btn" type="button" data-template="\\frac{□}{□}" title="كسر">
               <span class="fraction" aria-hidden="true">
                 <span class="box"></span>
@@ -80,21 +135,45 @@
                 <span class="box"></span>
               </span>
             </button>
-            <button class="symbol-btn" type="button" data-template="□^{□}" title="أس">
-              <span class="exp" aria-hidden="true">
-                <span class="box"></span>
-                <sup><span class="box small"></span></sup>
-              </span>
-            </button>
             <button class="symbol-btn" type="button" data-template="\\sqrt{□}" title="جذر">
               √<span class="box" aria-hidden="true"></span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\sqrt[□]{□}" title="جذر برتبة">
+              √<span class="box small" aria-hidden="true"></span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="□^{□}" title="أس">
+              <span class="exp-icon" aria-hidden="true">
+                <span class="box base"></span>
+                <span class="box sup"></span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="□^{2}" title="تربيع سريع">
+              <span class="exp-icon" aria-hidden="true">
+                <span class="box base"></span>
+                <span class="sup-text">2</span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
+              (<span class="box" aria-hidden="true"></span>)
+            </button>
+            <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
+              [<span class="box" aria-hidden="true"></span>]
+            </button>
+            <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
+              {<span class="box" aria-hidden="true"></span>}
             </button>
             <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
               |<span class="box" aria-hidden="true"></span>|
             </button>
-            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
-            <button class="symbol-btn" type="button" data-template="^{\\circ}" title="درجة">°</button>
+            <button class="symbol-btn" type="button" data-template="\\overline{□}" title="شَرطة علوية">
+              <span class="overline-icon" aria-hidden="true">
+                <span class="overline-bar"></span>
+                <span class="box"></span>
+              </span>
+            </button>
           </div>
+
+          <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
 
           <label class="form-label" for="eqInput">المعادلة</label>
           <textarea id="eqInput" class="input" dir="ltr" rows="6" placeholder="اكتب المعادلة هنا..."></textarea>
@@ -108,18 +187,58 @@
   </div>
 
   <style>
-    .equation-toolbar {
+    .eq-tabs {
+      display: flex;
+      gap: 6px;
+      margin: 0 0 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .eq-tab {
+      height: 28px;
+      min-width: 44px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border, #d7dbe3);
+      background: var(--surface, #f8fafc);
+      color: var(--text, #0f172a);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .eq-tab.is-active {
+      background: #2563eb;
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .eq-toolbar {
       display: grid;
-      grid-template-columns: repeat(auto-fill, 44px);
-      gap: 8px;
-      margin-bottom: 16px;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 10px;
       justify-content: start;
     }
 
+    .eq-toolbar-group {
+      display: none;
+    }
+
+    .eq-toolbar-group.is-active {
+      display: grid;
+    }
+
+    :root {
+      --btn: 34px;
+    }
+
     .symbol-btn {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
+      width: 100%;
+      height: var(--btn);
+      min-width: var(--btn);
+      border-radius: 12px;
       border: 1px solid var(--border, #d7dbe3);
       background: var(--surface, #f8fafc);
       color: var(--text, #0f172a);
@@ -178,18 +297,122 @@
       line-height: 1;
     }
 
+    .exp-icon {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 2px;
+      position: relative;
+      line-height: 1;
+    }
+
+    .exp-icon .base {
+      width: 16px;
+      height: 16px;
+    }
+
+    .exp-icon .sup {
+      width: 9px;
+      height: 9px;
+      margin-top: -4px;
+    }
+
+    .exp-icon .sup-text {
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: -4px;
+    }
+
+    .overline-icon {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .overline-icon .overline-bar {
+      width: 20px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 999px;
+    }
+
+    .geom-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .geom-svg {
+      width: 28px;
+      height: 14px;
+    }
+
+    .eq-preview {
+      border: 1px solid var(--border, #d7dbe3);
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      min-height: 56px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+      white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
+    }
+
     #eqInput {
       width: 100%;
       min-height: 160px;
       font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     }
+
+    @media (min-width: 900px) {
+      :root {
+        --btn: 40px;
+      }
+
+      .eq-tab {
+        height: 32px;
+        min-width: 52px;
+        font-size: 15px;
+      }
+    }
   </style>
 
   <script>
     const eqInput = document.getElementById('eqInput');
+    const eqPreview = document.getElementById('eqPreview');
+    let previewTimer;
 
-    function insertTemplate(template) {
+    function schedulePreview() {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(updatePreview, 80);
+    }
+
+    function updatePreview() {
+      if (!eqInput || !eqPreview) return;
+      const text = eqInput.value;
+
+      if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+        eqPreview.textContent = text ? `\\(${text}\\)` : ' ';
+        window.MathJax.typesetClear?.([eqPreview]);
+        window.MathJax.typesetPromise([eqPreview]);
+      } else if (window.MathJax && window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
+        eqPreview.textContent = '';
+        const script = document.createElement('script');
+        script.type = 'math/tex';
+        script.textContent = text || ' ';
+        eqPreview.appendChild(script);
+        window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, eqPreview]);
+      } else {
+        eqPreview.textContent = text;
+      }
+    }
+
+    function insertTemplate(rawTemplate) {
       if (!eqInput) return;
+      const template = rawTemplate.replace(/\\\\/g, '\\');
       const start = eqInput.selectionStart ?? 0;
       const end = eqInput.selectionEnd ?? 0;
       const before = eqInput.value.slice(0, start);
@@ -205,15 +428,70 @@
       } else {
         eqInput.setSelectionRange(cursorPos, cursorPos);
       }
+
+      schedulePreview();
+    }
+
+    function applyDeletion(isBackspace) {
+      if (!eqInput) return;
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+      const value = eqInput.value;
+      let before = value.slice(0, start);
+      let after = value.slice(end);
+      let cursorPos = start;
+
+      if (start !== end) {
+        // remove selection
+      } else if (isBackspace && start > 0) {
+        before = value.slice(0, start - 1);
+        cursorPos = start - 1;
+      } else if (!isBackspace && end < value.length) {
+        after = value.slice(end + 1);
+        cursorPos = start;
+      } else {
+        return;
+      }
+
+      eqInput.value = `${before}${after}`;
+      eqInput.focus();
+      eqInput.setSelectionRange(cursorPos, cursorPos);
+      schedulePreview();
     }
 
     document.querySelectorAll('.symbol-btn').forEach((button) => {
       button.addEventListener('click', () => {
+        const action = button.getAttribute('data-action');
+        if (action === 'backspace') {
+          applyDeletion(true);
+          return;
+        }
+        if (action === 'delete') {
+          applyDeletion(false);
+          return;
+        }
         const template = button.getAttribute('data-template');
         if (!template) return;
         insertTemplate(template);
       });
     });
+
+    document.querySelectorAll('.eq-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.getAttribute('data-target');
+        if (!target) return;
+        document.querySelectorAll('.eq-tab').forEach((item) => {
+          item.classList.toggle('is-active', item === tab);
+          item.setAttribute('aria-selected', item === tab ? 'true' : 'false');
+        });
+        document.querySelectorAll('.eq-toolbar-group').forEach((group) => {
+          group.classList.toggle('is-active', group.getAttribute('data-group') === target);
+        });
+      });
+    });
+
+    eqInput?.addEventListener('input', schedulePreview);
+    schedulePreview();
   </script>
 </body>
 </html>
