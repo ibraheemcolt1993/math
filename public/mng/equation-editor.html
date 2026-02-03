@@ -47,9 +47,57 @@
         <div class="card-header">
           <div>
             <h1 class="h1">محرر المعادلات</h1>
-            <p class="p muted">قريباً</p>
+            <p class="p muted">أضف الرموز بسرعة من الشريط العلوي.</p>
           </div>
           <span id="ainStatusBadge" class="badge primary md-badge">محمي</span>
+        </div>
+        <div class="card-body">
+          <div class="equation-toolbar" aria-label="شريط رموز المعادلات">
+            <button class="symbol-btn" type="button" data-template="+" title="جمع">+</button>
+            <button class="symbol-btn" type="button" data-template="-" title="طرح">−</button>
+            <button class="symbol-btn" type="button" data-template="\\times " title="ضرب">×</button>
+            <button class="symbol-btn" type="button" data-template="\\div " title="قسمة">÷</button>
+            <button class="symbol-btn" type="button" data-template="=" title="يساوي">=</button>
+            <button class="symbol-btn" type="button" data-template="\\ne " title="لا يساوي">≠</button>
+            <button class="symbol-btn" type="button" data-template="&lt;" title="أصغر من">&lt;</button>
+            <button class="symbol-btn" type="button" data-template="&gt;" title="أكبر من">&gt;</button>
+            <button class="symbol-btn" type="button" data-template="\\le " title="أصغر أو يساوي">≤</button>
+            <button class="symbol-btn" type="button" data-template="\\ge " title="أكبر أو يساوي">≥</button>
+            <button class="symbol-btn" type="button" data-template="\\pm " title="زائد أو ناقص">±</button>
+            <button class="symbol-btn" type="button" data-template="(□)" title="أقواس دائرية">
+              (<span class="box" aria-hidden="true"></span>)
+            </button>
+            <button class="symbol-btn" type="button" data-template="[□]" title="أقواس مربعة">
+              [<span class="box" aria-hidden="true"></span>]
+            </button>
+            <button class="symbol-btn" type="button" data-template="{□}" title="أقواس معقوفة">
+              {<span class="box" aria-hidden="true"></span>}
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\frac{□}{□}" title="كسر">
+              <span class="fraction" aria-hidden="true">
+                <span class="box"></span>
+                <span class="bar"></span>
+                <span class="box"></span>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="□^{□}" title="أس">
+              <span class="exp" aria-hidden="true">
+                <span class="box"></span>
+                <sup><span class="box small"></span></sup>
+              </span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\sqrt{□}" title="جذر">
+              √<span class="box" aria-hidden="true"></span>
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\left|□\\right|" title="قيمة مطلقة">
+              |<span class="box" aria-hidden="true"></span>|
+            </button>
+            <button class="symbol-btn" type="button" data-template="\\pi " title="باي">π</button>
+            <button class="symbol-btn" type="button" data-template="^{\\circ}" title="درجة">°</button>
+          </div>
+
+          <label class="form-label" for="eqInput">المعادلة</label>
+          <textarea id="eqInput" class="input" dir="ltr" rows="6" placeholder="اكتب المعادلة هنا..."></textarea>
         </div>
       </section>
     </main>
@@ -58,5 +106,114 @@
       <p class="small">© math — لوحة إدارة تجريبية</p>
     </footer>
   </div>
+
+  <style>
+    .equation-toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 44px);
+      gap: 8px;
+      margin-bottom: 16px;
+      justify-content: start;
+    }
+
+    .symbol-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--border, #d7dbe3);
+      background: var(--surface, #f8fafc);
+      color: var(--text, #0f172a);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      padding: 0;
+    }
+
+    .symbol-btn:hover {
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .symbol-btn:focus {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+
+    .box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 1px solid currentColor;
+      border-radius: 2px;
+      vertical-align: middle;
+    }
+
+    .box.small {
+      width: 10px;
+      height: 10px;
+    }
+
+    .fraction {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      line-height: 1;
+    }
+
+    .fraction .bar {
+      width: 20px;
+      height: 1px;
+      background: currentColor;
+      display: block;
+    }
+
+    .exp {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 2px;
+      line-height: 1;
+    }
+
+    #eqInput {
+      width: 100%;
+      min-height: 160px;
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    }
+  </style>
+
+  <script>
+    const eqInput = document.getElementById('eqInput');
+
+    function insertTemplate(template) {
+      if (!eqInput) return;
+      const start = eqInput.selectionStart ?? 0;
+      const end = eqInput.selectionEnd ?? 0;
+      const before = eqInput.value.slice(0, start);
+      const after = eqInput.value.slice(end);
+      eqInput.value = `${before}${template}${after}`;
+
+      const placeholderIndex = template.indexOf('□');
+      const cursorPos = start + template.length;
+      eqInput.focus();
+      if (placeholderIndex !== -1) {
+        const placeholderPos = start + placeholderIndex;
+        eqInput.setSelectionRange(placeholderPos, placeholderPos + 1);
+      } else {
+        eqInput.setSelectionRange(cursorPos, cursorPos);
+      }
+    }
+
+    document.querySelectorAll('.symbol-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const template = button.getAttribute('data-template');
+        if (!template) return;
+        insertTemplate(template);
+      });
+    });
+  </script>
 </body>
 </html>
