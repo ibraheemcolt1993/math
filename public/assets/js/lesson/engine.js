@@ -36,6 +36,7 @@ const STAGES = {
   CONCEPT: 'concept',
   ASSESSMENT: 'assessment',
 };
+const DEBUG_TOASTS = true;
 
 export function initEngine({ week, studentId, data, mountEl, preview = false }) {
   mountEl.innerHTML = '';
@@ -531,11 +532,21 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
           const ok = check();
           if (!ok) {
-            showToast('إجابة غير صحيحة', 'حاول مرة أخرى', 'error', 3000);
+            showToast(
+              'إجابة غير صحيحة',
+              buildToastMessage('حاول مرة أخرى', currentReq),
+              'error',
+              6500
+            );
             return;
           }
 
-          showToast('إجابة صحيحة', pickRandom(ENCOURAGEMENTS), 'success', 2500);
+          showToast(
+            'إجابة صحيحة',
+            buildToastMessage(pickRandom(ENCOURAGEMENTS), currentReq),
+            'success',
+            6500
+          );
           moveToNextPrereqItem();
         });
 
@@ -788,10 +799,20 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       const isCorrect = isAssessmentQuestionCorrect(currentQuestion);
 
       if (isCorrect) {
-        showToast('إجابة صحيحة', pickRandom(ENCOURAGEMENTS), 'success', 2500);
+        showToast(
+          'إجابة صحيحة',
+          buildToastMessage(pickRandom(ENCOURAGEMENTS), currentQuestion),
+          'success',
+          6500
+        );
         moveToNextAssessmentQuestion(totalQuestions);
       } else {
-        showToast('إجابة غير صحيحة', 'جرّب مرة أخرى قبل المتابعة', 'error', 3000);
+        showToast(
+          'إجابة غير صحيحة',
+          buildToastMessage('جرّب مرة أخرى قبل المتابعة', currentQuestion),
+          'error',
+          6500
+        );
       }
     });
 
@@ -1185,7 +1206,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const user = normalizeSpaces(userValue);
     const ans = normalizeSpaces(extractAnswerValue(answerValue));
 
-    if (validation.numericOnly || isNumericAnswer(ans)) {
+    if (isNumericAnswer(ans)) {
       const userNum = parseNumericValue(user);
       const ansNum = parseNumericValue(ans);
 
@@ -1211,6 +1232,175 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     }
 
     return false;
+  }
+
+  function mapTextSpecReason(reason) {
+    switch (reason) {
+      case 'forbidden':
+        return 'تم العثور على كلمة ممنوعة';
+      case 'empty':
+        return 'الإجابة فارغة';
+      case 'match':
+        return 'تطابق كامل بعد التطبيع';
+      case 'accepted':
+        return 'مطابقة عبارة مقبولة';
+      case 'distance':
+        return 'مطابقة وفق مسافة التحرير';
+      case 'core':
+        return 'احتوت كلمة أساسية مطلوبة';
+      case 'wrong':
+        return 'غير مطابقة للنموذج';
+      default:
+        return 'سبب غير معروف';
+    }
+  }
+
+  function buildInputDebugInfo(question) {
+    if (!question || question.type !== 'input') return null;
+    if (question._debugLastCheck) return question._debugLastCheck;
+
+    const rawUser = question._value ?? '';
+    const rawAns = question.answer ?? '';
+    const textSpec = question.textSpec || question.spec || question.answerSpec;
+    const validation = question.validation || {};
+
+    const user = normalizeSpaces(rawUser);
+    const ans = normalizeSpaces(extractAnswerValue(rawAns));
+    const specModelAnswer =
+      textSpec && typeof textSpec === 'object' ? (textSpec.modelAnswer ?? '') : '';
+    const normalizedSpecModel = normalizeSpaces(specModelAnswer);
+    const info = {
+      rawUser,
+      rawAns,
+      normalizedUser: user,
+      normalizedAns: ans,
+      normalizedArabicUser: '',
+      normalizedArabicAns: '',
+      textSpecModelAnswer: specModelAnswer || null,
+      normalizedSpecModel,
+      modelSource: rawAns ? 'answer' : (specModelAnswer ? 'textSpec.modelAnswer' : 'missing'),
+      userNum: null,
+      ansNum: null,
+      mode: isNumericAnswer(ans) ? 'numeric' : 'text',
+      textSpecUsed: Boolean(textSpec),
+      textSpecReason: null,
+      corrected: null,
+      fuzzyAutocorrect: Boolean(validation.fuzzyAutocorrect),
+      ok: false,
+      reason: ''
+    };
+
+    if (info.mode === 'numeric') {
+      const userNum = parseNumericValue(rawUser);
+      const ansNum = parseNumericValue(rawAns);
+      info.userNum = Number.isFinite(userNum) ? userNum : null;
+      info.ansNum = Number.isFinite(ansNum) ? ansNum : null;
+      info.ok = Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
+      info.reason = info.ok
+        ? 'تطابق رقمي'
+        : (!Number.isFinite(userNum)
+          ? 'تعذر تحويل إجابة الطالب إلى رقم'
+          : (!Number.isFinite(ansNum)
+            ? 'الإجابة النموذجية ليست رقمًا صالحًا'
+            : 'الرقم مختلف عن النموذج'));
+      return info;
+    }
+
+    if (textSpec) {
+      const spec = typeof textSpec === 'object' && textSpec !== null ? { ...textSpec } : {};
+      if (!spec.modelAnswer && ans) {
+        spec.modelAnswer = ans;
+      }
+      const result = judgeTextAnswer(rawUser, spec);
+      info.textSpecReason = result.reason || null;
+      info.corrected = result.corrected || null;
+      info.ok = result.ok;
+      info.reason = result.ok
+        ? `مطابقة وفق قواعد النص (${mapTextSpecReason(result.reason)})`
+        : `فشل وفق قواعد النص (${mapTextSpecReason(result.reason)})`;
+      return info;
+    }
+
+    let ok = user !== '' && user === ans;
+    let reason = '';
+    if (!ok && validation.fuzzyAutocorrect && user !== '') {
+      const normalizedUser = normalizeArabic(user);
+      const normalizedAns = normalizeArabic(ans);
+      info.normalizedArabicUser = normalizedUser;
+      info.normalizedArabicAns = normalizedAns;
+      ok = normalizedUser === normalizedAns || similarity(normalizedUser, normalizedAns) >= 0.85;
+    }
+
+    info.ok = ok;
+    if (!user) {
+      reason = 'إجابة فارغة';
+    } else if (ok && validation.fuzzyAutocorrect) {
+      reason = 'تطابق بعد التطبيع/التقريب';
+    } else if (ok) {
+      reason = 'تطابق نصي مباشر';
+    } else if (validation.fuzzyAutocorrect) {
+      reason = 'النص مختلف بعد التطبيع/التقريب';
+    } else {
+      reason = 'النص مختلف عن النموذج';
+    }
+
+    info.reason = reason;
+    return info;
+  }
+
+  function formatInputDebugMessage(question) {
+    if (!DEBUG_TOASTS) return '';
+    const info = buildInputDebugInfo(question);
+    if (!info) return '';
+
+    const modeLabel = info.mode === 'numeric'
+      ? 'رقمي'
+      : (info.textSpecUsed ? 'نصي (قواعد)' : 'نصي مباشر');
+
+    const parts = [
+      `إدخال الطالب: "${info.rawUser ?? ''}"`,
+      `تنظيف الطالب: "${info.normalizedUser ?? ''}"`,
+      `الإجابة النموذجية: "${info.rawAns ?? ''}"`,
+      `تنظيف النموذج: "${info.normalizedAns ?? ''}"`,
+      `طريقة التحقق: ${modeLabel}`,
+      `النتيجة: ${info.ok ? 'صحيح' : 'خطأ'}`,
+      `سبب الحكم: ${info.reason || 'غير محدد'}`
+    ];
+    parts.push(`مصدر النموذج: ${info.modelSource ?? 'غير محدد'}`);
+    if (info.textSpecModelAnswer) {
+      parts.push(`نموذج النص (TextSpec): "${info.textSpecModelAnswer}"`);
+      parts.push(`تنظيف نموذج النص: "${info.normalizedSpecModel ?? ''}"`);
+    }
+    if (info.modelSource === 'missing') {
+      parts.push('تحذير: الإجابة النموذجية فارغة أو غير محفوظة');
+    }
+
+    if (info.mode === 'numeric') {
+      parts.push(`قيمة الطالب: ${info.userNum ?? 'غير صالحة'}`);
+      parts.push(`قيمة النموذج: ${info.ansNum ?? 'غير صالحة'}`);
+      if (!info.ok && info.userNum != null && info.ansNum != null) {
+        parts.push(`الاختلاف: ${info.userNum} ≠ ${info.ansNum}`);
+      }
+    } else {
+      if (info.normalizedArabicUser || info.normalizedArabicAns) {
+        parts.push(`تطبيع عربي الطالب: "${info.normalizedArabicUser ?? ''}"`);
+        parts.push(`تطبيع عربي النموذج: "${info.normalizedArabicAns ?? ''}"`);
+      }
+      if (!info.ok) {
+        parts.push(`الاختلاف: "${info.normalizedUser ?? ''}" ≠ "${info.normalizedAns ?? ''}"`);
+      }
+      if (info.corrected) {
+        parts.push(`تصحيح مقترح: "${info.corrected}"`);
+      }
+    }
+
+    return parts.join(' | ');
+  }
+
+  function buildToastMessage(baseMessage, question) {
+    const debugMessage = formatInputDebugMessage(question);
+    if (!debugMessage) return baseMessage;
+    return `${baseMessage} — ${debugMessage}`;
   }
 
   function extractAnswerValue(value) {
@@ -1394,7 +1584,12 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       activeQuestion.verifiedOk = true;
       activeQuestion.btn.disabled = true;
 
-      showToast('صح ✔', pickRandom(ENCOURAGEMENTS), 'success');
+      showToast(
+        'صح ✔',
+        buildToastMessage(pickRandom(ENCOURAGEMENTS), activeQuestion.qData),
+        'success',
+        6500
+      );
 
       setTimeout(() => {
         advanceWithFocus();
@@ -1415,9 +1610,21 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
           DEFAULT_HINTS[a - 1] ||
           FINAL_HINT;
 
+        showToast(
+          'إجابة غير صحيحة',
+          buildToastMessage('تم تسجيل المحاولة', activeQuestion.qData),
+          'error',
+          6500
+        );
         showToast('تلميح', hint, 'warning', 4000);
       } else {
         const hint3 = activeQuestion.qData.hints?.[a - 1] || FINAL_HINT;
+        showToast(
+          'إجابة غير صحيحة',
+          buildToastMessage('تم تسجيل المحاولة', activeQuestion.qData),
+          'error',
+          6500
+        );
         showToast('تلميح قوي', hint3, 'warning', 4500);
 
         if (!activeQuestion.solutionShown) {

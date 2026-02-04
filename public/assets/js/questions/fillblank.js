@@ -262,7 +262,7 @@ export function renderFillBlankQuestion({ mountEl, question }) {
     const ans = normalizeSpaces(extractAnswerValue(answerValue));
     const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
 
-    if (validation.numericOnly || Number.isFinite(parseNumericValue(ans))) {
+    if (Number.isFinite(parseNumericValue(ans))) {
       const userNum = parseNumericValue(user);
       const ansNum = parseNumericValue(ans);
       return {
