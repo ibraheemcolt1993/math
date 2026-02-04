@@ -120,6 +120,18 @@
   display: none;
 }
 
+.equation-editor-body {
+  padding: 0;
+}
+
+.equation-editor iframe {
+  width: 100%;
+  height: min(70vh, 720px);
+  border: none;
+  background: #fff;
+  border-radius: 0 0 18px 18px;
+}
+
 .preview-shell {
   background: #fff;
   border: 1px solid #e5e7eb;
