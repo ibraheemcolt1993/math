@@ -12,7 +12,12 @@ function parsePrereqItem(value) {
         return {
           type: parsed.type === 'mcq' ? 'mcq' : 'input',
           text: String(parsed.text),
-          choices: Array.isArray(parsed.choices) ? parsed.choices : []
+          choices: Array.isArray(parsed.choices) ? parsed.choices : [],
+          isRequired: parsed.isRequired !== false,
+          hints: Array.isArray(parsed.hints) ? parsed.hints.filter(Boolean) : [],
+          answer: parsed.answer ?? '',
+          correctIndex: typeof parsed.correctIndex === 'number' ? parsed.correctIndex : 0,
+          validation: parsed.validation && typeof parsed.validation === 'object' ? parsed.validation : null
         };
       }
     } catch (error) {
