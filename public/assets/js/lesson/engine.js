@@ -1266,6 +1266,9 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     const user = normalizeSpaces(rawUser);
     const ans = normalizeSpaces(extractAnswerValue(rawAns));
+    const specModelAnswer =
+      textSpec && typeof textSpec === 'object' ? (textSpec.modelAnswer ?? '') : '';
+    const normalizedSpecModel = normalizeSpaces(specModelAnswer);
     const info = {
       rawUser,
       rawAns,
@@ -1273,6 +1276,9 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       normalizedAns: ans,
       normalizedArabicUser: '',
       normalizedArabicAns: '',
+      textSpecModelAnswer: specModelAnswer || null,
+      normalizedSpecModel,
+      modelSource: rawAns ? 'answer' : (specModelAnswer ? 'textSpec.modelAnswer' : 'missing'),
       userNum: null,
       ansNum: null,
       mode: isNumericAnswer(ans) ? 'numeric' : 'text',
@@ -1360,6 +1366,14 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       `النتيجة: ${info.ok ? 'صحيح' : 'خطأ'}`,
       `سبب الحكم: ${info.reason || 'غير محدد'}`
     ];
+    parts.push(`مصدر النموذج: ${info.modelSource ?? 'غير محدد'}`);
+    if (info.textSpecModelAnswer) {
+      parts.push(`نموذج النص (TextSpec): "${info.textSpecModelAnswer}"`);
+      parts.push(`تنظيف نموذج النص: "${info.normalizedSpecModel ?? ''}"`);
+    }
+    if (info.modelSource === 'missing') {
+      parts.push('تحذير: الإجابة النموذجية فارغة أو غير محفوظة');
+    }
 
     if (info.mode === 'numeric') {
       parts.push(`قيمة الطالب: ${info.userNum ?? 'غير صالحة'}`);

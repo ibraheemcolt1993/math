@@ -264,6 +264,9 @@ export function renderInputQuestion({ mountEl, question }) {
       normalizedAns: normalizeSpaces(rawAns),
       normalizedArabicUser: '',
       normalizedArabicAns: '',
+      textSpecModelAnswer: null,
+      normalizedSpecModel: '',
+      modelSource: rawAns ? 'answer' : 'missing',
       userNum: null,
       ansNum: null,
       mode: expectsNumber ? 'numeric' : 'text',
@@ -308,6 +311,13 @@ export function renderInputQuestion({ mountEl, question }) {
 
     // text mode
     const textSpec = question.textSpec || question.spec || question.answerSpec;
+    if (textSpec && typeof textSpec === 'object') {
+      debug.textSpecModelAnswer = textSpec.modelAnswer ?? null;
+      debug.normalizedSpecModel = normalizeSpaces(textSpec.modelAnswer ?? '');
+      if (!rawAns && textSpec.modelAnswer) {
+        debug.modelSource = 'textSpec.modelAnswer';
+      }
+    }
     const user = normalizeSpaces(rawUser);
     const ans = normalizeSpaces(rawAns);
     debug.normalizedUser = user;
