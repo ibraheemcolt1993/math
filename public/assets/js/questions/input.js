@@ -257,6 +257,23 @@ export function renderInputQuestion({ mountEl, question }) {
   function check() {
     const rawUser = input.value ?? '';
     const rawAns = question.answer ?? '';
+    const debug = {
+      rawUser,
+      rawAns,
+      normalizedUser: normalizeSpaces(rawUser),
+      normalizedAns: normalizeSpaces(rawAns),
+      normalizedArabicUser: '',
+      normalizedArabicAns: '',
+      userNum: null,
+      ansNum: null,
+      mode: expectsNumber ? 'numeric' : 'text',
+      textSpecUsed: false,
+      textSpecReason: null,
+      corrected: null,
+      fuzzyAutocorrect: Boolean(validation.fuzzyAutocorrect),
+      ok: false,
+      reason: ''
+    };
 
     // Persist before checking (safety)
     question._value = rawUser;
@@ -266,6 +283,17 @@ export function renderInputQuestion({ mountEl, question }) {
       const ansNum = parseNumericValue(rawAns);
 
       const ok = Number.isFinite(userNum) && Number.isFinite(ansNum) && userNum === ansNum;
+      debug.userNum = Number.isFinite(userNum) ? userNum : null;
+      debug.ansNum = Number.isFinite(ansNum) ? ansNum : null;
+      debug.ok = ok;
+      debug.reason = ok
+        ? 'تطابق رقمي'
+        : (!Number.isFinite(userNum)
+          ? 'تعذر تحويل إجابة الطالب إلى رقم'
+          : (!Number.isFinite(ansNum)
+            ? 'الإجابة النموذجية ليست رقمًا صالحًا'
+            : 'الرقم مختلف عن النموذج'));
+      question._debugLastCheck = debug;
 
       feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
       feedback.classList.toggle('ok', ok);
@@ -282,6 +310,8 @@ export function renderInputQuestion({ mountEl, question }) {
     const textSpec = question.textSpec || question.spec || question.answerSpec;
     const user = normalizeSpaces(rawUser);
     const ans = normalizeSpaces(rawAns);
+    debug.normalizedUser = user;
+    debug.normalizedAns = ans;
 
     let ok = user !== '' && user === ans;
     let corrected = null;
@@ -290,6 +320,13 @@ export function renderInputQuestion({ mountEl, question }) {
       const result = judgeTextAnswer(rawUser, textSpec);
       ok = result.ok;
       corrected = result.corrected;
+      debug.textSpecUsed = true;
+      debug.textSpecReason = result.reason || null;
+      debug.corrected = corrected;
+      debug.ok = ok;
+      debug.reason = ok
+        ? `مطابقة وفق قواعد النص (${result.reason || 'match'})`
+        : `فشل وفق قواعد النص (${result.reason || 'wrong'})`;
       if (ok && corrected) {
         input.value = corrected;
         question._value = corrected;
@@ -306,8 +343,23 @@ export function renderInputQuestion({ mountEl, question }) {
       if (!ok && validation.fuzzyAutocorrect && user !== '') {
         const normalizedUser = normalizeArabic(user);
         const normalizedAns = normalizeArabic(ans);
+        debug.normalizedArabicUser = normalizedUser;
+        debug.normalizedArabicAns = normalizedAns;
         ok = normalizedUser === normalizedAns || similarity(normalizedUser, normalizedAns) >= 0.85;
         shouldAutocorrect = ok;
+      }
+
+      debug.ok = ok;
+      if (!user) {
+        debug.reason = 'إجابة فارغة';
+      } else if (ok && shouldAutocorrect) {
+        debug.reason = 'تطابق بعد التطبيع/التقريب';
+      } else if (ok) {
+        debug.reason = 'تطابق نصي مباشر';
+      } else if (validation.fuzzyAutocorrect) {
+        debug.reason = 'النص مختلف بعد التطبيع/التقريب';
+      } else {
+        debug.reason = 'النص مختلف عن النموذج';
       }
 
       if (ok && shouldAutocorrect && ans) {
@@ -318,6 +370,7 @@ export function renderInputQuestion({ mountEl, question }) {
         feedback.textContent = ok ? 'إجابة صحيحة ✅' : 'مش صحيح، جرّب مرة ثانية';
       }
     }
+    question._debugLastCheck = debug;
     feedback.classList.toggle('ok', ok);
     feedback.classList.toggle('err', !ok);
 
