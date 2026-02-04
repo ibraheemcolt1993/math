@@ -51,6 +51,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     total: null,
     currentIndex: 0,
   };
+  let prereqIndex = 0;
 
   const goalsList = getGoalsList(data);
   const prereqList = getPrereqList(data);
@@ -282,6 +283,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       stage,
       conceptIndex,
       stepIndex: itemIndex,
+      prereqIndex,
       assessment: assessmentState,
     });
   }
@@ -318,6 +320,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     if (Number.isFinite(saved.conceptIndex)) conceptIndex = Number(saved.conceptIndex);
     if (Number.isFinite(saved.stepIndex)) itemIndex = Number(saved.stepIndex);
+    if (Number.isFinite(saved.prereqIndex)) prereqIndex = Number(saved.prereqIndex);
 
     if (saved.assessment && typeof saved.assessment === 'object') {
       assessmentState = {
@@ -438,6 +441,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     btn.textContent = 'متابعة';
     btn.addEventListener('click', () => {
       stage = STAGES.PREREQ;
+      prereqIndex = 0;
       render();
     });
 
@@ -468,47 +472,90 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const body = card.querySelector('.stage-body');
 
     if (prereqList.length) {
+      const currentIndex = Math.max(0, Math.min(prereqIndex, prereqList.length - 1));
+      prereqIndex = currentIndex;
+
+      const progress = document.createElement('div');
+      progress.className = 'prereq-progress';
+      progress.textContent = `المتطلب ${currentIndex + 1} من ${prereqList.length}`;
+      body.appendChild(progress);
+
+      const currentReq = prereqList[currentIndex];
       const list = document.createElement('div');
       list.className = 'prereq-stack';
 
-      prereqList.forEach((req, idx) => {
-        if (req.type === 'input' || req.type === 'mcq') {
-          const wrap = document.createElement('div');
-          wrap.className = 'question-wrap';
-          const title = document.createElement('p');
-          title.className = 'question-title';
-          title.textContent = req.text || `سؤال ${idx + 1}`;
-          if (req.isRequired === false) {
-            const badge = document.createElement('span');
-            badge.className = 'question-badge';
-            badge.textContent = 'اختياري';
-            title.appendChild(badge);
-          }
-          wrap.appendChild(title);
+      if (currentReq.type === 'input' || currentReq.type === 'mcq') {
+        const wrap = document.createElement('div');
+        wrap.className = 'question-wrap';
+        const title = document.createElement('p');
+        title.className = 'question-title';
+        title.textContent = currentReq.text || `سؤال ${currentIndex + 1}`;
+        wrap.appendChild(title);
 
-          const mount = document.createElement('div');
-          wrap.appendChild(mount);
-          list.appendChild(wrap);
+        const mount = document.createElement('div');
+        wrap.appendChild(mount);
+        list.appendChild(wrap);
 
-          try {
-            renderQuestion({ mountEl: mount, question: req });
-          } catch (error) {
-            const err = document.createElement('div');
-            err.className = 'solution';
-            err.innerHTML = '<p class="solution-title">تعذر عرض السؤال</p>';
-            wrap.appendChild(err);
-          }
-          return;
+        let check = null;
+        try {
+          const q = renderQuestion({ mountEl: mount, question: currentReq });
+          check = q?.check;
+        } catch (error) {
+          const err = document.createElement('div');
+          err.className = 'solution';
+          err.innerHTML = '<p class="solution-title">تعذر عرض السؤال</p>';
+          wrap.appendChild(err);
         }
 
+        const nav = document.createElement('div');
+        nav.className = 'lesson-nav';
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary w-100';
+        btn.textContent = currentIndex === prereqList.length - 1
+          ? 'تحقق والانتقال للمرحلة التالية'
+          : 'تحقق والمتابعة';
+        btn.addEventListener('click', () => {
+          if (!check) return;
+
+          if (!hasResponse(currentReq)) {
+            showToast('تنبيه', 'جاوب على السؤال أولًا قبل المتابعة', 'warning', 3000);
+            return;
+          }
+
+          const ok = check();
+          if (!ok) {
+            showToast('إجابة غير صحيحة', 'حاول مرة أخرى', 'error', 3000);
+            return;
+          }
+
+          showToast('إجابة صحيحة', pickRandom(ENCOURAGEMENTS), 'success', 2500);
+          moveToNextPrereqItem();
+        });
+
+        nav.appendChild(btn);
+        list.appendChild(nav);
+      } else {
         const item = document.createElement('div');
         item.className = 'goal-item';
         item.innerHTML = `
-          <span class="goal-index">${idx + 1}</span>
-          <span class="goal-text">${escapeHtml(req.text || req)}</span>
+          <span class="goal-index">${currentIndex + 1}</span>
+          <span class="goal-text">${escapeHtml(currentReq.text || currentReq)}</span>
         `;
         list.appendChild(item);
-      });
+
+        const nav = document.createElement('div');
+        nav.className = 'lesson-nav';
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary w-100';
+        btn.textContent = currentIndex === prereqList.length - 1
+          ? 'متابعة للمرحلة التالية'
+          : 'متابعة';
+        btn.addEventListener('click', () => moveToNextPrereqItem());
+        nav.appendChild(btn);
+        list.appendChild(nav);
+      }
 
       body.appendChild(list);
     } else {
@@ -516,23 +563,23 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       empty.className = 'stage-empty';
       empty.textContent = 'لا توجد متطلبات سابقة لهذه البطاقة.';
       body.appendChild(empty);
+
+      const nav = document.createElement('div');
+      nav.className = 'lesson-nav';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary w-100';
+      btn.textContent = 'متابعة';
+      btn.addEventListener('click', () => {
+        stage = STAGES.CONCEPT;
+        conceptIndex = 0;
+        itemIndex = 0;
+        render();
+      });
+
+      nav.appendChild(btn);
+      card.appendChild(nav);
     }
-
-    const nav = document.createElement('div');
-    nav.className = 'lesson-nav';
-
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-primary w-100';
-    btn.textContent = 'متابعة';
-    btn.addEventListener('click', () => {
-      stage = STAGES.CONCEPT;
-      conceptIndex = 0;
-      itemIndex = 0;
-      render();
-    });
-
-    nav.appendChild(btn);
-    card.appendChild(nav);
     mountEl.appendChild(card);
     bindStageBack(card);
 
@@ -1000,6 +1047,19 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
   function resetAssessmentQuestion(question) {
     delete question._value;
     delete question._selectedIndex;
+  }
+
+  function moveToNextPrereqItem() {
+    if (prereqIndex >= prereqList.length - 1) {
+      stage = STAGES.CONCEPT;
+      conceptIndex = 0;
+      itemIndex = 0;
+      render();
+      return;
+    }
+
+    prereqIndex += 1;
+    render();
   }
 
   function moveToNextAssessmentQuestion(totalQuestions) {

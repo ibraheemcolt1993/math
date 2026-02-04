@@ -454,6 +454,11 @@
   flex-direction: column;
   gap: 14px;
 }
+.prereq-progress{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
 .assessment-progress{
   font-size: 13px;
   font-weight: 700;
