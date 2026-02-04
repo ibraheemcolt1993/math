@@ -184,8 +184,9 @@
             </div>
           </div>
 
-          <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
-          <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+            <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
+            <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+          </div>
         </div>
       </section>
     </main>
@@ -456,6 +457,13 @@
     function schedulePreview() {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(updatePreview, 80);
+    }
+
+    function updateKeyboardState() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport ? viewport.height : window.innerHeight;
+      const diff = window.innerHeight - viewportHeight;
+      document.body.classList.toggle('keyboard-open', diff > 120);
     }
 
     function getActivePlaceholderIndex(value) {
@@ -777,7 +785,11 @@
     });
     eqInput?.addEventListener('select', schedulePreview);
     window.addEventListener('resize', syncInputHeight);
+    window.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardState);
     syncInputHeight();
+    updateKeyboardState();
     schedulePreview();
   </script>
 </body>
