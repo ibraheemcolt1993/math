@@ -527,6 +527,100 @@ function setHeader() {
   updateSaveStatus();
 }
 
+function setPickerHeader() {
+  elements.cardTitle.textContent = 'اختر بطاقة للتحرير';
+  elements.cardSubtitle.textContent = 'اختر بطاقة من البطاقات المضافة لبدء التعديل.';
+  if (elements.btnSave) elements.btnSave.disabled = true;
+  if (elements.previewToggle) elements.previewToggle.disabled = true;
+  if (elements.saveStatus) elements.saveStatus.textContent = '';
+}
+
+function normalizeCardInfo(card) {
+  const rawWeek = card?.week ?? card?.Week;
+  const week = Number.isFinite(Number(rawWeek)) ? Number(rawWeek) : null;
+  const seq = normalizeValue(card?.seq ?? card?.Seq ?? rawWeek);
+  const title = normalizeValue(card?.title ?? card?.Title);
+  return { week, seq, title };
+}
+
+function renderCardPicker(cards) {
+  const normalizedCards = cards.map(normalizeCardInfo).filter((card) => Number.isFinite(card.week));
+  if (!normalizedCards.length) {
+    elements.editorContent.innerHTML = `
+      <section class="card md-card">
+        <div class="card-header">
+          <div>
+            <h2 class="h2">لا توجد بطاقات</h2>
+            <p class="p muted">قم بإضافة بطاقة أولًا من صفحة إدارة البطاقات.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <a class="btn btn-primary md-btn" href="/mng/cards.html">الانتقال لإدارة البطاقات</a>
+        </div>
+      </section>
+    `;
+    return;
+  }
+
+  normalizedCards.sort((a, b) => Number(a.seq || a.week) - Number(b.seq || b.week));
+  const options = normalizedCards
+    .map((card) => {
+      const seqLabel = card.seq || card.week;
+      const titleLabel = card.title || 'بدون عنوان';
+      return `<option value="${escapeHtml(card.week)}">بطاقة ${escapeHtml(seqLabel)} — ${escapeHtml(titleLabel)}</option>`;
+    })
+    .join('');
+
+  elements.editorContent.innerHTML = `
+    <section class="card md-card">
+      <div class="card-header">
+        <div>
+          <h2 class="h2">اختر بطاقة للتحرير</h2>
+          <p class="p muted">اختر البطاقة التي تريد تعديل محتواها.</p>
+        </div>
+      </div>
+      <div class="card-body stack">
+        <label class="label md-label" for="cardPicker">البطاقة</label>
+        <div class="row">
+          <select id="cardPicker" class="input md-input">${options}</select>
+          <button id="cardPickerOpen" class="btn btn-primary md-btn" type="button">فتح البطاقة</button>
+        </div>
+        <p class="p muted">يمكنك أيضًا الرجوع إلى صفحة إدارة البطاقات لعرض كل البطاقات.</p>
+      </div>
+      <div class="card-footer">
+        <a class="btn btn-ghost md-btn" href="/mng/cards.html">رجوع لإدارة البطاقات</a>
+      </div>
+    </section>
+  `;
+
+  const picker = document.getElementById('cardPicker');
+  const openButton = document.getElementById('cardPickerOpen');
+  openButton?.addEventListener('click', () => {
+    const selectedWeek = picker?.value;
+    if (!selectedWeek) return;
+    window.location.href = `/mng/card-editor.html?week=${encodeURIComponent(selectedWeek)}`;
+  });
+}
+
+async function initCardPicker() {
+  setPickerHeader();
+  elements.editorContent.innerHTML = '<p class="p muted">تحميل البطاقات...</p>';
+  try {
+    const response = await fetch('/api/mng/cards', {
+      cache: 'no-store',
+      credentials: 'include'
+    });
+    const data = await response.json();
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || 'تعذر تحميل البطاقات.');
+    }
+    renderCardPicker(data.cards || []);
+  } catch (error) {
+    elements.editorContent.innerHTML = '<p class="p">تعذر تحميل البطاقات.</p>';
+    showToast('خطأ', error.message || 'تعذر تحميل البطاقات.', 'error');
+  }
+}
+
 function normalizePrerequisites(rawList) {
   if (!Array.isArray(rawList)) return [];
   return rawList.map((item) => {
@@ -3346,7 +3440,7 @@ function bindEvents() {
 async function init() {
   const week = getWeekParam();
   if (!week) {
-    elements.editorContent.textContent = 'رقم البطاقة غير صالح.';
+    await initCardPicker();
     return;
   }
 
