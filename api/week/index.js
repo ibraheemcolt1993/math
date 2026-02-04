@@ -1,6 +1,29 @@
 const { getPool, sql } = require('../_shared/db');
 const { DEFAULT_HEADERS } = require('../_shared/http');
 
+function normalizeBoolean(value, fallback = true) {
+  if (value == null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const lowered = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y'].includes(lowered)) return true;
+    if (['false', '0', 'no', 'n'].includes(lowered)) return false;
+  }
+  return Boolean(value);
+}
+
+function normalizeNumber(value) {
+  if (Number.isFinite(value)) return Number(value);
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function parseJsonField(value) {
   if (!value) return null;
   if (typeof value === 'object') return value;
@@ -292,29 +315,45 @@ module.exports = async function (context, req) {
           description: item.ItemDescription,
           url: item.ItemUrl,
           answer: item.Answer,
-          correctIndex: item.CorrectIndex,
+          correctIndex: normalizeNumber(item.CorrectIndex),
           solution: item.Solution,
-          isRequired: item.IsRequired !== false,
+          isRequired: normalizeBoolean(item.IsRequired, true),
           validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null,
           details: details.map((detail) => detail.DetailText),
           hints: hints.map((hint) => hint.HintText),
           choices: choices.map((choice) => choice.ChoiceText)
         };
 
-        if (dataPayload && typeof dataPayload === 'object') {
-          Object.assign(mapped, dataPayload);
+        const merged = dataPayload && typeof dataPayload === 'object'
+          ? { ...mapped, ...dataPayload }
+          : { ...mapped };
+        merged.type = mapped.type;
+        merged.text = mapped.text;
+        merged.title = mapped.title;
+        merged.description = mapped.description;
+        merged.url = mapped.url;
+        merged.flowItemId = mapped.flowItemId;
+        merged.correctIndex = normalizeNumber(merged.correctIndex);
+        merged.isRequired = normalizeBoolean(merged.isRequired, true);
+
+        if (type === 'ordering' && !Array.isArray(merged.items) && merged.choices?.length) {
+          merged.items = merged.choices;
         }
 
-        if (type === 'ordering' && !Array.isArray(mapped.items) && mapped.choices?.length) {
-          mapped.items = mapped.choices;
+        if (type === 'match' && !Array.isArray(merged.pairs)) {
+          merged.pairs = [];
         }
 
-        if (!mapped.details.length) delete mapped.details;
-        if (!mapped.hints.length) delete mapped.hints;
-        if (!mapped.choices.length) delete mapped.choices;
-        if (!mapped.validation) delete mapped.validation;
+        if (type === 'fillblank' && !Array.isArray(merged.blanks)) {
+          merged.blanks = [];
+        }
 
-        return mapped;
+        if (!merged.details.length) delete merged.details;
+        if (!merged.hints.length) delete merged.hints;
+        if (!merged.choices.length) delete merged.choices;
+        if (!merged.validation) delete merged.validation;
+
+        return merged;
       })
     }));
 
@@ -335,27 +374,35 @@ module.exports = async function (context, req) {
           type,
           text: question.QuestionText,
           points: Number.isFinite(question.Points) ? question.Points : 1,
-          isRequired: question.IsRequired !== false,
+          isRequired: normalizeBoolean(question.IsRequired, true),
           validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null
         };
 
-        if (dataPayload && typeof dataPayload === 'object') {
-          Object.assign(normalized, dataPayload);
-        }
+        const merged = dataPayload && typeof dataPayload === 'object'
+          ? { ...normalized, ...dataPayload }
+          : { ...normalized };
+        merged.type = normalized.type;
+        merged.text = normalized.text;
+        merged.isRequired = normalizeBoolean(merged.isRequired, true);
+        merged.validation = normalized.validation;
 
         if (type === 'mcq') {
-          normalized.choices = choiceTexts;
-          normalized.correctIndex =
-            typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
+          merged.choices = choiceTexts;
+          const resolvedCorrectIndex = normalizeNumber(merged.correctIndex ?? question.CorrectIndex);
+          merged.correctIndex = resolvedCorrectIndex ?? 0;
         } else if (type === 'input') {
-          normalized.answer = question.Answer ?? '';
-        } else if (type === 'ordering' && !Array.isArray(normalized.items) && choiceTexts.length) {
-          normalized.items = choiceTexts;
+          merged.answer = question.Answer ?? '';
+        } else if (type === 'ordering' && !Array.isArray(merged.items) && choiceTexts.length) {
+          merged.items = choiceTexts;
+        } else if (type === 'match' && !Array.isArray(merged.pairs)) {
+          merged.pairs = [];
+        } else if (type === 'fillblank' && !Array.isArray(merged.blanks)) {
+          merged.blanks = [];
         }
 
-        if (!normalized.validation) delete normalized.validation;
+        if (!merged.validation) delete merged.validation;
 
-        return normalized;
+        return merged;
       })
     }));
 

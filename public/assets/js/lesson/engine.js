@@ -28,6 +28,7 @@ import { setProgressUI } from './progress.js';
 import { completeLesson } from './completion.js';
 import { replaceMathTokensInElement } from '../shared/stripMathTokens.js';
 import { judgeTextAnswer } from '../shared/textAnswerJudge.js';
+import { normalizeQuestion, getExpectedAnswer, getSolutionText, isAnswerCorrect } from '../shared/questionModel.js';
 
 const LEGACY_ORDER = ['goal', 'explain', 'example', 'example2', 'mistake', 'note', 'question'];
 const STAGES = {
@@ -203,7 +204,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         question?.type ||
         (Array.isArray(question?.choices) ? 'mcq' : 'input');
 
-      const normalized = {
+      const base = {
         ...question,
         type: inferredType,
         text: question?.text || 'سؤال',
@@ -213,25 +214,25 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       };
 
       if (inferredType === 'mcq') {
-        normalized.choices = Array.isArray(question?.choices) ? question.choices : [];
-        normalized.correctIndex =
+        base.choices = Array.isArray(question?.choices) ? question.choices : [];
+        base.correctIndex =
           typeof question?.correctIndex === 'number' ? question.correctIndex : 0;
       } else if (inferredType === 'input') {
-        normalized.answer = question?.answer ?? '';
-        normalized.placeholder = question?.placeholder || 'اكتب إجابتك هنا';
+        base.answer = question?.answer ?? '';
+        base.placeholder = question?.placeholder || 'اكتب إجابتك هنا';
       } else if (inferredType === 'ordering') {
-        normalized.items = Array.isArray(question?.items)
+        base.items = Array.isArray(question?.items)
           ? question.items
           : Array.isArray(question?.choices)
             ? question.choices
             : [];
       } else if (inferredType === 'match') {
-        normalized.pairs = Array.isArray(question?.pairs) ? question.pairs : [];
+        base.pairs = Array.isArray(question?.pairs) ? question.pairs : [];
       } else if (inferredType === 'fillblank') {
-        normalized.blanks = Array.isArray(question?.blanks) ? question.blanks : [];
+        base.blanks = Array.isArray(question?.blanks) ? question.blanks : [];
       }
 
-      return normalized;
+      return normalizeQuestion(base);
     }).filter(Boolean);
 
     if (!questions.length) return null;
@@ -996,7 +997,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     wrap.setAttribute('data-step-key', 'question');
 
     // IMPORTANT: stable question object for this flow item (persists across re-renders)
-    const qData = getStableQuestionObjectForFlowItem(item);
+    const qData = normalizeQuestion(getStableQuestionObjectForFlowItem(item));
+    if (item) item._qState = qData;
     if (item?.flowItemId === 97) {
       console.info('FlowItemId=97 qData قبل الرندر', {
         blanks: qData?.blanks,
@@ -1035,15 +1037,22 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     try {
       const q = renderQuestion({ mountEl: qMount, question: qData });
-
+      const expected = getExpectedAnswer(qData);
+      const uiCheck = typeof q?.check === 'function' ? q.check : null;
       activeQuestion = {
-        check: q.check,
+        check: () => {
+          if (uiCheck) {
+            uiCheck();
+          }
+          return isAnswerCorrect(qData, expected, compareAnswer);
+        },
         attempts: 0,
         solutionShown: false,
         btn: null,
         dotsWrap: attemptsWrap,
         container: wrap,
         qData,
+        expected,
         verifiedOk: false,
       };
     } catch (err) {
@@ -1145,27 +1154,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
   function isAssessmentQuestionCorrect(question) {
     if (!question) return false;
-
-    if (question.type === 'mcq') {
-      return question._selectedIndex === question.correctIndex;
-    }
-
-    if (question.type === 'ordering') {
-      return isOrderingCorrect(question);
-    }
-
-    if (question.type === 'match') {
-      return isMatchCorrect(question);
-    }
-
-    if (question.type === 'fillblank') {
-      return isFillBlankCorrect(question);
-    }
-
-    const rawUser = question._value ?? '';
-    const rawAns = question.answer ?? '';
-    const textSpec = question.textSpec || question.spec || question.answerSpec;
-    return compareAnswer(rawUser, rawAns, question.validation, textSpec);
+    const expected = getExpectedAnswer(question);
+    return isAnswerCorrect(question, expected, compareAnswer);
   }
 
   function scoreAssessment(questions) {
@@ -1179,30 +1169,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       }
       total += points;
 
-      if (question.type === 'mcq') {
-        if (question._selectedIndex === question.correctIndex) score += points;
-        return;
-      }
-
-      if (question.type === 'ordering') {
-        if (isOrderingCorrect(question)) score += points;
-        return;
-      }
-
-      if (question.type === 'match') {
-        if (isMatchCorrect(question)) score += points;
-        return;
-      }
-
-      if (question.type === 'fillblank') {
-        if (isFillBlankCorrect(question)) score += points;
-        return;
-      }
-
-      const rawUser = question._value ?? '';
-      const rawAns = question.answer ?? '';
-      const textSpec = question.textSpec || question.spec || question.answerSpec;
-      const ok = compareAnswer(rawUser, rawAns, question.validation, textSpec);
+      const expected = getExpectedAnswer(question);
+      const ok = isAnswerCorrect(question, expected, compareAnswer);
       if (ok) score += points;
     });
 
@@ -1267,7 +1235,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     if (question._debugLastCheck) return question._debugLastCheck;
 
     const rawUser = question._value ?? '';
-    const rawAns = question.answer ?? '';
+    const expected = getExpectedAnswer(question);
+    const rawAns = typeof expected === 'string' ? expected : (question.answer ?? '');
     const textSpec = question.textSpec || question.spec || question.answerSpec;
     const validation = question.validation || {};
 
@@ -1285,7 +1254,9 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       normalizedArabicAns: '',
       textSpecModelAnswer: specModelAnswer || null,
       normalizedSpecModel,
-      modelSource: rawAns ? 'answer' : (specModelAnswer ? 'textSpec.modelAnswer' : 'missing'),
+      modelSource: rawAns
+        ? (question.answer ? 'answer' : (question.solution ? 'solution' : 'expected'))
+        : (specModelAnswer ? 'textSpec.modelAnswer' : 'missing'),
       userNum: null,
       ansNum: null,
       mode: isNumericAnswer(ans) ? 'numeric' : 'text',
@@ -1517,46 +1488,6 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     return String(question._value || '').trim() !== '';
   }
 
-  function isOrderingCorrect(question) {
-    const originalItems = Array.isArray(question.items)
-      ? question.items
-      : Array.isArray(question.choices)
-        ? question.choices
-        : [];
-    const order = Array.isArray(question._order) ? question._order : [];
-    if (!originalItems.length) return true;
-    if (order.length !== originalItems.length) return false;
-    if (order.some((item) => item == null)) return false;
-    return order.every((value, index) => String(value ?? '').trim() === String(originalItems[index] ?? '').trim());
-  }
-
-  function isMatchCorrect(question) {
-    const pairs = Array.isArray(question.pairs) ? question.pairs : [];
-    const selections = Array.isArray(question._matches) ? question._matches : [];
-    if (!pairs.length) return true;
-    if (selections.length !== pairs.length) return false;
-    if (selections.some((value) => !String(value || '').trim())) return false;
-    return pairs.every((pair, index) => {
-      const expected = String(pair?.right ?? '').trim();
-      const actual = String(selections[index] ?? '').trim();
-      return expected !== '' && expected === actual;
-    });
-  }
-
-  function isFillBlankCorrect(question) {
-    const blanks = Array.isArray(question.blanks) ? question.blanks : [];
-    const values = Array.isArray(question._blanks) ? question._blanks : [];
-    const validation = { fuzzyAutocorrect: true, ...(question.validation || {}) };
-    if (!blanks.length) return true;
-    if (values.length < blanks.length) return false;
-    return blanks.every((ans, index) => {
-      const spec = Array.isArray(question.textSpec)
-        ? question.textSpec[index]
-        : (question.textSpec || question.spec || question.answerSpec);
-      return compareAnswer(values[index] ?? '', ans ?? '', validation, spec);
-    });
-  }
-
   function getYouTubeId(url) {
     try {
       const parsed = new URL(url);
@@ -1636,7 +1567,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
         if (!activeQuestion.solutionShown) {
           showToast('الحل', 'تم عرض الحل النموذجي تحت', 'danger', 4500);
-          const resolvedSolution = resolveSolutionText(activeQuestion.qData);
+          const resolvedSolution = getSolutionText(activeQuestion.qData);
           showSolution(activeQuestion.container, resolvedSolution);
           activeQuestion.solutionShown = true;
         }
@@ -1665,37 +1596,6 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     `;
     container.appendChild(sol);
     replaceMathTokensInElement(sol);
-  }
-
-  function resolveSolutionText(question) {
-    if (!question) return '';
-    const direct = typeof question.solution === 'string'
-      ? question.solution.trim()
-      : String(question.solution || '').trim();
-    if (direct) return direct;
-
-    if (question.type === 'ordering') {
-      const items = Array.isArray(question.items)
-        ? question.items
-        : Array.isArray(question.choices)
-          ? question.choices
-          : [];
-      const ordered = items.map((item) => String(item ?? '').trim()).filter(Boolean);
-      if (ordered.length) return ordered.join('، ');
-    }
-
-    if (question.type === 'fillblank') {
-      const blanks = Array.isArray(question.blanks) ? question.blanks : [];
-      const filled = blanks.map((entry) => extractAnswerValue(entry)).filter(Boolean);
-      if (filled.length) return filled.join('، ');
-    }
-
-    if (question.type === 'input') {
-      const answer = extractAnswerValue(question.answer ?? '').trim();
-      if (answer) return answer;
-    }
-
-    return '';
   }
 
   function setPendingFocusToNext() {
