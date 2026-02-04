@@ -518,6 +518,12 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
         btn.addEventListener('click', () => {
           if (!check) return;
 
+          if (currentReq.isRequired === false && !hasResponse(currentReq)) {
+            showToast('تم التجاوز', 'تم تجاوز السؤال الاختياري', 'info', 2500);
+            moveToNextPrereqItem();
+            return;
+          }
+
           if (!hasResponse(currentReq)) {
             showToast('تنبيه', 'جاوب على السؤال أولًا قبل المتابعة', 'warning', 3000);
             return;
