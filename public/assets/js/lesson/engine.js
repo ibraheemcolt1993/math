@@ -1674,6 +1674,16 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
       : String(question.solution || '').trim();
     if (direct) return direct;
 
+    if (question.type === 'ordering') {
+      const items = Array.isArray(question.items)
+        ? question.items
+        : Array.isArray(question.choices)
+          ? question.choices
+          : [];
+      const ordered = items.map((item) => String(item ?? '').trim()).filter(Boolean);
+      if (ordered.length) return ordered.join('، ');
+    }
+
     if (question.type === 'fillblank') {
       const blanks = Array.isArray(question.blanks) ? question.blanks : [];
       const filled = blanks.map((entry) => extractAnswerValue(entry)).filter(Boolean);
