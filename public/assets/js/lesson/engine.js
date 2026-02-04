@@ -726,6 +726,30 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     const body = card.querySelector('.assessment-body');
     const totalQuestions = assessment.questions.length;
+
+    if (!totalQuestions) {
+      const empty = document.createElement('div');
+      empty.className = 'stage-empty';
+      empty.textContent = 'لا توجد أسئلة تقييم لهذه البطاقة.';
+      body.appendChild(empty);
+
+      const actions = document.createElement('div');
+      actions.className = 'lesson-nav';
+
+      const btnFinish = document.createElement('button');
+      btnFinish.className = 'btn btn-primary w-100';
+      btnFinish.textContent = 'إنهاء البطاقة';
+      btnFinish.addEventListener('click', () => finishCard());
+
+      actions.appendChild(btnFinish);
+      card.appendChild(actions);
+      mountEl.appendChild(card);
+      bindStageBack(card);
+
+      updateProgress();
+      saveProgress();
+      return;
+    }
     const currentIndex = Math.max(0, Math.min(assessmentState.currentIndex, totalQuestions - 1));
     assessmentState.currentIndex = currentIndex;
 
@@ -1196,7 +1220,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
   function normalizeSpaces(s) {
     if (s == null) return '';
-    return String(s).trim().replace(/\s+/g, ' ');
+    return toLatinDigits(String(s)).trim().replace(/\s+/g, ' ');
   }
 
   function toLatinDigits(str) {
