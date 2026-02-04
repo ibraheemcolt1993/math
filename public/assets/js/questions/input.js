@@ -128,7 +128,8 @@ export function renderInputQuestion({ mountEl, question }) {
   }
 
   const validation = question.validation || {};
-  const expectsNumber = Boolean(validation.numericOnly) || isNumericAnswer(question.answer);
+  const answerIsNumeric = isNumericAnswer(question.answer);
+  const expectsNumber = answerIsNumeric;
 
   // Restore previous value (persisted by engine via stable question object)
   if (typeof question._value === 'string' && question._value !== '') {
