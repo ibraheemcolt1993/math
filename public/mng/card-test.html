@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>math — معاينة إجابة الطالب</title>
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/lesson.css" />
+  <link rel="stylesheet" href="/assets/css/questions.css" />
+  <link rel="stylesheet" href="/assets/css/md-tokens.css" />
+  <link rel="stylesheet" href="/assets/css/md-base.css" />
+  <link rel="stylesheet" href="/assets/css/md-components.css" />
+  <link rel="stylesheet" href="/assets/css/md-utilities.css" />
+  <link rel="stylesheet" href="/assets/css/mng/card-test.css" />
+</head>
+
+<body class="md-theme">
+  <main class="container page-stack">
+    <header class="page-header">
+      <div>
+        <p class="badge primary md-badge">اختبار البطاقة</p>
+        <h1 class="h1">صفحة معاينة إجابة الطالب</h1>
+        <p class="p muted">صفحة بسيطة لمعاينة كيف يرى الطالب البطاقة، مع مقارنة الإجابة المدخلة بالإجابة المتوقعة.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-ghost md-btn" type="button">تبديل السؤال</button>
+        <button class="btn btn-primary md-btn" type="button">تحديث النتيجة</button>
+      </div>
+    </header>
+
+    <section class="card md-card">
+      <div class="card-header">
+        <div>
+          <h2 class="h2">البطاقة 12 — المعادلات</h2>
+          <p class="p muted">تجربة مقارنة الإجابات قبل اعتماد البطاقة.</p>
+        </div>
+        <span class="badge md-badge">طالب: سارة</span>
+      </div>
+      <div class="card-body stack">
+        <div class="q">
+          <p class="q-desc">إذا كانت 3x + 2 = 11، ما قيمة x؟</p>
+          <div class="q-input">
+            <label class="label md-label" for="studentAnswer">إجابة الطالب</label>
+            <input id="studentAnswer" class="input" type="text" value="3" />
+            <span class="hint">الطالب أدخل الإجابة كما تظهر في التطبيق.</span>
+          </div>
+        </div>
+
+        <div class="review-grid">
+          <div class="review-card expected">
+            <span class="review-label">الإجابة المتوقعة</span>
+            <p class="review-value">3</p>
+            <p class="review-note">يتم سحبها من إعدادات البطاقة.</p>
+          </div>
+          <div class="review-card actual">
+            <span class="review-label">الإجابة المدخلة</span>
+            <p class="review-value">3</p>
+            <p class="review-note">مطابقة لما كتبه الطالب في الحقل.</p>
+          </div>
+          <div class="review-card status">
+            <span class="review-label">النتيجة</span>
+            <p class="review-value success">مطابقة ✅</p>
+            <p class="review-note">تأكد من أن المقارنة النصية مطابقة للتوقعات.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card md-card">
+      <div class="card-header">
+        <div>
+          <h2 class="h2">حالة أخرى (خطأ)</h2>
+          <p class="p muted">مثال على اختلاف الإجابة لتوضيح السبب.</p>
+        </div>
+        <span class="badge warning md-badge">تنبيه</span>
+      </div>
+      <div class="card-body stack">
+        <div class="q">
+          <p class="q-desc">حوّل 0.5 إلى كسر اعتيادي.</p>
+          <div class="q-input">
+            <label class="label md-label" for="studentAnswer2">إجابة الطالب</label>
+            <input id="studentAnswer2" class="input" type="text" value="1/4" />
+            <span class="hint">الطالب كتب كسراً غير مطابق.</span>
+          </div>
+        </div>
+
+        <div class="review-grid">
+          <div class="review-card expected">
+            <span class="review-label">الإجابة المتوقعة</span>
+            <p class="review-value">1/2</p>
+            <p class="review-note">المطلوب تبسيط الكسر إلى نصف.</p>
+          </div>
+          <div class="review-card actual">
+            <span class="review-label">الإجابة المدخلة</span>
+            <p class="review-value">1/4</p>
+            <p class="review-note">الإجابة المدخلة لا تطابق النتيجة.</p>
+          </div>
+          <div class="review-card status">
+            <span class="review-label">النتيجة</span>
+            <p class="review-value danger">غير مطابقة ❌</p>
+            <p class="review-note">يمكن تعديل الإجابة المتوقعة إذا كانت غير دقيقة.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card md-card tips-card">
+      <div class="card-header">
+        <div>
+          <h2 class="h2">ملاحظات سريعة</h2>
+          <p class="p muted">نصائح لتقليل اختلافات المطابقة.</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul class="tips-list">
+          <li>استخدم الإجابة المتوقعة بنفس تنسيق إجابة الطالب (أرقام عربية/إنجليزية، فواصل، كسور).</li>
+          <li>تأكد من إزالة الفراغات الزائدة أو الرموز غير الضرورية قبل المقارنة.</li>
+          <li>يمكن إضافة أكثر من إجابة متوقعة إذا كان هناك أكثر من شكل صحيح.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
