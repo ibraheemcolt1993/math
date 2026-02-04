@@ -471,6 +471,13 @@
       previewTimer = setTimeout(updatePreview, 80);
     }
 
+    function updateKeyboardState() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport ? viewport.height : window.innerHeight;
+      const diff = window.innerHeight - viewportHeight;
+      document.body.classList.toggle('keyboard-open', diff > 120);
+    }
+
     function getActivePlaceholderIndex(value) {
       const positions = [];
       for (let i = 0; i < value.length; i += 1) {
@@ -789,7 +796,11 @@
     });
     eqInput?.addEventListener('select', schedulePreview);
     window.addEventListener('resize', syncInputHeight);
+    window.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('resize', updateKeyboardState);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardState);
     syncInputHeight();
+    updateKeyboardState();
     schedulePreview();
   </script>
 </body>
