@@ -67,6 +67,10 @@
                 <span class="eq-tab-icon" aria-hidden="true">□/□</span>
                 <span class="eq-tab-label">قوالب</span>
               </button>
+              <button class="eq-tab" type="button" data-target="text" aria-selected="false" title="نص عربي">
+                <span class="eq-tab-icon" aria-hidden="true">أب</span>
+                <span class="eq-tab-label">نص</span>
+              </button>
             </div>
 
             <div class="eq-toolbar eq-toolbar-group is-active" data-group="basic" aria-label="شريط رموز المعادلات">
@@ -182,11 +186,19 @@
                 </span>
               </button>
             </div>
+
+            <div class="eq-toolbar eq-toolbar-group" data-group="text" aria-label="شريط النص العربي">
+              <button class="symbol-btn" type="button" data-template="\\text{□}" title="نص عربي">
+                نص
+              </button>
+              <button class="symbol-btn" type="button" data-template="\\text{جد قيمة س حيث }" title="مثال عربي">
+                مثال
+              </button>
+            </div>
           </div>
 
-            <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
-            <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
-          </div>
+          <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
+          <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
         </div>
       </section>
     </main>
