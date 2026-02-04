@@ -199,6 +199,10 @@
 
           <div id="eqPreview" class="eq-preview" aria-live="polite"></div>
           <textarea id="eqInput" class="input" dir="ltr" rows="2" placeholder="اكتب المعادلة هنا..." aria-label="المعادلة"></textarea>
+          <div class="eq-actions">
+            <button id="eqInsertBtn" class="btn btn-primary md-btn" type="button">إدراج في البطاقة</button>
+            <button id="eqTextBtn" class="btn btn-ghost md-btn" type="button">إضافة نص عربي</button>
+          </div>
         </div>
       </section>
     </main>
@@ -434,6 +438,18 @@
       font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     }
 
+    .eq-actions {
+      display: none;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      justify-content: flex-start;
+    }
+
+    body.is-embed .eq-actions {
+      display: flex;
+    }
+
     @media (min-width: 900px) {
       :root {
         --btn: 40px;
@@ -454,8 +470,15 @@
   <script>
     const eqInput = document.getElementById('eqInput');
     const eqPreview = document.getElementById('eqPreview');
+    const eqInsertBtn = document.getElementById('eqInsertBtn');
+    const eqTextBtn = document.getElementById('eqTextBtn');
     let previewTimer;
     let previewInFlight = false;
+    const isEmbedded = new URLSearchParams(window.location.search).get('embed') === '1';
+
+    if (isEmbedded) {
+      document.body.classList.add('is-embed');
+    }
 
     function focusInput() {
       if (!eqInput) return;
@@ -655,6 +678,20 @@
       syncInputHeight();
     }
 
+    function sendEquation() {
+      if (!eqInput) return;
+      const latex = eqInput.value.trim();
+      if (!latex) return;
+      const payload = { type: 'math-equation-insert', source: 'math-equation-editor', latex };
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, '*');
+        return;
+      }
+      if (window.opener) {
+        window.opener.postMessage(payload, '*');
+      }
+    }
+
     function applyDeletion(isBackspace) {
       if (!eqInput) return;
       const start = eqInput.selectionStart ?? 0;
@@ -698,6 +735,24 @@
         if (!template) return;
         insertTemplate(template);
       });
+    });
+
+    eqInsertBtn?.addEventListener('click', () => {
+      sendEquation();
+    });
+
+    eqTextBtn?.addEventListener('click', () => {
+      insertTemplate('\\text{□}');
+    });
+
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.type !== 'math-equation-load') return;
+      if (!eqInput) return;
+      eqInput.value = String(data.latex ?? '');
+      schedulePreview();
+      syncInputHeight();
+      focusInput();
     });
 
     const tabButtons = Array.from(document.querySelectorAll('.eq-tab'));

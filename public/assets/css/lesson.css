@@ -307,6 +307,17 @@
   line-height: 1.4;
   min-width: 12px;
 }
+.token-math{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  direction: ltr;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  padding: 0 2px;
+}
 .step.muted{
   background: rgba(17,24,39,.04);
 }

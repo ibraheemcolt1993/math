@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/assets/css/md-components.css" />
   <link rel="stylesheet" href="/assets/css/md-utilities.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
+  <script src="/assets/vendor/mathjax/tex-svg.js"></script>
   <script src="/assets/js/mng/ain-guard.js" defer></script>
 </head>
 
@@ -139,6 +140,19 @@
       <div class="modal-footer modal-actions">
         <button id="btnCancelImageEdit" class="btn btn-outline md-btn" type="button">إلغاء</button>
         <button id="btnApplyImageEdit" class="btn btn-primary md-btn" type="button">اعتماد التعديل</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="equationEditor" class="modal hidden md-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-card-lg equation-editor md-modal-card" role="dialog" aria-modal="true" aria-labelledby="equationEditorTitle">
+      <div class="modal-header">
+        <h2 id="equationEditorTitle" class="h2">إضافة معادلة</h2>
+        <button id="btnCloseEquationEditor" class="btn btn-ghost btn-sm md-btn" type="button">إغلاق</button>
+      </div>
+      <div class="modal-body equation-editor-body">
+        <iframe id="equationEditorFrame" title="محرر المعادلات" loading="lazy"></iframe>
       </div>
     </div>
   </div>

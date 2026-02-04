@@ -20,6 +20,9 @@ const elements = {
   btnCloseImageEditor: document.getElementById('btnCloseImageEditor'),
   btnCancelImageEdit: document.getElementById('btnCancelImageEdit'),
   btnApplyImageEdit: document.getElementById('btnApplyImageEdit'),
+  equationEditor: document.getElementById('equationEditor'),
+  equationEditorFrame: document.getElementById('equationEditorFrame'),
+  btnCloseEquationEditor: document.getElementById('btnCloseEquationEditor'),
   previewLessonTitle: document.getElementById('lessonTitle'),
   previewLessonStudent: document.getElementById('lessonStudent'),
   previewLessonWeek: document.getElementById('lessonWeek'),
@@ -45,7 +48,9 @@ const state = {
   previewEnabled: false,
   openMenu: null,
   pendingDelete: null,
-  pendingAdd: null
+  pendingAdd: null,
+  activeMathTargetId: null,
+  lastFocusedInputId: null
 };
 
 const imageEditorState = {
@@ -336,6 +341,21 @@ function renderMathField({ id, tag = 'input', value = '', attrs = '', className 
   `;
 }
 
+function buildMathToken(latex) {
+  const normalized = String(latex ?? '').trim();
+  return normalized ? `[[math:${normalized}]]` : '';
+}
+
+function buildInlineActions({ targetId, blankToken } = {}) {
+  const actions = [];
+  if (blankToken) {
+    actions.push(`<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-blank-token="${escapeHtml(blankToken)}" data-target-id="${targetId}">فراغ</button>`);
+  }
+  actions.push(`<button type="button" class="btn btn-ghost btn-sm" data-action="open-equation" data-target-id="${targetId}">معادلة</button>`);
+  actions.push(`<button type="button" class="btn btn-ghost btn-sm" data-action="insert-table" data-target-id="${targetId}">جدول</button>`);
+  return actions.join('');
+}
+
 function parseTableTokens(text) {
   const results = [];
   const raw = String(text ?? '');
@@ -388,6 +408,55 @@ function insertTokenAtCursor(textarea, token) {
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+function parseTableCommand(value, cursorPosition) {
+  const regex = /\\table(?:\s*(?:\((\d+)x(\d+)\)|(\d+)x(\d+)))?/gi;
+  let match = null;
+  let lastMatch = null;
+  while ((match = regex.exec(value)) !== null) {
+    if (match.index + match[0].length <= cursorPosition) {
+      lastMatch = match;
+    } else {
+      break;
+    }
+  }
+  if (!lastMatch) return null;
+  const rows = Math.max(1, Number(lastMatch[1] || lastMatch[3] || 2));
+  const cols = Math.max(1, Number(lastMatch[2] || lastMatch[4] || 2));
+  return {
+    index: lastMatch.index,
+    length: lastMatch[0].length,
+    rows,
+    cols
+  };
+}
+
+function applyTableCommand(target) {
+  if (!target?.dataset?.allowTableCommand) return null;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return null;
+  const value = target.value;
+  const cursorPosition = target.selectionStart ?? value.length;
+  const match = parseTableCommand(value, cursorPosition);
+  if (!match) return null;
+  const token = buildTableToken(match.rows, match.cols, []);
+  const before = value.slice(0, match.index);
+  const after = value.slice(match.index + match.length);
+  const nextValue = `${before}${token}${after}`;
+  const nextCursor = before.length + token.length;
+  return { nextValue, nextCursor };
+}
+
+function restoreFieldFocus(targetId, cursorPosition) {
+  if (!targetId) return;
+  requestAnimationFrame(() => {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    if (cursorPosition != null && target.setSelectionRange) {
+      target.setSelectionRange(cursorPosition, cursorPosition);
+    }
+  });
+}
+
 function setDirty(value = true) {
   state.dirty = value;
   updateSaveStatus();
@@ -421,6 +490,26 @@ function updateSaveStatus() {
   elements.saveStatus.style.color = '#10b981';
   elements.saveStatus.style.borderColor = '#bbf7d0';
   elements.saveStatus.style.background = '#ecfdf3';
+}
+
+function openEquationEditor(targetId) {
+  if (!elements.equationEditor) return;
+  state.activeMathTargetId = targetId || state.lastFocusedInputId;
+  elements.equationEditor.classList.remove('hidden');
+  elements.equationEditor.setAttribute('aria-hidden', 'false');
+  if (elements.equationEditorFrame && !elements.equationEditorFrame.src) {
+    elements.equationEditorFrame.src = '/mng/equation-editor.html?embed=1';
+  }
+  if (elements.equationEditorFrame?.contentWindow) {
+    elements.equationEditorFrame.contentWindow.postMessage({ type: 'math-equation-load', latex: '' }, '*');
+  }
+}
+
+function closeEquationEditor() {
+  if (!elements.equationEditor) return;
+  elements.equationEditor.classList.add('hidden');
+  elements.equationEditor.setAttribute('aria-hidden', 'true');
+  state.activeMathTargetId = null;
 }
 
 function getWeekParam() {
@@ -699,13 +788,15 @@ function renderGoalsSection(sectionIndex) {
         ${goals
           .map((goal, index) => {
             const menuId = `goal-menu-${index}`;
+            const goalFieldId = buildMathTargetId('goal', index);
             return `
               <div class="goal-row" draggable="true" data-drag-type="goal" data-goal-index="${index}">
                 <span class="drag-handle" aria-hidden="true">⋮⋮</span>
                 ${renderMathField({
-                  id: buildMathTargetId('goal', index),
+                  id: goalFieldId,
                   value: goal,
-                  attrs: `data-goal-index="${index}" placeholder="اكتب الهدف هنا"`
+                  actions: buildInlineActions({ targetId: goalFieldId }),
+                  attrs: `data-goal-index="${index}" data-allow-table-command="true" placeholder="اكتب الهدف هنا"`
                 })}
                 <div class="section-actions">
                   <button class="action-menu-btn" data-action="toggle-menu" data-menu-id="${menuId}">⋮</button>
@@ -756,6 +847,7 @@ function renderPrereqSection(sectionIndex) {
           .map((item, index) => {
             const menuId = `prereq-menu-${index}`;
             const type = item.type === 'mcq' ? 'mcq' : 'input';
+            const textFieldId = buildMathTargetId('prereq', index, 'text');
             return `
               <div class="block-card" draggable="true" data-drag-type="prereq" data-prereq-index="${index}">
                 <div class="block-header">
@@ -785,11 +877,13 @@ function renderPrereqSection(sectionIndex) {
                   <div class="field">
                     <label class="label">نص السؤال</label>
                     ${renderMathField({
-                      id: buildMathTargetId('prereq', index, 'text'),
+                      id: textFieldId,
                       value: item.text || '',
-                      attrs: `data-prereq-field="text" data-prereq-index="${index}"`
+                      actions: buildInlineActions({ targetId: textFieldId }),
+                      attrs: `data-prereq-field="text" data-prereq-index="${index}" data-allow-table-command="true"`
                     })}
                   </div>
+                  ${renderTableEditors({ text: item.text || '', prereqIndex: index })}
                   <div class="field">
                     <label class="label">حالة السؤال</label>
                     <label class="toggle-row">
@@ -1045,8 +1139,8 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
               tag: 'textarea',
               rows: 2,
               value: item.text || '',
-              actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-blank-token="${escapeHtml(getBlankInsertToken())}" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-target-id="${textFieldId}">فراغ</button>`,
-              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+              actions: buildInlineActions({ targetId: textFieldId, blankToken: getBlankInsertToken() }),
+              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-allow-table-command="true"`
             })}
             <div class="help">استخدم [[blank]] أو ${escapeHtml(getBlankInsertToken())} لكل فراغ داخل الجملة.</div>
           `
@@ -1054,10 +1148,12 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
             ${renderMathField({
               id: textFieldId,
               value: item.text || '',
-              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+              actions: buildInlineActions({ targetId: textFieldId }),
+              attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-allow-table-command="true"`
             })}
           `}
       </div>
+      ${renderTableEditors({ text: item.text || '', conceptIndex, flowIndex })}
       <div class="field">
         <label class="label">حالة السؤال</label>
         <label class="toggle-row">
@@ -1187,7 +1283,8 @@ function renderFlowBlockBody(item, conceptIndex, flowIndex) {
         tag: 'textarea',
         rows: 3,
         value: item.text || '',
-        attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`
+        actions: buildInlineActions({ targetId: buildMathTargetId('flow', conceptIndex, flowIndex, 'text') }),
+        attrs: `data-block-field="text" data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}" data-allow-table-command="true"`
       })}
       ${renderTableEditors({ text: item.text || '', conceptIndex, flowIndex })}
     </div>
@@ -1219,7 +1316,8 @@ function renderAssessmentSection(sectionIndex) {
           ${renderMathField({
             id: buildMathTargetId('assessment', 'title'),
             value: assessment.title || '',
-            attrs: 'data-assessment-field="title"'
+            actions: buildInlineActions({ targetId: buildMathTargetId('assessment', 'title') }),
+            attrs: 'data-assessment-field="title" data-allow-table-command="true"'
           })}
         </div>
         <div class="field">
@@ -1229,7 +1327,8 @@ function renderAssessmentSection(sectionIndex) {
             tag: 'textarea',
             rows: 2,
             value: assessment.description || '',
-            attrs: 'data-assessment-field="description"'
+            actions: buildInlineActions({ targetId: buildMathTargetId('assessment', 'description') }),
+            attrs: 'data-assessment-field="description" data-allow-table-command="true"'
           })}
         </div>
         ${questions.length
@@ -1284,24 +1383,26 @@ function renderAssessmentQuestion(question, index) {
           <label class="label">نص السؤال</label>
           ${type === 'fillblank'
             ? `
-              ${renderMathField({
-                id: textFieldId,
-                tag: 'textarea',
-                rows: 2,
-                value: question.text || '',
-                actions: `<button type="button" class="btn btn-ghost btn-sm blank-btn" data-action="insert-blank" data-blank-token="${escapeHtml(getBlankInsertToken())}" data-question-index="${index}" data-target-id="${textFieldId}">فراغ</button>`,
-                attrs: `data-question-field="text" data-question-index="${index}"`
-              })}
+            ${renderMathField({
+              id: textFieldId,
+              tag: 'textarea',
+              rows: 2,
+              value: question.text || '',
+              actions: buildInlineActions({ targetId: textFieldId, blankToken: getBlankInsertToken() }),
+              attrs: `data-question-field="text" data-question-index="${index}" data-allow-table-command="true"`
+            })}
               <div class="help">استخدم [[blank]] أو ${escapeHtml(getBlankInsertToken())} لكل فراغ داخل الجملة.</div>
             `
             : `
               ${renderMathField({
                 id: textFieldId,
                 value: question.text || '',
-                attrs: `data-question-field="text" data-question-index="${index}"`
+                actions: buildInlineActions({ targetId: textFieldId }),
+                attrs: `data-question-field="text" data-question-index="${index}" data-allow-table-command="true"`
               })}
             `}
         </div>
+        ${renderTableEditors({ text: question.text || '', questionIndex: index })}
         <div class="field">
           <label class="label">الدرجة</label>
           <input class="input ltr" data-question-field="points" data-question-index="${index}" value="${escapeHtml(question.points ?? 1)}" />
@@ -1427,9 +1528,14 @@ function renderInlineList({ list, listType, index, conceptIndex }) {
   `;
 }
 
-function renderTableEditors({ text, conceptIndex, flowIndex }) {
+function renderTableEditors({ text, conceptIndex, flowIndex, questionIndex, prereqIndex }) {
   const tables = parseTableTokens(text);
   if (!tables.length) return '';
+  const baseAttrs = questionIndex != null
+    ? `data-question-index="${questionIndex}"`
+    : prereqIndex != null
+      ? `data-prereq-index="${prereqIndex}"`
+      : `data-goal-index="${conceptIndex}" data-flow-index="${flowIndex}"`;
 
   return `
     <div class="table-editor-list">
@@ -1447,8 +1553,7 @@ function renderTableEditors({ text, conceptIndex, flowIndex }) {
                   class="input"
                   data-table-index="${tableIndex}"
                   data-table-cell-index="${cellIndex}"
-                  data-goal-index="${conceptIndex}"
-                  data-flow-index="${flowIndex}"
+                  ${baseAttrs}
                   value="${escapeHtml(value)}"
                   placeholder="خلية"
                 />
@@ -1612,9 +1717,46 @@ function moveItem(list, fromIndex, direction) {
   list.splice(toIndex, 0, item);
 }
 
+function handleEquationMessage(event) {
+  const data = event.data;
+  if (!data || data.type !== 'math-equation-insert' || data.source !== 'math-equation-editor') return;
+  const token = buildMathToken(data.latex);
+  if (!token) return;
+  const targetId = state.activeMathTargetId || state.lastFocusedInputId;
+  const targetInput = targetId ? document.getElementById(targetId) : null;
+  if (!targetInput) return;
+  insertTokenAtCursor(targetInput, token);
+  closeEquationEditor();
+}
+
 function handleEditorInput(event) {
   const target = event.target;
-  const fieldValue = target.type === 'checkbox' ? target.checked : target.value;
+  let fieldValue = target.type === 'checkbox' ? target.checked : target.value;
+  const focusTargetId = target.id;
+  const tableRenderState = { shouldRender: false, cursor: null };
+  const tableCommand = applyTableCommand(target);
+
+  if (tableCommand) {
+    target.value = tableCommand.nextValue;
+    if (target.setSelectionRange) {
+      target.setSelectionRange(tableCommand.nextCursor, tableCommand.nextCursor);
+    }
+    fieldValue = tableCommand.nextValue;
+    tableRenderState.shouldRender = true;
+    tableRenderState.cursor = tableCommand.nextCursor;
+  }
+
+  if (target.dataset.forceTableRender) {
+    tableRenderState.shouldRender = true;
+    tableRenderState.cursor = target.selectionStart ?? tableRenderState.cursor;
+    delete target.dataset.forceTableRender;
+  }
+
+  function finalizeTableRender() {
+    if (!tableRenderState.shouldRender) return;
+    renderEditor();
+    restoreFieldFocus(focusTargetId, tableRenderState.cursor);
+  }
 
   if (target.dataset.presetInput) {
     state.preset.text = fieldValue;
@@ -1634,10 +1776,12 @@ function handleEditorInput(event) {
       }
       setDirty(true);
       renderEditor();
+      finalizeTableRender();
       return;
     }
     state.prerequisites[index][field] = fieldValue;
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1649,6 +1793,7 @@ function handleEditorInput(event) {
     prereq.validation = prereq.validation || normalizeValidation();
     prereq.validation[key] = Boolean(target.checked);
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1665,9 +1810,11 @@ function handleEditorInput(event) {
       if (synced) {
         renderEditor();
       }
+      finalizeTableRender();
       return;
     }
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1680,6 +1827,7 @@ function handleEditorInput(event) {
     item.validation = item.validation || normalizeValidation();
     item.validation[key] = Boolean(target.checked);
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1694,6 +1842,7 @@ function handleEditorInput(event) {
       if (!question.pairs[matchIndex]) question.pairs[matchIndex] = { left: '', right: '' };
       question.pairs[matchIndex][side] = fieldValue;
       setDirty(true);
+      finalizeTableRender();
       return;
     }
     const conceptIndex = Number(target.dataset.goalIndex);
@@ -1704,6 +1853,7 @@ function handleEditorInput(event) {
     if (!flowItem.pairs[matchIndex]) flowItem.pairs[matchIndex] = { left: '', right: '' };
     flowItem.pairs[matchIndex][side] = fieldValue;
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1711,6 +1861,7 @@ function handleEditorInput(event) {
     const field = target.dataset.assessmentField;
     state.assessment[field] = fieldValue;
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1740,6 +1891,7 @@ function handleEditorInput(event) {
       }
       setDirty(true);
       renderEditor();
+      finalizeTableRender();
       return;
     }
     question[field] = fieldValue;
@@ -1749,9 +1901,11 @@ function handleEditorInput(event) {
       if (synced) {
         renderEditor();
       }
+      finalizeTableRender();
       return;
     }
     setDirty(true);
+    finalizeTableRender();
   }
 
   if (target.dataset.questionValidation) {
@@ -1762,6 +1916,7 @@ function handleEditorInput(event) {
     question.validation = question.validation || normalizeValidation();
     question.validation[key] = Boolean(target.checked);
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1836,11 +1991,46 @@ function handleEditorInput(event) {
       flowItem.details[itemIndex] = value;
     }
     setDirty(true);
+    finalizeTableRender();
+    return;
   }
 
   if (target.dataset.tableIndex != null && target.dataset.tableCellIndex != null) {
     const tableIndex = Number(target.dataset.tableIndex);
     const cellIndex = Number(target.dataset.tableCellIndex);
+    if (target.dataset.prereqIndex != null) {
+      const prereqIndex = Number(target.dataset.prereqIndex);
+      const prereq = state.prerequisites?.[prereqIndex];
+      if (!prereq) return;
+      const tables = parseTableTokens(prereq.text || '');
+      const table = tables[tableIndex];
+      if (!table) return;
+      const total = table.rows * table.cols;
+      const nextCells = Array.from({ length: total }, (_, idx) => table.cells[idx] ?? '');
+      nextCells[cellIndex] = fieldValue;
+      const nextToken = buildTableToken(table.rows, table.cols, nextCells);
+      prereq.text = replaceTableToken(prereq.text || '', tableIndex, nextToken);
+      setDirty(true);
+      finalizeTableRender();
+      return;
+    }
+    if (target.dataset.questionIndex != null) {
+      const questionIndex = Number(target.dataset.questionIndex);
+      const question = state.assessment.questions?.[questionIndex];
+      if (!question) return;
+      const tables = parseTableTokens(question.text || '');
+      const table = tables[tableIndex];
+      if (!table) return;
+      const total = table.rows * table.cols;
+      const nextCells = Array.from({ length: total }, (_, idx) => table.cells[idx] ?? '');
+      nextCells[cellIndex] = fieldValue;
+      const nextToken = buildTableToken(table.rows, table.cols, nextCells);
+      question.text = replaceTableToken(question.text || '', tableIndex, nextToken);
+      setDirty(true);
+      finalizeTableRender();
+      return;
+    }
+
     const conceptIndex = Number(target.dataset.goalIndex);
     const flowIndex = Number(target.dataset.flowIndex);
     const item = state.concepts?.[conceptIndex]?.flow?.[flowIndex];
@@ -1854,6 +2044,7 @@ function handleEditorInput(event) {
     const nextToken = buildTableToken(table.rows, table.cols, nextCells);
     item.text = replaceTableToken(item.text || '', tableIndex, nextToken);
     setDirty(true);
+    finalizeTableRender();
     return;
   }
 
@@ -1868,6 +2059,7 @@ function handleEditorInput(event) {
       goalTitle.textContent = target.value || `هدف ${index + 1}`;
     }
     setDirty(true);
+    finalizeTableRender();
   }
 }
 
@@ -1885,6 +2077,14 @@ function handleEditorChange(event) {
   }
   setDirty(true);
   renderEditor();
+}
+
+function handleEditorFocusIn(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+  if (target.id) {
+    state.lastFocusedInputId = target.id;
+  }
 }
 
 function handleEditorClick(event) {
@@ -1933,6 +2133,21 @@ function handleEditorClick(event) {
     const targetInput = targetId ? document.getElementById(targetId) : null;
     if (!targetInput) return;
     const token = button.dataset.blankToken || getBlankInsertToken();
+    insertTokenAtCursor(targetInput, token);
+    return;
+  }
+
+  if (action === 'open-equation') {
+    openEquationEditor(button.dataset.targetId);
+    return;
+  }
+
+  if (action === 'insert-table') {
+    const targetId = button.dataset.targetId;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    if (!targetInput) return;
+    targetInput.dataset.forceTableRender = 'true';
+    const token = buildTableToken(2, 2, []);
     insertTokenAtCursor(targetInput, token);
     return;
   }
@@ -2845,6 +3060,7 @@ function bindEvents() {
   elements.editorContent.addEventListener('input', handleEditorInput);
   elements.editorContent.addEventListener('change', handleEditorChange);
   elements.editorContent.addEventListener('click', handleEditorClick);
+  elements.editorContent.addEventListener('focusin', handleEditorFocusIn);
   elements.editorContent.addEventListener('dragstart', handleDragStart);
   elements.editorContent.addEventListener('dragover', handleDragOver);
   elements.editorContent.addEventListener('dragleave', handleDragLeave);
@@ -2866,6 +3082,13 @@ function bindEvents() {
       next();
     }
   });
+
+  elements.btnCloseEquationEditor?.addEventListener('click', closeEquationEditor);
+  elements.equationEditor?.addEventListener('click', (event) => {
+    if (event.target.dataset?.close) closeEquationEditor();
+  });
+
+  window.addEventListener('message', handleEquationMessage);
 
   elements.imageEditor?.addEventListener('click', (event) => {
     if (event.target.dataset?.close) {
