@@ -7,6 +7,13 @@ function toCleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function toBlankAnswer(value) {
+  if (value && typeof value === 'object') {
+    return toCleanString(value.answer ?? value.text ?? value.value ?? '');
+  }
+  return toCleanString(value);
+}
+
 function toNullableString(value) {
   const cleaned = toCleanString(value);
   return cleaned ? cleaned : null;
@@ -49,7 +56,7 @@ function buildFlowData(flowItem) {
     data.items = flowItem.items.map((entry) => toCleanString(entry)).filter(Boolean);
   }
   if (Array.isArray(flowItem.blanks)) {
-    data.blanks = flowItem.blanks.map((entry) => toCleanString(entry)).filter(Boolean);
+    data.blanks = flowItem.blanks.map((entry) => toBlankAnswer(entry)).filter(Boolean);
   }
   if (Array.isArray(flowItem.pairs)) {
     data.pairs = flowItem.pairs
@@ -68,7 +75,7 @@ function buildQuestionData(question) {
     data.items = question.items.map((entry) => toCleanString(entry)).filter(Boolean);
   }
   if (Array.isArray(question.blanks)) {
-    data.blanks = question.blanks.map((entry) => toCleanString(entry)).filter(Boolean);
+    data.blanks = question.blanks.map((entry) => toBlankAnswer(entry)).filter(Boolean);
   }
   if (Array.isArray(question.pairs)) {
     data.pairs = question.pairs
