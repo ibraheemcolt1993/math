@@ -1185,7 +1185,7 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     const user = normalizeSpaces(userValue);
     const ans = normalizeSpaces(extractAnswerValue(answerValue));
 
-    if (validation.numericOnly || isNumericAnswer(ans)) {
+    if (isNumericAnswer(ans)) {
       const userNum = parseNumericValue(user);
       const ansNum = parseNumericValue(ans);
 
