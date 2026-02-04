@@ -997,6 +997,13 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
     // IMPORTANT: stable question object for this flow item (persists across re-renders)
     const qData = getStableQuestionObjectForFlowItem(item);
+    if (item?.flowItemId === 97) {
+      console.info('FlowItemId=97 qData قبل الرندر', {
+        blanks: qData?.blanks,
+        solution: qData?.solution,
+        qData,
+      });
+    }
 
     const title = document.createElement('p');
     title.className = 'question-title';
@@ -1629,7 +1636,8 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
 
         if (!activeQuestion.solutionShown) {
           showToast('الحل', 'تم عرض الحل النموذجي تحت', 'danger', 4500);
-          showSolution(activeQuestion.container, activeQuestion.qData.solution);
+          const resolvedSolution = resolveSolutionText(activeQuestion.qData);
+          showSolution(activeQuestion.container, resolvedSolution);
           activeQuestion.solutionShown = true;
         }
       }
@@ -1657,6 +1665,27 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     `;
     container.appendChild(sol);
     replaceMathTokensInElement(sol);
+  }
+
+  function resolveSolutionText(question) {
+    if (!question) return '';
+    const direct = typeof question.solution === 'string'
+      ? question.solution.trim()
+      : String(question.solution || '').trim();
+    if (direct) return direct;
+
+    if (question.type === 'fillblank') {
+      const blanks = Array.isArray(question.blanks) ? question.blanks : [];
+      const filled = blanks.map((entry) => extractAnswerValue(entry)).filter(Boolean);
+      if (filled.length) return filled.join('، ');
+    }
+
+    if (question.type === 'input') {
+      const answer = extractAnswerValue(question.answer ?? '').trim();
+      if (answer) return answer;
+    }
+
+    return '';
   }
 
   function setPendingFocusToNext() {

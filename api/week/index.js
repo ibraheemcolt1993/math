@@ -1,6 +1,19 @@
 const { getPool, sql } = require('../_shared/db');
 const { DEFAULT_HEADERS } = require('../_shared/http');
 
+function parseJsonField(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch (error) {
+    return null;
+  }
+}
+
 function parsePrereqItem(value) {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
@@ -97,7 +110,8 @@ module.exports = async function (context, req) {
       });
 
       flowItemsResult = await flowRequest.query(
-        `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution
+        `SELECT FlowItemId, ConceptId, SortOrder, ItemType, ItemText, ItemTitle, ItemDescription, ItemUrl, Answer, CorrectIndex, Solution,
+                IsRequired, DataJson, ValidationJson
          FROM dbo.FlowItems
          WHERE ConceptId IN (${inClause})
          ORDER BY ConceptId, SortOrder`
@@ -165,7 +179,8 @@ module.exports = async function (context, req) {
       });
 
       assessmentQuestionsResult = await assessmentRequest.query(
-        `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex
+        `SELECT AssessmentQuestionId, AssessmentId, SortOrder, QuestionType, QuestionText, Answer, Points, CorrectIndex,
+                IsRequired, DataJson, ValidationJson
          FROM dbo.AssessmentQuestions
          WHERE AssessmentId IN (${assessmentClause})
          ORDER BY AssessmentId, SortOrder`
@@ -267,7 +282,10 @@ module.exports = async function (context, req) {
       title: concept.Title,
       flow: flow.map(({ item, details, hints, choices }) => {
         const type = String(item.ItemType || '').trim().toLowerCase();
+        const dataPayload = parseJsonField(item.DataJson) || {};
+        const validationPayload = parseJsonField(item.ValidationJson);
         const mapped = {
+          flowItemId: item.FlowItemId,
           type,
           text: item.ItemText,
           title: item.ItemTitle,
@@ -276,14 +294,25 @@ module.exports = async function (context, req) {
           answer: item.Answer,
           correctIndex: item.CorrectIndex,
           solution: item.Solution,
+          isRequired: item.IsRequired !== false,
+          validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null,
           details: details.map((detail) => detail.DetailText),
           hints: hints.map((hint) => hint.HintText),
           choices: choices.map((choice) => choice.ChoiceText)
         };
 
+        if (dataPayload && typeof dataPayload === 'object') {
+          Object.assign(mapped, dataPayload);
+        }
+
+        if (type === 'ordering' && !Array.isArray(mapped.items) && mapped.choices?.length) {
+          mapped.items = mapped.choices;
+        }
+
         if (!mapped.details.length) delete mapped.details;
         if (!mapped.hints.length) delete mapped.hints;
         if (!mapped.choices.length) delete mapped.choices;
+        if (!mapped.validation) delete mapped.validation;
 
         return mapped;
       })
@@ -295,24 +324,36 @@ module.exports = async function (context, req) {
       questions: questions.map(({ question, choices }) => {
         const rawType = String(question.QuestionType || '').trim().toLowerCase();
         const choiceTexts = choices.map((choice) => choice.ChoiceText);
+        const dataPayload = parseJsonField(question.DataJson) || {};
+        const validationPayload = parseJsonField(question.ValidationJson);
         let type = rawType;
-        if (!['mcq', 'input'].includes(type)) {
+        if (!['mcq', 'input', 'ordering', 'match', 'fillblank'].includes(type)) {
           type = choiceTexts.length ? 'mcq' : 'input';
         }
 
         const normalized = {
           type,
           text: question.QuestionText,
-          points: Number.isFinite(question.Points) ? question.Points : 1
+          points: Number.isFinite(question.Points) ? question.Points : 1,
+          isRequired: question.IsRequired !== false,
+          validation: validationPayload && typeof validationPayload === 'object' ? validationPayload : null
         };
+
+        if (dataPayload && typeof dataPayload === 'object') {
+          Object.assign(normalized, dataPayload);
+        }
 
         if (type === 'mcq') {
           normalized.choices = choiceTexts;
           normalized.correctIndex =
             typeof question.CorrectIndex === 'number' ? question.CorrectIndex : 0;
-        } else {
+        } else if (type === 'input') {
           normalized.answer = question.Answer ?? '';
+        } else if (type === 'ordering' && !Array.isArray(normalized.items) && choiceTexts.length) {
+          normalized.items = choiceTexts;
         }
+
+        if (!normalized.validation) delete normalized.validation;
 
         return normalized;
       })
