@@ -47,7 +47,7 @@ export function renderInputQuestion({ mountEl, question }) {
 
   function normalizeSpaces(s) {
     if (s == null) return '';
-    return String(s).trim().replace(/\s+/g, ' ');
+    return toLatinDigits(String(s)).trim().replace(/\s+/g, ' ');
   }
 
   function toLatinDigits(str) {
@@ -68,7 +68,9 @@ export function renderInputQuestion({ mountEl, question }) {
     if (value == null) return NaN;
     const normalized = toLatinDigits(String(value))
       .trim()
+      .replace(/[٬،]/g, ',')
       .replace(',', '.')
+      .replace('٫', '.')
       .replace(/\s+/g, '');
 
     if (/^[-+]?[\d.]+\/[-+]?[\d.]+$/.test(normalized)) {
