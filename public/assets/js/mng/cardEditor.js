@@ -34,6 +34,11 @@ const state = {
   prerequisites: [],
   concepts: [],
   assessment: { title: '', description: '', questions: [] },
+  preset: {
+    text: '',
+    status: 'idle',
+    message: 'أدخل JSON للبطاقة للتأكد من صحته.'
+  },
   dirty: false,
   saving: false,
   pendingNavigation: null,
@@ -75,6 +80,159 @@ function normalizeValidation(value) {
 
 function hasValidation(value) {
   return Boolean(value?.numericOnly || value?.fuzzyAutocorrect);
+}
+
+function setPresetStatus({ status, message }) {
+  state.preset.status = status;
+  state.preset.message = message;
+  const statusEl = elements.editorContent?.querySelector('[data-preset-status]');
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.dataset.status = status;
+  }
+}
+
+function validatePresetData(data) {
+  const errors = [];
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    errors.push('البيانات يجب أن تكون كائن JSON.');
+    return errors;
+  }
+
+  if ('week' in data && !Number.isFinite(Number(data.week))) {
+    errors.push('الحقل week يجب أن يكون رقمًا.');
+  }
+  if ('seq' in data && !Number.isFinite(Number(data.seq))) {
+    errors.push('الحقل seq يجب أن يكون رقمًا.');
+  }
+  if ('title' in data && typeof data.title !== 'string') {
+    errors.push('الحقل title يجب أن يكون نصًا.');
+  }
+  if ('goals' in data) {
+    if (!Array.isArray(data.goals)) {
+      errors.push('الحقل goals يجب أن يكون قائمة نصوص.');
+    } else if (data.goals.some((goal) => typeof goal !== 'string')) {
+      errors.push('كل عنصر في goals يجب أن يكون نصًا.');
+    }
+  }
+  if ('prerequisites' in data) {
+    if (!Array.isArray(data.prerequisites)) {
+      errors.push('الحقل prerequisites يجب أن يكون قائمة.');
+    } else {
+      data.prerequisites.forEach((item, index) => {
+        if (typeof item === 'string') return;
+        if (!item || typeof item !== 'object') {
+          errors.push(`المتطلب رقم ${index + 1} يجب أن يكون نصًا أو كائنًا.`);
+          return;
+        }
+        if ('type' in item && !['mcq', 'input'].includes(item.type)) {
+          errors.push(`نوع المتطلب رقم ${index + 1} غير مدعوم.`);
+        }
+        if ('choices' in item && !Array.isArray(item.choices)) {
+          errors.push(`choices للمتطلب رقم ${index + 1} يجب أن تكون قائمة نصوص.`);
+        }
+        if ('hints' in item && !Array.isArray(item.hints)) {
+          errors.push(`hints للمتطلب رقم ${index + 1} يجب أن تكون قائمة نصوص.`);
+        }
+      });
+    }
+  }
+  if ('concepts' in data) {
+    if (!Array.isArray(data.concepts)) {
+      errors.push('الحقل concepts يجب أن يكون قائمة.');
+    } else {
+      data.concepts.forEach((concept, index) => {
+        if (!concept || typeof concept !== 'object') {
+          errors.push(`المفهوم رقم ${index + 1} يجب أن يكون كائنًا.`);
+          return;
+        }
+        if ('title' in concept && typeof concept.title !== 'string') {
+          errors.push(`عنوان المفهوم رقم ${index + 1} يجب أن يكون نصًا.`);
+        }
+        if ('flow' in concept) {
+          if (!Array.isArray(concept.flow)) {
+            errors.push(`flow للمفهوم رقم ${index + 1} يجب أن تكون قائمة.`);
+          } else {
+            concept.flow.forEach((item, flowIndex) => {
+              if (!item || typeof item !== 'object') {
+                errors.push(`عنصر flow رقم ${flowIndex + 1} في المفهوم رقم ${index + 1} يجب أن يكون كائنًا.`);
+                return;
+              }
+              if ('type' in item && typeof item.type !== 'string') {
+                errors.push(`type في عنصر flow رقم ${flowIndex + 1} يجب أن يكون نصًا.`);
+              }
+            });
+          }
+        }
+      });
+    }
+  }
+  if ('assessment' in data && data.assessment != null) {
+    if (!data.assessment || typeof data.assessment !== 'object' || Array.isArray(data.assessment)) {
+      errors.push('الحقل assessment يجب أن يكون كائنًا.');
+    } else if ('questions' in data.assessment) {
+      if (!Array.isArray(data.assessment.questions)) {
+        errors.push('questions داخل assessment يجب أن تكون قائمة.');
+      } else {
+        data.assessment.questions.forEach((question, index) => {
+          if (!question || typeof question !== 'object') {
+            errors.push(`سؤال التقييم رقم ${index + 1} يجب أن يكون كائنًا.`);
+            return;
+          }
+          if ('type' in question && !['mcq', 'input', 'ordering', 'match', 'fillblank'].includes(question.type)) {
+            errors.push(`نوع سؤال التقييم رقم ${index + 1} غير مدعوم.`);
+          }
+        });
+      }
+    }
+  }
+
+  return errors;
+}
+
+function validatePresetJson(raw) {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) {
+    return { status: 'idle', message: 'أدخل JSON للبطاقة للتأكد من صحته.' };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    return { status: 'error', message: `خطأ في JSON: ${error.message}` };
+  }
+
+  const errors = validatePresetData(parsed);
+  if (errors.length) {
+    const [first] = errors;
+    const suffix = errors.length > 1 ? ` (وأيضًا ${errors.length - 1} أخطاء أخرى)` : '';
+    return { status: 'error', message: `${first}${suffix}` };
+  }
+
+  return { status: 'success', message: 'JSON صالح ويمكن تطبيقه.' };
+}
+
+function applyPresetData(raw) {
+  const validation = validatePresetJson(raw);
+  if (validation.status !== 'success') {
+    setPresetStatus(validation);
+    showToast('تنبيه', validation.message, 'warning');
+    return;
+  }
+
+  const parsed = JSON.parse(String(raw ?? '').trim());
+  state.seq = Number.isFinite(Number(parsed.seq)) ? Number(parsed.seq) : state.seq;
+  state.title = typeof parsed.title === 'string' ? parsed.title : state.title;
+  state.goals = Array.isArray(parsed.goals) ? parsed.goals : [];
+  state.prerequisites = normalizePrerequisites(parsed.prerequisites || []);
+  state.concepts = Array.isArray(parsed.concepts) ? parsed.concepts : [];
+  state.assessment = normalizeAssessment(parsed.assessment);
+  syncGoalsWithConcepts();
+  setHeader();
+  setDirty(true);
+  renderEditor();
+  showToast('نجاح', 'تم تحميل البطاقة الجاهزة.', 'success');
 }
 
 function buildMathTargetId(...parts) {
@@ -440,15 +598,16 @@ function syncGoalsWithConcepts() {
 
 function buildSections() {
   const sections = [
-    { id: 'goals', label: 'ماذا سنتعلم اليوم', index: 1 },
-    { id: 'prereq', label: 'المتطلبات السابقة', index: 2 }
+    { id: 'preset', label: 'إضافة بطاقة جاهزة', index: 1 },
+    { id: 'goals', label: 'ماذا سنتعلم اليوم', index: 2 },
+    { id: 'prereq', label: 'المتطلبات السابقة', index: 3 }
   ];
 
   state.goals.forEach((goal, idx) => {
     sections.push({
       id: `goal-${idx}`,
       label: goal || `هدف ${idx + 1}`,
-      index: idx + 3
+      index: idx + 4
     });
   });
 
@@ -485,6 +644,36 @@ function renderConfirmInline({ id, message }) {
         <button class="btn btn-outline btn-sm" data-action="cancel-delete">إلغاء</button>
       </div>
     </div>
+  `;
+}
+
+function renderPresetSection(sectionIndex) {
+  return `
+    <section class="section-card" data-section="preset">
+      <div class="section-header">
+        <div class="section-title">
+          <div>
+            <span class="section-index">${sectionIndex}</span>
+            <h2>إضافة بطاقة جاهزة</h2>
+          </div>
+          <p class="section-subtitle">الصق JSON البطاقة هنا وسيتم التحقق منه قبل التطبيق.</p>
+        </div>
+      </div>
+      <div class="section-body preset-body">
+        <textarea
+          class="input preset-textarea"
+          rows="8"
+          data-preset-input="true"
+          placeholder="الصق JSON البطاقة هنا...">${escapeHtml(state.preset.text || '')}</textarea>
+        <div class="preset-actions">
+          <button class="btn btn-outline md-btn" type="button" data-action="validate-preset">تحقق</button>
+          <button class="btn btn-primary md-btn" type="button" data-action="apply-preset">تطبيق البطاقة</button>
+        </div>
+        <div class="preset-status" data-preset-status data-status="${state.preset.status}">
+          ${escapeHtml(state.preset.message)}
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -1308,6 +1497,7 @@ function renderEditor() {
 
   elements.editorContent.innerHTML = sections
     .map((section) => {
+      if (section.id === 'preset') return renderPresetSection(section.index);
       if (section.id === 'goals') return renderGoalsSection(section.index);
       if (section.id === 'prereq') return renderPrereqSection(section.index);
       if (section.id === 'assessment') return renderAssessmentSection(section.index);
@@ -1425,6 +1615,13 @@ function moveItem(list, fromIndex, direction) {
 function handleEditorInput(event) {
   const target = event.target;
   const fieldValue = target.type === 'checkbox' ? target.checked : target.value;
+
+  if (target.dataset.presetInput) {
+    state.preset.text = fieldValue;
+    const validation = validatePresetJson(fieldValue);
+    setPresetStatus(validation);
+    return;
+  }
 
   if (target.dataset.prereqField) {
     const index = Number(target.dataset.prereqIndex);
@@ -1704,6 +1901,24 @@ function handleEditorClick(event) {
 
   if (action === 'cancel-delete') {
     clearPendingDelete();
+    return;
+  }
+
+  if (action === 'validate-preset') {
+    const input = elements.editorContent.querySelector('[data-preset-input]');
+    const validation = validatePresetJson(input?.value || '');
+    setPresetStatus(validation);
+    if (validation.status === 'success') {
+      showToast('نجاح', validation.message, 'success');
+    } else if (validation.status === 'error') {
+      showToast('تنبيه', validation.message, 'warning');
+    }
+    return;
+  }
+
+  if (action === 'apply-preset') {
+    const input = elements.editorContent.querySelector('[data-preset-input]');
+    applyPresetData(input?.value || '');
     return;
   }
 
