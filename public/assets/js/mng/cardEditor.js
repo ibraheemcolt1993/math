@@ -761,6 +761,200 @@ function renderPresetSection(sectionIndex) {
         <div class="preset-status" data-preset-status data-status="${state.preset.status}">
           ${escapeHtml(state.preset.message)}
         </div>
+        <details class="preset-help">
+          <summary>دليل صيغة JSON للبطاقة الجاهزة (CardPayload)</summary>
+          <div class="preset-help-body">
+            <h3>1) المخطط العام (CardPayload)</h3>
+            <p>الـ JSON يجب أن يكون كائن (Object) بالجذور التالية (الحقول اختيارية لكن يُفضّل إرسالها كاملة):</p>
+            <ul>
+              <li><strong>week</strong> (رقم) — رقم الأسبوع/الوحدة. القيم المسموحة: رقم صحيح/عشري.</li>
+              <li><strong>seq</strong> (رقم) — رقم ترتيب البطاقة داخل الأسبوع. القيم المسموحة: رقم صحيح/عشري.</li>
+              <li><strong>title</strong> (نص) — عنوان البطاقة.</li>
+              <li><strong>goals</strong> (مصفوفة نصوص) — أهداف التعلّم. كل عنصر نص.</li>
+              <li><strong>prerequisites</strong> (مصفوفة) — متطلبات سابقة (سؤال تمهيدي). كل عنصر إمّا نص أو كائن.</li>
+              <li><strong>concepts</strong> (مصفوفة كائنات) — كل مفهوم يحتوي <code>title</code> و <code>flow</code>.</li>
+              <li><strong>assessment</strong> (كائن) — التقييم النهائي: <code>title</code> و <code>description</code> و <code>questions</code>.</li>
+            </ul>
+            <pre><code>{
+  "week": 3,
+  "seq": 2,
+  "title": "جمع الكسور",
+  "goals": ["تبسيط الكسر", "جمع كسور لها نفس المقام"],
+  "prerequisites": [],
+  "concepts": [],
+  "assessment": { "title": "", "description": "", "questions": [] }
+}</code></pre>
+
+            <h3>2) prerequisites (المتطلبات السابقة)</h3>
+            <p>كل عنصر يمكن أن يكون نصًا (اختصارًا لسؤال input) أو كائنًا:</p>
+            <ul>
+              <li><strong>type</strong>: <code>input</code> أو <code>mcq</code>.</li>
+              <li><strong>text</strong>: نص السؤال (يدعم رموز المعادلات والجداول).</li>
+              <li><strong>choices</strong>: قائمة الاختيارات (فقط لـ <code>mcq</code>).</li>
+              <li><strong>hints</strong>: تلميحات اختيارية (قائمة نصوص).</li>
+              <li><strong>answer</strong>: إجابة نموذجية (لـ <code>input</code>).</li>
+              <li><strong>correctIndex</strong>: رقم الاختيار الصحيح (0-based) لـ <code>mcq</code>.</li>
+              <li><strong>isRequired</strong>: هل السؤال مطلوب؟ (true/false).</li>
+              <li><strong>validation</strong>: كائن اختياري، مثل <code>{"numericOnly": true, "fuzzyAutocorrect": false}</code>.</li>
+            </ul>
+            <pre><code>{
+  "type": "mcq",
+  "text": "كم 2 + 2؟",
+  "choices": ["3", "4", "5"],
+  "correctIndex": 1,
+  "isRequired": true,
+  "hints": ["اجمع العددين."]
+}</code></pre>
+
+            <h3>3) concept.flow (أنواع البلوكات المدعومة)</h3>
+            <p>كل عنصر في <code>flow</code> هو كائن يملك <code>type</code> وبعض الحقول حسب النوع:</p>
+            <ul>
+              <li><strong>explain</strong>: شرح نصي بسيط.</li>
+              <li><strong>example</strong>: مثال محلول.</li>
+              <li><strong>nonexample</strong>: مثال خاطئ/غير صحيح.</li>
+              <li><strong>image</strong>: صورة مع تعليق.</li>
+              <li><strong>input</strong>: سؤال تدريبي بإجابة قصيرة.</li>
+              <li><strong>mcq</strong>: سؤال تدريبي اختيار متعدد.</li>
+              <li><strong>ordering</strong>: سؤال ترتيب.</li>
+              <li><strong>match</strong>: سؤال توصيل.</li>
+              <li><strong>fillblank</strong>: سؤال اكمل الفراغ (يستخدم [[blank]] أو ____ داخل النص).</li>
+              <li><strong>hintlist</strong>: قائمة تلميحات إضافية.</li>
+            </ul>
+            <pre><code>{ "type": "explain", "text": "شرح سريع للفكرة." }</code></pre>
+            <pre><code>{ "type": "example", "text": "مثال: 1/2 + 1/2 = 1" }</code></pre>
+            <pre><code>{ "type": "nonexample", "text": "مثال خاطئ: 1/2 + 1/2 = 1/4" }</code></pre>
+            <pre><code>{ "type": "image", "text": "شكل توضيحي", "url": "https://..." }</code></pre>
+            <pre><code>{ "type": "input", "text": "احسب 5 + 7", "answer": "12", "validation": { "numericOnly": true } }</code></pre>
+            <pre><code>{ "type": "mcq", "text": "اختر الناتج الصحيح", "choices": ["6", "8", "10"], "correctIndex": 1 }</code></pre>
+            <pre><code>{ "type": "ordering", "text": "رتّب الخطوات", "items": ["ابدأ", "وسّط", "أنهِ"] }</code></pre>
+            <pre><code>{ "type": "match", "text": "وصّل العمودين", "pairs": [{ "left": "2×3", "right": "6" }] }</code></pre>
+            <pre><code>{ "type": "fillblank", "text": "٢ + [[blank]] = ٥", "blanks": ["٣"] }</code></pre>
+            <pre><code>{ "type": "hintlist", "details": ["تلميح أول", "تلميح ثانٍ"] }</code></pre>
+
+            <h3>4) assessment.questions (أنواع الأسئلة)</h3>
+            <p>أنواع التقييم النهائي: <code>mcq</code>, <code>input</code>, <code>ordering</code>, <code>match</code>, <code>fillblank</code>.</p>
+            <pre><code>{
+  "type": "mcq",
+  "text": "كم 3×4؟",
+  "choices": ["7", "12", "14"],
+  "correctIndex": 1,
+  "points": 1
+}</code></pre>
+            <pre><code>{
+  "type": "input",
+  "text": "اكتب ناتج 9 - 4",
+  "answer": "5",
+  "points": 1,
+  "validation": { "numericOnly": true }
+}</code></pre>
+            <pre><code>{
+  "type": "ordering",
+  "text": "رتّب من الأصغر للأكبر",
+  "items": ["5", "1", "3"],
+  "points": 1
+}</code></pre>
+            <pre><code>{
+  "type": "match",
+  "text": "وصّل العملية بالناتج",
+  "pairs": [{ "left": "2+2", "right": "4" }, { "left": "3+1", "right": "4" }],
+  "points": 1
+}</code></pre>
+            <pre><code>{
+  "type": "fillblank",
+  "text": "١٠ ÷ [[blank]] = ٢",
+  "blanks": ["5"],
+  "points": 1
+}</code></pre>
+
+            <h3>5) الرموز الخاصة داخل النص</h3>
+            <ul>
+              <li><strong>المعادلات:</strong> الزر <em>معادلة</em> يُدرج توكن بالشكل <code>[[math:LATEX]]</code>. يمكن كتابة نفس التوكن يدويًا داخل أي نص في JSON.</li>
+              <li><strong>الجداول:</strong> استخدم التوكن <code>[[table:RxC|...]]</code> حيث <code>R</code> عدد الصفوف و<code>C</code> عدد الأعمدة. مثال: <code>[[table:2x3|1|2|3|4|5|6]]</code>.</li>
+              <li><strong>أوامر الإدراج السريع:</strong> داخل أي حقل نصي يدعم الجداول يمكنك كتابة <code>\\table</code> أو <code>\\table(3x2)</code> ليتم تحويله تلقائيًا لتوكن جدول.</li>
+              <li>في المعاينة والدرس: يظهر التوكن كجدول فعلي أو معادلة مُنسّقة.</li>
+            </ul>
+
+            <h3>6) أمثلة كاملة قابلة للنسخ</h3>
+            <p><strong>مثال بطاقة بسيطة قصيرة:</strong></p>
+            <pre><code>{
+  "week": 1,
+  "seq": 1,
+  "title": "الجمع البسيط",
+  "goals": ["جمع عددين"],
+  "prerequisites": ["ما هو ناتج 1 + 1؟"],
+  "concepts": [
+    {
+      "title": "جمع عددين",
+      "flow": [
+        { "type": "explain", "text": "نجمع العددين معًا." },
+        { "type": "example", "text": "مثال: 2 + 3 = 5" },
+        { "type": "input", "text": "احسب 4 + 6", "answer": "10", "validation": { "numericOnly": true } }
+      ]
+    }
+  ],
+  "assessment": {
+    "title": "تقييم سريع",
+    "description": "سؤال واحد للتأكد.",
+    "questions": [
+      { "type": "mcq", "text": "اختر الناتج: 3 + 2", "choices": ["4", "5"], "correctIndex": 1, "points": 1 }
+    ]
+  }
+}</code></pre>
+
+            <p><strong>مثال بطاقة متقدمة (معادلة + جدول + fillblank + ordering + match + assessment):</strong></p>
+            <pre><code>{
+  "week": 2,
+  "seq": 4,
+  "title": "الكسور والمتتابعات",
+  "goals": ["فهم الكسور", "ترتيب خطوات الحل"],
+  "prerequisites": [
+    { "type": "input", "text": "اكتب كسرًا مكافئًا لـ 1/2", "answer": "2/4" }
+  ],
+  "concepts": [
+    {
+      "title": "الكسور",
+      "flow": [
+        { "type": "explain", "text": "نستخدم صيغة [[math:\\\\frac{a}{b}]] لتمثيل الكسر." },
+        { "type": "example", "text": "املأ الجدول التالي:", "details": [""] },
+        { "type": "explain", "text": "جدول قيم: [[table:2x2|1/2|2/4|3/6|4/8]]" },
+        { "type": "fillblank", "text": "٣/٦ تبسّط إلى [[blank]]", "blanks": ["1/2"] }
+      ]
+    },
+    {
+      "title": "خطوات الحل",
+      "flow": [
+        { "type": "ordering", "text": "رتّب الخطوات", "items": ["اقرأ المسألة", "حدّد المعطيات", "احسب الناتج"] },
+        { "type": "match", "text": "وصّل العملية بالناتج", "pairs": [{ "left": "1/2 + 1/2", "right": "1" }] }
+      ]
+    }
+  ],
+  "assessment": {
+    "title": "تقييم نهائي",
+    "description": "أجب عن الأسئلة التالية.",
+    "questions": [
+      {
+        "type": "fillblank",
+        "text": "٢/٤ تبسّط إلى [[blank]]",
+        "blanks": ["1/2"],
+        "points": 1
+      },
+      {
+        "type": "ordering",
+        "text": "رتّب خطوات الحل",
+        "items": ["اختر العملية", "احسب", "تحقق"],
+        "points": 1
+      },
+      {
+        "type": "match",
+        "text": "وصّل الكسر بالمكافئ",
+        "pairs": [{ "left": "1/3", "right": "2/6" }],
+        "points": 1
+      }
+    ]
+  }
+}</code></pre>
+          </div>
+        </details>
       </div>
     </section>
   `;
