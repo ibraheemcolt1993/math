@@ -1193,7 +1193,11 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     }
 
     if (textSpec) {
-      return judgeTextAnswer(userValue, textSpec).ok;
+      const spec = typeof textSpec === 'object' && textSpec !== null ? { ...textSpec } : {};
+      if (!spec.modelAnswer && ans) {
+        spec.modelAnswer = ans;
+      }
+      return judgeTextAnswer(userValue, spec).ok;
     }
 
     if (user !== '' && user === ans) return true;
