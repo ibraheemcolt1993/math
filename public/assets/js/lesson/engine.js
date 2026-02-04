@@ -37,7 +37,7 @@ const STAGES = {
   CONCEPT: 'concept',
   ASSESSMENT: 'assessment',
 };
-const DEBUG_TOASTS = true;
+const DEBUG_TOASTS = false;
 
 export function initEngine({ week, studentId, data, mountEl, preview = false }) {
   mountEl.innerHTML = '';
@@ -366,9 +366,10 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     // Pass title for certificate hook readiness
     const cardTitle = String(data?.title || '');
     const finalScore = Number.isFinite(assessmentState?.score) ? assessmentState.score : 0;
+    const assessmentSummary = assessmentState?.summary || null;
 
     // Use existing completion handler (shows UI + returns home)
-    completeLesson({ studentId, week, cardTitle, finalScore });
+    completeLesson({ studentId, week, cardTitle, finalScore, assessmentSummary });
   }
 
   function render() {
@@ -806,15 +807,16 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
           'success',
           6500
         );
-        moveToNextAssessmentQuestion(totalQuestions);
       } else {
         showToast(
           'إجابة غير صحيحة',
-          buildToastMessage('جرّب مرة أخرى قبل المتابعة', currentQuestion),
+          buildToastMessage('تم تسجيل الإجابة', currentQuestion),
           'error',
           6500
         );
       }
+
+      moveToNextAssessmentQuestion(totalQuestions);
     });
 
     actions.appendChild(btnCheck);
@@ -1139,14 +1141,16 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     }
 
     const { score, total } = scoreAssessment(assessment.questions);
+    const summary = buildAssessmentSummary(assessment.questions);
     assessmentState = {
       ...assessmentState,
       completed: true,
       score,
       total,
+      summary,
     };
 
-    showToast('إجابة صحيحة', 'تم إنهاء التقييم بنجاح', 'success', 4500);
+    showToast('تم إنهاء التقييم', 'تم حفظ إجاباتك', 'success', 4500);
     setTimeout(() => {
       finishCard();
     }, 4500);
@@ -1175,6 +1179,69 @@ export function initEngine({ week, studentId, data, mountEl, preview = false }) 
     });
 
     return { score, total };
+  }
+
+  function buildAssessmentSummary(questions) {
+    const results = questions.map((question) => {
+      const normalized = normalizeQuestion(question);
+      const expected = getExpectedAnswer(normalized);
+      const isCorrect = isAnswerCorrect(normalized, expected, compareAnswer);
+      const studentAnswer = formatStudentAnswer(normalized);
+      const correctAnswer = getSolutionText(normalized);
+
+      return {
+        text: normalized.text,
+        studentAnswer,
+        correctAnswer,
+        isCorrect,
+      };
+    });
+
+    const total = results.length;
+    const correctCount = results.filter((entry) => entry.isCorrect).length;
+
+    return { results, total, correctCount };
+  }
+
+  function formatStudentAnswer(question) {
+    if (!question) return 'بدون إجابة';
+    const fallback = 'بدون إجابة';
+
+    if (question.type === 'mcq') {
+      const index = Number.isFinite(question._selectedIndex) ? question._selectedIndex : null;
+      const choice = index != null ? question.choices?.[index] : '';
+      return String(choice || fallback);
+    }
+
+    if (question.type === 'ordering') {
+      const order = Array.isArray(question._order) ? question._order.filter((item) => item != null) : [];
+      return order.length ? order.join('، ') : fallback;
+    }
+
+    if (question.type === 'match') {
+      const pairs = Array.isArray(question.pairs) ? question.pairs : [];
+      const selections = Array.isArray(question._matches) ? question._matches : [];
+      if (!pairs.length && !selections.length) return fallback;
+      if (!pairs.length) return selections.filter(Boolean).join('، ') || fallback;
+      const lines = pairs.map((pair, index) => {
+        const left = pair?.left || '';
+        const selected = selections[index] || '';
+        if (!left && !selected) return '';
+        if (!selected) return `${left} → —`;
+        return `${left} → ${selected}`;
+      }).filter(Boolean);
+      return lines.length ? lines.join('، ') : fallback;
+    }
+
+    if (question.type === 'fillblank') {
+      const blanks = Array.isArray(question._blanks)
+        ? question._blanks.map((value) => String(value || '').trim()).filter(Boolean)
+        : [];
+      return blanks.length ? blanks.join('، ') : fallback;
+    }
+
+    const value = String(question._value || '').trim();
+    return value || fallback;
   }
 
   function compareAnswer(userValue, answerValue, validation = {}, textSpec = null) {

@@ -16,7 +16,7 @@ import { goHome } from '../core/router.js';
 const LS_LAST_CERTIFICATE = 'math:lastCertificate';      // prepared here
 const CERT_URL = '/assets/cert/certificate.html';
 
-export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0 }) {
+export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0, assessmentSummary = null }) {
   const wasDone = isCardDone(studentId, week);
   // mark card as done
   markCardDone(studentId, week);
@@ -39,6 +39,7 @@ export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0
 
     // Add certificate button (idempotent)
     ensureCertActions(completeEl);
+    renderAssessmentSummary(completeEl, assessmentSummary);
   }
 
   // Toast includes first name
@@ -53,6 +54,56 @@ export function completeLesson({ studentId, week, cardTitle = '', finalScore = 0
   setTimeout(() => {
     // goHome();
   }, 12000);
+}
+
+function renderAssessmentSummary(completeEl, summary) {
+  const existing = completeEl.querySelector('[data-assessment-summary]');
+  if (existing) existing.remove();
+
+  if (!summary || !Array.isArray(summary.results) || !summary.results.length) return;
+
+  const body = completeEl.querySelector('.card-body') || completeEl;
+  const wrap = document.createElement('div');
+  wrap.className = 'assessment-summary';
+  wrap.setAttribute('data-assessment-summary', 'true');
+
+  const scoreLine = document.createElement('p');
+  scoreLine.className = 'p';
+  scoreLine.textContent = `العلامة: ${summary.correctCount} من ${summary.total}`;
+  wrap.appendChild(scoreLine);
+
+  const list = document.createElement('div');
+  list.className = 'assessment-summary-list';
+
+  summary.results.forEach((entry, index) => {
+    const item = document.createElement('div');
+    item.className = 'assessment-summary-item';
+
+    const title = document.createElement('p');
+    title.className = 'p';
+    title.textContent = `${index + 1}. ${entry.text || 'سؤال'}`;
+
+    const studentAnswer = document.createElement('p');
+    studentAnswer.className = 'p';
+    studentAnswer.textContent = `إجابة الطالب: ${entry.studentAnswer || 'بدون إجابة'}`;
+
+    const correctAnswer = document.createElement('p');
+    correctAnswer.className = 'p';
+    correctAnswer.textContent = `الإجابة الصحيحة: ${entry.correctAnswer || 'غير متوفر'}`;
+
+    const status = document.createElement('p');
+    status.className = 'p';
+    status.textContent = entry.isCorrect ? 'النتيجة: صحيح' : 'النتيجة: خطأ';
+
+    item.appendChild(title);
+    item.appendChild(studentAnswer);
+    item.appendChild(correctAnswer);
+    item.appendChild(status);
+    list.appendChild(item);
+  });
+
+  wrap.appendChild(list);
+  body.appendChild(wrap);
 }
 
 /* ---------- Certificate UI Actions ---------- */
